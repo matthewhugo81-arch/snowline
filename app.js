@@ -1,7 +1,7 @@
 import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js';
 import {averageSeries} from './average.js';
-import {createDatasetDialog} from './dataset-dialog.js';
-import {temperatureAttributes, frostLegend, formatValue} from './export.js';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261007-average-rain';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261007-average-rain';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -97,12 +97,12 @@ function render(){
  plot($('plot-'+v.key),[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  const current=models.filter(m=>finite(valueAt(m,v.key,time)));
  const mean=average.values[state.index],count=average.counts[state.index];
- const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${temperatureAttributes(mean,v.unit)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
- $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${m.color}"></i>${m.name} <b ${temperatureAttributes(value,v.unit)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
- $('frost-'+v.key).innerHTML=v.unit==='°C'&&series.some(s=>s.values.some(value=>finite(value)&&value<0))?frostLegend():'';
+ const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${valueAttributes(mean,v)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
+ $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${m.color}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
+ $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
 
- $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let coverage=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)coverage=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${temperatureAttributes(value,v.unit)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage)}</td></tr>`}).join('');
+ $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let coverage=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)coverage=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage)}</td></tr>`}).join('');
  datasetDialog.render();
 }
 let searchController=null;

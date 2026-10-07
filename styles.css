@@ -11,7 +11,7 @@
 .chart-card .chart-heading h2{min-width:0}
 .chart-tools{display:flex;align-items:center;gap:9px;flex-shrink:0}
 .data-button{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;font-size:11px;min-height:30px}
-.chart-values b.frost-value{padding:2px 5px;border-radius:4px}
+.chart-values b.frost-value,.chart-values b.rain-value{padding:2px 5px;border-radius:4px}
 .frost-legend{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px;line-height:1.5;margin:12px 0 3px}
 .frost-legend>span:first-child{color:var(--muted);margin-right:3px}
 .frost-key{padding:3px 6px;border-radius:4px;white-space:nowrap}
@@ -38,6 +38,10 @@
 .forecast-table thead th{position:sticky;top:0;z-index:2;background:#edf3f8;color:var(--ink)}
 .forecast-table tbody th{position:sticky;left:0;z-index:1;background:#f8fafc;font-weight:500;text-align:left;color:var(--ink)}
 .forecast-table thead th:first-child{left:0;z-index:3;text-align:left}
+.forecast-table .average-column{position:sticky;right:0;z-index:1;font-weight:700;background:#edf3f8;border-left:2px solid #8fa4b7}
+.forecast-table thead .average-column{z-index:3}
+.scale-note{color:var(--muted);font-size:11px}
+@media(max-width:600px){.forecast-table .average-column{position:static}.forecast-table thead .average-column{position:sticky;right:auto}}
 .forecast-table small{font-weight:400;color:var(--muted)}
 .dataset-empty{padding:16px;font-size:14px}
 .dataset-availability{margin-top:15px;font-size:12px;color:var(--muted)}

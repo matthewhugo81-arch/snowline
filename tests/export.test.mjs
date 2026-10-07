@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalise, VARIABLES} from '../data.js';
-import {FROST_BANDS, frostBand, buildDataset, datasetCSV, datasetHTML, datasetTable, formatValue} from '../export.js';
+import {FROST_BANDS, RAIN_BANDS, frostBand, rainBand, buildDataset, datasetCSV, datasetHTML, datasetTable, formatValue} from '../export.js';
 
 const variable = VARIABLES.find(v => v.key === 'soil_temperature_0cm');
 const times = ['2026-10-07T00:00:00Z','2026-10-07T01:00:00Z','2026-10-07T02:00:00Z'];
@@ -39,8 +39,8 @@ test('CSV includes units and location, escapes text, preserves precision, negati
   const csv = datasetCSV(buildDataset(options));
   assert.ok(csv.startsWith('\ufeff"Location"'));
   assert.ok(csv.includes('"Model ""Two"" — 0 cm soil temperature (°C)"'));
-  assert.ok(csv.includes('"Test, ""Place""","53.9","-2.1","2026-10-07T02:00:00Z","-15","-5.123",\r\n'));
-  assert.ok(csv.includes('"2026-10-07T00:00:00Z","0",,\r\n'));
+  assert.ok(csv.includes('"Test, ""Place""","53.9","-2.1","2026-10-07T02:00:00Z","-15","-5.123",,"-10.0615"\r\n'));
+  assert.ok(csv.includes('"2026-10-07T00:00:00Z","0",,,"0"\r\n'));
   const guarded = datasetCSV(buildDataset({...options,location:{...options.location,name:'=1+1'}}));
   assert.ok(guarded.includes('"\'=1+1"'));
 });
@@ -64,4 +64,44 @@ test('exports use the same normalised centimetres as snow-depth charts',() => {
   assert.deepEqual(data.rows[0].values,[12]);
   assert.ok(datasetCSV(data).includes('Snow depth (cm)'));
   assert.ok(!datasetHTML(data).includes('Sub-zero scale'));
+});
+
+test('hourly averages use available displayed models, count zeroes and omit missing values',() => {
+  const data = buildDataset(options);
+  assert.deepEqual(data.rows.map(row => row.average),[0,-2,-10.0615]);
+  assert.deepEqual(data.rows.map(row => row.averageCount),[1,1,2]);
+  const single = buildDataset({...options,modelDefinitions:[defs[1]]});
+  assert.deepEqual(single.rows.map(row => row.average),[null,null,-5.123]);
+  assert.deepEqual(single.rows.map(row => row.averageCount),[0,0,1]);
+  assert.ok(buildDataset({...options,modelDefinitions:[]}).rows.every(row => row.average === null));
+  assert.ok(buildDataset({...options,modelDefinitions:[defs[2]]}).rows.every(row => row.average === null));
+  const html = datasetTable(data);
+  assert.match(html, /class="average-column">Average<br><small>°C<\/small><\/th><\/tr><\/thead>/);
+  assert.match(html, /class="average-column frost-value"[^>]+Mean of 2 available models[^>]*>-10\.1<\/td><\/tr>/);
+  assert.ok(datasetCSV(data).split('\r\n')[0].endsWith('"Average — 0 cm soil temperature (°C)"'));
+  assert.ok(datasetCSV(single).split('\r\n')[1].endsWith(',,'));
+});
+
+test('rainfall colour boundaries exclude dry, missing and non-precipitation values',() => {
+  for(const [value,index] of [[0.001,0],[0.49,0],[0.5,1],[1.99,1],[2,2],[4.99,2],[5,3],[9.99,3],[10,4],[30,4]]){
+    assert.equal(rainBand(value,'precipitation'),RAIN_BANDS[index]);
+  }
+  for(const value of [null,undefined,NaN,Infinity,-Infinity,0,-0.1,'2']) assert.equal(rainBand(value,'precipitation'),null);
+  assert.equal(rainBand(2,'snowfall'),null);
+  assert.equal(rainBand(2,'temperature_2m'),null);
+});
+
+test('rainfall averages and saved tables retain green shading without rounding small rain to zero',() => {
+  const rain = VARIABLES.find(v => v.key === 'precipitation');
+  const wet = normalise({hourly:{time:times,precipitation:[0,0.1,12]}},defs[0]);
+  const dry = normalise({hourly:{time:times,precipitation:[null,0,4]}},defs[1]);
+  const data = buildDataset({...options,variable:rain,models:new Map([['one',wet],['two',dry]])});
+  assert.deepEqual(data.rows.map(row => row.average),[0,0.05,8]);
+  const html = datasetHTML(data);
+  assert.ok(html.includes('Precipitation · mm/h'));
+  assert.ok(html.includes('background-color:#14532d;color:#ffffff'));
+  assert.match(html,/class="average-column rain-value" style="background-color:#15803d;color:#ffffff"[^>]*>8\.00<\/td>/);
+  assert.ok(datasetCSV(data).split('\r\n')[3].endsWith(',"8"'));
+  assert.equal(formatValue(0.05,rain),'0.05');
+  assert.equal(formatValue(0.001,rain),'0.001');
 });

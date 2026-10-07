@@ -10,4 +10,8 @@ All Celsius variables (air, dew point, 850 hPa and 0 cm soil temperature) use th
 
 Run the data/export checks with `node --test tests/export.test.mjs`.
 
+Every hourly dataset has an **Average** column at the far right, also included in CSV and HTML downloads. It recalculates from the displayed models using the same arithmetic mean as the charts: missing values are excluded and zeroes count. If no model has a value for an hour, the average is unavailable. Hover over an average to see how many models contributed.
+
+Total precipitation values and their averages use five green display bands: above 0 but below 0.5, 0.5 to below 2, 2 to below 5, 5 to below 10, and 10+ mm/h. Dry and missing values are unshaded. The same shading appears in chart readouts, tables and saved HTML. These are display thresholds, not warning categories; total precipitation includes snow water equivalent as described on the chart.
+
 Weather data: [Open-Meteo](https://open-meteo.com/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Geocoding: Open-Meteo / GeoNames.
