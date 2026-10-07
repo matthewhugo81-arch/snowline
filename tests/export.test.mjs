@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalise, VARIABLES} from '../data.js';
+import {normalise, VARIABLES, forecastURL, windMph} from '../data.js';
 import {FROST_BANDS, RAIN_BANDS, frostBand, rainBand, buildDataset, datasetCSV, datasetHTML, datasetTable, formatValue} from '../export.js';
 
 const variable = VARIABLES.find(v => v.key === 'soil_temperature_0cm');
@@ -104,4 +104,44 @@ test('rainfall averages and saved tables retain green shading without rounding s
   assert.ok(datasetCSV(data).split('\r\n')[3].endsWith(',"8"'));
   assert.equal(formatValue(0.05,rain),'0.05');
   assert.equal(formatValue(0.001,rain),'0.001');
+});
+
+test('forecasts request both wind variables in mph with a distinct cache URL',() => {
+  const url = new URL(forecastURL(options.location, defs[0]));
+  assert.equal(url.searchParams.get('wind_speed_unit'),'mph');
+  const keys = url.searchParams.get('hourly').split(',');
+  assert.ok(keys.includes('wind_speed_10m'));
+  assert.ok(keys.includes('wind_gusts_10m'));
+  assert.ok(VARIABLES.filter(v => v.key.startsWith('wind_')).every(v => v.unit === 'mph'));
+});
+
+test('wind units are converted once, preserving calm and missing values',() => {
+  assert.equal(windMph(16.09344,'km/h'),10);
+  assert.ok(Math.abs(windMph(4.4704,'m/s')-10) < 1e-10);
+  assert.ok(Math.abs(windMph(10,'kn')-11.507794480235425) < 1e-10);
+  assert.equal(windMph(10,'mp/h'),10);
+  assert.equal(windMph(10,'mph'),10);
+  assert.equal(windMph(0,'mp/h'),0);
+  for(const value of [null,undefined,NaN,Infinity,'10']) assert.equal(windMph(value,'mp/h'),null);
+  assert.equal(windMph(10,undefined),null);
+  assert.equal(windMph(10,'unknown'),null);
+});
+
+test('gust datasets, averages and downloads use mph and omit unavailable models',() => {
+  const units = {wind_speed_10m:'mp/h',wind_gusts_10m:'mp/h'};
+  const gusts = VARIABLES.find(v => v.key === 'wind_gusts_10m');
+  const first = normalise({hourly:{time:times,wind_speed_10m:[0,10,12],wind_gusts_10m:[0,20,null]},hourly_units:units},defs[0]);
+  const second = normalise({hourly:{time:times,wind_speed_10m:[5,9,10],wind_gusts_10m:[10,30,40]},hourly_units:units},defs[1]);
+  const unavailable = normalise({hourly:{time:times,wind_speed_10m:[1,2,3]},hourly_units:units},defs[2]);
+  assert.deepEqual(unavailable.values.wind_speed_10m,[1,2,3]);
+  assert.deepEqual(unavailable.values.wind_gusts_10m,[null,null,null]);
+  const data = buildDataset({...options,variable:gusts,models:new Map([['one',first],['two',second],['missing',unavailable]])});
+  assert.deepEqual(data.rows.map(row => row.average),[5,25,40]);
+  assert.deepEqual(data.rows.map(row => row.averageCount),[2,2,1]);
+  assert.ok(datasetTable(data).includes('10 m wind gusts (mph)'));
+  assert.ok(datasetCSV(data).split('\r\n')[0].endsWith('"Average — 10 m wind gusts (mph)"'));
+  assert.ok(datasetHTML(data).includes('Maximum gust in the preceding hour'));
+  const converted = normalise({hourly:{time:[times[0]],wind_speed_10m:[16.09344],wind_gusts_10m:[32.18688]},hourly_units:{wind_speed_10m:'km/h',wind_gusts_10m:'km/h'}},defs[0]);
+  assert.deepEqual(converted.values.wind_speed_10m,[10]);
+  assert.deepEqual(converted.values.wind_gusts_10m,[20]);
 });

@@ -1,7 +1,7 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js';
+import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js?v=20261007-wind-mph';
 import {averageSeries} from './average.js';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261007-average-rain';
-import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261007-average-rain';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261007-wind-mph';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261007-wind-mph';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -131,7 +131,7 @@ $('refresh').addEventListener('click',()=>loadLocation(state.location,true));
 $('horizon').addEventListener('change',e=>{state.hours=Number(e.target.value);scheduleRender();});
 $('time-slider').addEventListener('input',e=>{state.index=Number(e.target.value);scheduleRender();});
 for(const [id,filter] of [['select-all',()=>true],['select-global',m=>!m.regional],['select-none',()=>false]])$(id).addEventListener('click',()=>{state.selected=new Set(MODELS.filter(filter).map(m=>m.id));document.querySelectorAll('.model-chip input').forEach(input=>input.checked=state.selected.has(input.value));scheduleRender();});
-$('focus').addEventListener('change',e=>{const group=e.target.value;const snow=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation'];const ice=['temperature_2m','dew_point_2m','soil_temperature_0cm','relative_humidity_2m','precipitation','snow_depth','cloud_cover','wind_speed_10m'];for(const v of VARIABLES){const card=$('plot-'+v.key).closest('article');const order=group==='snow'?snow:ice;card.hidden=group!=='all'&&!order.includes(v.key);card.style.order=group==='all'?0:order.indexOf(v.key);}scheduleRender();});
+$('focus').addEventListener('change',e=>{const group=e.target.value;const snow=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation'];const ice=['temperature_2m','dew_point_2m','soil_temperature_0cm','relative_humidity_2m','precipitation','snow_depth','cloud_cover','wind_speed_10m','wind_gusts_10m'];const wind=['wind_speed_10m','wind_gusts_10m'];for(const v of VARIABLES){const card=$('plot-'+v.key).closest('article');const order=group==='snow'?snow:group==='wind'?wind:ice;card.hidden=group!=='all'&&!order.includes(v.key);card.style.order=group==='all'?0:order.indexOf(v.key);}scheduleRender();});
 document.addEventListener('click',e=>{const plotEl=e.target.closest('.plot');const layout=plotEl&&chartLayouts.get(plotEl.id);if(!layout)return;const x=e.clientX-plotEl.getBoundingClientRect().left;state.index=Math.max(0,Math.min(layout.n-1,Math.round((x-layout.left)/layout.inner*(layout.n-1))));scheduleRender();});
 let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(scheduleRender,120);});
 populate();await loadLocation(state.location);

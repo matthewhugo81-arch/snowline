@@ -1,4 +1,4 @@
-import {finite, valueAt} from './data.js';
+import {finite, valueAt} from './data.js?v=20261007-wind-mph';
 import {averageSeries} from './average.js';
 
 export const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
