@@ -1,5 +1,7 @@
 import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js';
 import {averageSeries} from './average.js';
+import {createDatasetDialog} from './dataset-dialog.js';
+import {temperatureAttributes, frostLegend, formatValue} from './export.js';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9,6 +11,7 @@ const clock=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',tim
 const fmt=(v,dec=1)=>finite(v)?v.toFixed(dec):'—';
 const state={location:{latitude:53.9239,longitude:-2.1949,name:'Starting location'},selected:new Set(MODELS.map(m=>m.id)),models:new Map(),errors:new Map(),hours:168,index:0,times:[],loading:false,controller:null,generation:0,fetched:null};
 const cache=new Map();
+const datasetDialog=createDatasetDialog(state);
 const linkParams=new URLSearchParams(location.search);let requestedTime=Date.parse(linkParams.get('time'));
 try{if(linkParams.has('lat')&&linkParams.has('lon')){const point=parseCoordinates(linkParams.get('lat')+','+linkParams.get('lon'));if(point)state.location=point;}}catch{}
 
@@ -19,10 +22,12 @@ function scheduleRender(){if(renderPending)return;renderPending=true;requestAnim
 function populate(){
  $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${m.color}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
- $('charts').innerHTML=VARIABLES.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><span class="unit">${v.unit}</span></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div></article>`).join('');
+ $('charts').innerHTML=VARIABLES.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div></article>`).join('');
+ $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
  $('data-table').previousElementSibling.innerHTML='<tr><th>Model</th>'+VARIABLES.map(v=>`<th>${v.title}<br>${v.unit}</th>`).join('')+'<th>Coverage / status</th></tr>';
 }
 async function loadLocation(location,force=false){
+ datasetDialog.close();
  state.controller?.abort();state.controller=new AbortController();const signal=state.controller.signal;const generation=++state.generation;
  state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;
  $('place').textContent=location.name;$('coordinates').textContent=`${Math.abs(location.latitude).toFixed(4)}° ${location.latitude<0?'S':'N'} · ${Math.abs(location.longitude).toFixed(4)}° ${location.longitude<0?'W':'E'}`;
@@ -92,11 +97,13 @@ function render(){
  plot($('plot-'+v.key),[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  const current=models.filter(m=>finite(valueAt(m,v.key,time)));
  const mean=average.values[state.index],count=average.counts[state.index];
- const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b>${fmt(mean,v.key==='snowfall'?2:1)}</b> <small>(${count} models)</small></span>`:'';
- $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>`<span><i class="swatch" style="--color:${m.color}"></i>${m.name} <b>${fmt(valueAt(m,v.key,time),v.key==='snowfall'?2:1)}</b></span>`).join(''):'<span>No values for this hour.</span>';
+ const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${temperatureAttributes(mean,v.unit)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
+ $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${m.color}"></i>${m.name} <b ${temperatureAttributes(value,v.unit)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
+ $('frost-'+v.key).innerHTML=v.unit==='°C'&&series.some(s=>s.values.some(value=>finite(value)&&value<0))?frostLegend():'';
  }
 
- $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let coverage=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)coverage=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(({key:k})=>`<td>${data?fmt(valueAt(data,k,time),k==='snowfall'?2:1):'—'}</td>`).join('')}<td>${esc(coverage)}</td></tr>`}).join('');
+ $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let coverage=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)coverage=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${temperatureAttributes(value,v.unit)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage)}</td></tr>`}).join('');
+ datasetDialog.render();
 }
 let searchController=null;
 async function searchLocations(query){const coords=parseCoordinates(query);if(coords)return [coords];if(query.trim().length<2)throw new Error('Enter at least two characters.');const data=await fetchJSON('https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name:query,count:'8',language:'en',format:'json'}),searchController?.signal);return (data.results??[]).sort((a,b)=>Number(b.country_code==='GB')-Number(a.country_code==='GB')).map(r=>({latitude:r.latitude,longitude:r.longitude,name:[r.name,r.admin2,r.admin1,r.country].filter(Boolean).join(', ')}));}
