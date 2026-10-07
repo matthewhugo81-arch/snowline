@@ -26,6 +26,12 @@ async function loadLocation(location,force=false){
  state.controller?.abort();state.controller=new AbortController();const signal=state.controller.signal;const generation=++state.generation;
  state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;
  $('place').textContent=location.name;$('coordinates').textContent=`${Math.abs(location.latitude).toFixed(4)}° ${location.latitude<0?'S':'N'} · ${Math.abs(location.longitude).toFixed(4)}° ${location.longitude<0?'W':'E'}`;
+ $('altitude').textContent='Altitude: loading…';
+ fetchJSON('https://api.open-meteo.com/v1/elevation?'+new URLSearchParams({latitude:location.latitude,longitude:location.longitude}),signal).then(result=>{
+  if(generation!==state.generation)return;
+  const altitude=result.elevation?.[0];
+  $('altitude').textContent=finite(altitude)?'Altitude: approximately '+Math.round(altitude).toLocaleString('en-GB')+' m above sea level':'Altitude unavailable';
+ }).catch(()=>{if(generation===state.generation)$('altitude').textContent='Altitude unavailable';});
  $('refresh').disabled=true;$('refresh').textContent='Loading…';
  let start=Math.floor(Date.now()/3600000)*3600000;state.timeNote='';
  const today=Date.parse(new Date().toISOString().slice(0,10)+'T00:00:00Z');
