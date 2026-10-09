@@ -57,7 +57,18 @@ if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isF
 function modelName(id){return MODELS.find(m=>m.id===id)?.name??id;}
 function status(message){$('map-status').textContent=message;}
 function usageUpdate(){$('usage-summary').textContent=usageText();}window.addEventListener('snowline-usage',usageUpdate);usageUpdate();
-for(const id of ['map-model','map-model-b']){for(const m of MODELS){const option=document.createElement('option');option.value=m.id;option.textContent=m.name;$(id).append(option);}}$('map-model').value=state.model;$('map-model-b').value=state.modelB;
+const modelGroups=[
+ ['Short-term models',MODELS.filter(model=>model.regional)],
+ ['Medium-term models',MODELS.filter(model=>!model.regional)]
+];
+for(const id of ['map-model','map-model-b']){
+ for(const [label,models] of modelGroups){
+  const group=document.createElement('optgroup');group.label=label;
+  for(const model of models){const option=document.createElement('option');option.value=model.id;option.textContent=model.name;group.append(option);}
+  $(id).append(group);
+ }
+}
+$('map-model').value=state.model;$('map-model-b').value=state.modelB;
 function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:2.5,maxZoom:10,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:true});
  map.touchZoomRotate.disableRotation();
