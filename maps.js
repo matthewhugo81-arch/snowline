@@ -1,4 +1,4 @@
-import {setupMobileMap} from './map-mobile.js?v=20261009-mobile';
+import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {ForecastFrames,frameWindow} from './map-frames.js?v=20261009-loading';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261009-overlays';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261009-denser-grid';

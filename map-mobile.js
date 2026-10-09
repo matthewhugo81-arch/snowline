@@ -1,12 +1,15 @@
 // Keep the phone layout separate from forecast state and the desktop controls.
 export function setupMobileMap(){
- const mobile=matchMedia('(max-width:650px)');
  const workspace=document.querySelector('.map-workspace');
  const stage=document.querySelector('.map-stage');
  const settings=document.getElementById('mobile-map-settings');
  const returnToMap=document.getElementById('mobile-return-map');
  const expand=document.getElementById('mobile-expand-map');
  const dialog=document.getElementById('expanded-map');
+ // A cached page may predate these optional controls. Never block the forecast
+ // controls when its HTML and the current scripts arrive from different releases.
+ if(!workspace||!stage||!settings||!returnToMap||!expand||!dialog||typeof dialog.showModal!=='function')return;
+ const mobile=matchMedia('(max-width:650px)');
  const anchor=document.createComment('Map position');
  stage.before(anchor);
  let scrollY=0;
@@ -38,4 +41,5 @@ export function setupMobileMap(){
  // Event analysis lives below the map, so leave the expanded view before opening it.
  document.addEventListener('click',event=>{if(dialog.open&&event.target.closest('.event-link')){dialog.close();restoreMap(false);}},true);
  mobile.addEventListener('change',()=>{setSettings(false);if(!mobile.matches&&dialog.open)dialog.close();});
+ document.body.classList.add('mobile-map-ready');
 }
