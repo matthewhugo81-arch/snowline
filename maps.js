@@ -1,5 +1,5 @@
 import {chooseRun,hasTime,forecastTimes} from './map-runs.js';
-import {sourceVariable} from './map-catalogue.js';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup} from './map-catalogue.js?v=20261009-layers';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
 import {MODELS,finite} from './data.js';
@@ -75,7 +75,7 @@ const a=makeMap('a');
 if(state.location)locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat([state.location.longitude,state.location.latitude]).addTo(a.map);
 function contourLevels(field){
  if(field.contourValues)return field.contourValues;
- if(field.group==='Pressure levels'&&field.unit==='°C')return Array.from({length:71},(_,i)=>-100+i*2);
+ if(/hPa$/.test(field.key)&&field.unit==='°C')return Array.from({length:71},(_,i)=>-100+i*2);
  if(field.key.startsWith('geopotential_height_')){const min=field.stops[0],max=field.stops.at(-1),step=Number(field.key.match(/_(\d+)hPa/)?.[1])<=100?120:60;return Array.from({length:Math.ceil((max-min)/step)+2},(_,i)=>Math.floor(min/step)*step+i*step);}
  // Spatial feeds contain MSLP in either hPa (UKMO/ICON) or Pa (IFS).
  if(field.key==='pressure_msl'){const hpa=Array.from({length:61},(_,i)=>880+i*4);return [...hpa,...hpa.map(v=>v*100)];}
@@ -179,15 +179,18 @@ function setLegend(){const f=fields.find(f=>f.key===state.field);const min=f.sto
  $('legend-ticks').replaceChildren();$('legend-ticks').style.cssText='';$('legend-ticks').style.cssText='display:block;position:relative;height:16px';[f.stops[1],0,f.stops.at(-1)].forEach(v=>{const span=document.createElement('span');span.textContent=v+'°';span.style.cssText='position:absolute;transform:translateX(-50%);left:'+100*f.stops.indexOf(v)/f.colors.length+'%';$('legend-ticks').append(span);});
  }else $('legend-gradient').removeAttribute('title');
  $('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+f.stops[1]+' to '+f.stops.at(-1)+'°C; end colours extend beyond this range.':'';
- let note=f.note;const ids=state.compare?[state.model,state.modelB]:[state.model];$('field-availability').textContent=ids.map(id=>modelName(id)+': '+(sourceVariable(state.metas[id],f.key)?'available':'not supplied')).join(' · ');$('map-contours').disabled=!!f.categorical;if(['precipitation','snowfall_water_equivalent'].includes(f.key)){const times=state.metas[state.model]?.valid_times??[];const idx=times.indexOf(state.times[state.index]);note+=' '+(idx>0?`First model interval: ${(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000} hours ending at the displayed time.`:'Initial model time: an accumulation interval is not defined.');if(state.compare){const other=state.metas[state.modelB]?.valid_times??[];const j=other.indexOf(state.times[state.index]);note+=' '+(j>0?`Second model interval: ${(Date.parse(other[j])-Date.parse(other[j-1]))/3600000} hours.`:'Second model is at its initial time.');}}$('variable-note').textContent=note;const interval=f.key==='pressure_msl'?'4 hPa':f.unit==='°C'?'2°C':f.unit==='%'?'10%':f.key==='freezing_level_height'?'250 m':f.key.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';$('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+(f.group?'the layer’s analysis intervals':interval)+'. Labels use the displayed units.';}
+ let note=f.note;const ids=state.compare?[state.model,state.modelB]:[state.model];$('field-availability').textContent=ids.map(id=>modelName(id)+': '+(sourceVariable(state.metas[id],f.key)?'available':'not supplied')).join(' · ');$('map-contours').disabled=!!f.categorical;if(['precipitation','rain','showers','snowfall_water_equivalent'].includes(f.key)){const times=state.metas[state.model]?.valid_times??[];const idx=times.indexOf(state.times[state.index]);note+=' '+(idx>0?`First model interval: ${(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000} hours ending at the displayed time.`:'Initial model time: an accumulation interval is not defined.');if(state.compare){const other=state.metas[state.modelB]?.valid_times??[];const j=other.indexOf(state.times[state.index]);note+=' '+(j>0?`Second model interval: ${(Date.parse(other[j])-Date.parse(other[j-1]))/3600000} hours.`:'Second model is at its initial time.');}}$('variable-note').textContent=note;const interval=f.key==='pressure_msl'?'4 hPa':f.key.startsWith('geopotential_height_')?(Number(f.key.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':f.key==='freezing_level_height'?'250 m':f.key.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';$('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+interval+'. Labels use the displayed units.';}
 function populateVariables(){
  const metas=(state.compare?[state.model,state.modelB]:[state.model]).map(id=>state.metas[id]).filter(Boolean);
- const available=fields.filter(f=>!f.overlayOnly&&metas.some(m=>sourceVariable(m,f.key)));
+ const available=availableFields(fields,metas);
  $('map-variable').replaceChildren();
+ const groups=new Map();
  for(const f of available){
+  const group=variableGroup(f.key);
+  if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);$('map-variable').append(element);}
   const option=document.createElement('option');option.value=f.key;
   const only=state.compare&&!metas.every(m=>sourceVariable(m,f.key));
-  option.textContent=f.name+(only?' · one model':'');$('map-variable').append(option);
+  option.textContent=f.name+(only?' · one model':'');groups.get(group).append(option);
  }
  if(!available.some(f=>f.key===state.field))state.field=available[0]?.key;
  $('map-variable').value=state.field;
@@ -199,7 +202,7 @@ async function loadModelRun(id,force){
 }
 $('map-run-mode').addEventListener('change',()=>configure());
 async function configure(force=false){pauseAnimation();++timeGeneration;for(const p of Object.values(panels))p.version++;const generation=++state.generation;$('reload-maps').disabled=true;status('Checking available variables and forecast times…');const ids=state.compare?[state.model,state.modelB]:[state.model];try{const pairs=await Promise.all(ids.map(async id=>[id,await loadModelRun(id,force)]));if(generation!==state.generation)return;state.metas=Object.fromEntries(pairs);$('ukv-run-note').textContent=$('map-run-mode').value==='extended'?'Uses the recent completed run reaching furthest ahead for each model.':'Uses the newest published run for each model.';pressureNote();const metas=pairs.map(p=>p[1]);
- for(const field of fields)for(const meta of metas){const source=sourceVariable(meta,field.key);if(source)settings.colorScales[source]={type:'breakpoint',unit:field.unit,breakpoints:field.stops,colors:field.colors.map(rgba)};}populateVariables();
+ extendCatalogue(fields,metas,OM,settings);populateVariables();
  if(!fields.some(f=>f.key===state.field&&metas.some(m=>sourceVariable(m,f.key))))throw new Error('No map fields are available for these runs.');
 
  state.times=forecastTimes(metas);if(!state.times.length)throw new Error('These runs have no available forecast times.');state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
