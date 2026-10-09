@@ -1,4 +1,4 @@
-import {forecastTimes} from './map-runs.js';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes} from './map-panels.js?v=20261009-panel-fields';
 import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261009-white-rain';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
@@ -48,7 +48,7 @@ function dismissLocation(){
 document.addEventListener('click',event=>{if(!event.target.closest('.maplibregl-map'))dismissLocation();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissLocation();});
 function viewportBounds(){const visible=Object.entries(panels).filter(([key])=>key==='a'||state.compare).map(([,p])=>p.map.getBounds());if(!visible.length)return;OM.updateCurrentBounds([Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))]);}
-let state={model:'ukmo_uk_deterministic_2km',modelB:'icon_eu',compare:false,field:'temperature_2m',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,contours:true,isobars:true};
+let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,contours:true,isobars:true};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';$('map-mslp').checked=state.isobars;
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(MODELS.some(m=>m.id===params.get('model')))state.model=params.get('model');
@@ -70,16 +70,16 @@ for(const id of ['map-model','map-model-b']){
 }
 $('map-model').value=state.model;$('map-model-b').value=state.modelB;
 function makeMap(key){
- const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:2.5,maxZoom:10,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:true});
+ const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:2.5,maxZoom:10,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:{compact:true}});
  map.touchZoomRotate.disableRotation();
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');map.fitBounds([[UK[0],UK[1]],[UK[2],UK[3]]],{padding:25,duration:0});
- const panel={map,ready:new Promise(resolve=>map.on('load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('dataloading',viewportBounds);map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);});new ResizeObserver(()=>map.resize()).observe($('map-'+key));
+ const panel={key,map,ready:new Promise(resolve=>map.on('load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('dataloading',viewportBounds);map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);});new ResizeObserver(()=>map.resize()).observe($('map-'+key));
  map.on('style.load',()=>{applyRoads(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note').textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||(event.sourceId&&event.sourceId!==panel.sourceId))return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
- map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded){panel.loaded=true;status('Click the map for a value and local charts.');}});
+ map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded){panel.loaded=true;status('Click a map for a value and local charts.');}});
  map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
-locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await OM.getValueFromLatLong(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===state.field);value.textContent=result&&finite(result.value)?`${result.value.toFixed(2)} ${field.unit} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
+locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await OM.getValueFromLatLong(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${result.value.toFixed(2)} ${field.unit} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
  return panel;
 }
 const a=makeMap('a');
@@ -98,10 +98,10 @@ function contourLevels(field){
 }
 function clearContours(panel){for(const id of ['wind-arrows','wind-halo','contour-labels','contour-lines'])if(panel.map.getLayer(id))panel.map.removeLayer(id);if(panel.map.getSource('contour-source'))panel.map.removeSource('contour-source');}
 function drawContours(panel,before){
- const field=fields.find(f=>f.key===state.field);const url=panel.url;if(field.categorical)return;
+ const field=fields.find(f=>f.key===panelSelection(state,panel.key).field);const url=panel.url;if(field.categorical)return;
  panel.map.addSource('contour-source',{type:'vector',url,maxzoom:10});
  if(/^wind_speed_|^ocean_current_speed$/.test(field.key))for(const [id,color,width]of [['wind-halo','#ffffff',2.6],['wind-arrows','#111111',1]])panel.map.addLayer({id,type:'line',source:'contour-source','source-layer':'wind-arrows',paint:{'line-color':color,'line-width':width}},before);
- const visibility=state.contours||(state.field==='pressure_msl'&&state.isobars)?'visible':'none';
+ const visibility=state.contours||(field.key==='pressure_msl'&&state.isobars)?'visible':'none';
  panel.map.addLayer({id:'contour-lines',type:'line',source:'contour-source','source-layer':'contours',layout:{visibility,'line-join':'round'},paint:{'line-color':'#000000','line-width':0.7,'line-opacity':0.8}},before);
  panel.map.addLayer({id:'contour-labels',type:'symbol',source:'contour-source','source-layer':'contours',layout:{visibility,'symbol-placement':field.key==='pressure_msl'?'point':'line','symbol-spacing':140,'text-max-angle':85,'text-font':['Noto Sans Regular'],'text-field':['to-string',['get','value']],'text-size':10,'text-padding':field.key==='pressure_msl'?24:6,'text-offset':[0,-0.5]},paint:{'text-color':'#000000','text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1}},before);
 }
@@ -110,7 +110,7 @@ function clearPressure(panel){
  if(panel.map.getSource('mslp-source'))panel.map.removeSource('mslp-source');
 }
 function pressureNote(){
- const ids=state.compare?[state.model,state.modelB]:[state.model];
+ const ids=panelModelIds(state);
  const missing=ids.filter(id=>!hasFieldTime(state.metas[id],'pressure_msl',state.times[state.index]));
  const warnings=ids.flatMap(id=>state.metas[id]?.sourceWarnings??[]);
  $('mslp-note').textContent=warnings.length?warnings.join(' '):missing.length?'MSLP not available for '+missing.map(modelName).join(', ')+' at this forecast time.':'Isobars every 4 hPa, from each model at the displayed time.';
@@ -119,7 +119,7 @@ function pressureNote(){
 }
 function drawPressure(panel,model,before){
  clearPressure(panel);
- if(!state.isobars||state.field==='pressure_msl'||!sourceVariable(state.metas[model],'pressure_msl'))return;
+ if(!state.isobars||panelSelection(state,panel.key).field==='pressure_msl'||!sourceVariable(state.metas[model],'pressure_msl'))return;
  const time=state.times[state.index];if(!time||!hasFieldTime(state.metas[model],'pressure_msl',time))return;
  panel.map.addSource('mslp-source',{type:'vector',url:concreteURL(model,state.metas[model],time,'pressure_msl'),maxzoom:10});
  panel.map.addLayer({id:'mslp-lines',type:'line',source:'mslp-source','source-layer':'contours',layout:{'line-join':'round'},paint:{'line-color':'#000000','line-width':0.8,'line-opacity':1}},before);
@@ -144,25 +144,25 @@ function prepareFrame(panel,url){
  frame.ready=new Promise(resolve=>{let done=false;const finish=ok=>{if(done)return;done=true;clearTimeout(timer);panel.map.off('sourcedata',check);panel.map.off('error',failed);resolve(ok);};const check=()=>{if(panel.map.getSource(id)&&panel.map.isSourceLoaded(id))finish(true);};const failed=e=>{if(e.sourceId===id)finish(false);};const timer=setTimeout(()=>finish(false),25000);frame.cancel=()=>finish(false);panel.map.on('sourcedata',check);panel.map.on('error',failed);check();});
  return frame;
 }
-function warmUpcoming(panel,model){
- if(panel.restyling||!state.metas[model]||!sourceVariable(state.metas[model],state.field))return;const upcoming=state.times.slice(state.index+1,state.index+3).filter(t=>hasFieldTime(state.metas[model],state.field,t)).map(t=>concreteURL(model,state.metas[model],t,state.field));if(state.isobars&&sourceVariable(state.metas[model],'pressure_msl'))upcoming.push(...state.times.slice(state.index,state.index+3).filter(t=>hasFieldTime(state.metas[model],'pressure_msl',t)).map(t=>concreteURL(model,state.metas[model],t,'pressure_msl')));
+function warmUpcoming(panel,model,field){
+ if(panel.restyling||!state.metas[model]||!sourceVariable(state.metas[model],field))return;const upcoming=state.times.slice(state.index+1,state.index+3).filter(t=>hasFieldTime(state.metas[model],field,t)).map(t=>concreteURL(model,state.metas[model],t,field));if(state.isobars&&sourceVariable(state.metas[model],'pressure_msl'))upcoming.push(...state.times.slice(state.index,state.index+3).filter(t=>hasFieldTime(state.metas[model],'pressure_msl',t)).map(t=>concreteURL(model,state.metas[model],t,'pressure_msl')));
  for(const frame of [...(panel.frames?.values()??[])])if(frame.id!==panel.sourceId&&!upcoming.includes(frame.url))discardFrame(panel,frame);
  for(const url of upcoming)prepareFrame(panel,url);
 }
 
 async function drawPanel(key,model){
- const panel=panels[key];await panel.ready;if(panel.restyling)return false;const version=++panel.version;const meta=state.metas[model],time=state.times[state.index],field=state.field;if(!meta||!time)return false;
+ const panel=panels[key];await panel.ready;if(panel.restyling)return false;const version=++panel.version;const meta=state.metas[model],time=state.times[state.index],field=panelSelection(state,key).field;if(!meta||!time)return false;
  if(!sourceVariable(meta,field)||!hasFieldTime(meta,field,time)){
   clearPressure(panel);clearContours(panel);if(panel.map.getLayer('weather'))panel.map.removeLayer('weather');
   panel.sourceId=null;panel.url=null;panel.loaded=false;panel.displayedTime=null;
   for(const frame of [...(panel.frames?.values()??[])])discardFrame(panel,frame);
-  $('panel-label-'+key).textContent=modelName(model)+' · '+stamp(time)+' UTC';
+  $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';
   $('map-error-'+key).textContent=!sourceVariable(meta,field)?fields.find(f=>f.key===field).name+' is not supplied in this model’s map feed.':'No forecast for this layer at this time. Its data ends '+stamp(fieldSource(meta,field).valid_times.at(-1))+' UTC.';$('map-error-'+key).hidden=false;
   drawPressure(panel,model,panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id);return true;
  }
  const url=concreteURL(model,meta,time,field);$('map-error-'+key).hidden=true;
  const frame=prepareFrame(panel,url);const ready=await frame.ready;
- if(version!==panel.version||panel.restyling||time!==state.times[state.index]||field!==state.field)return false;
+ if(version!==panel.version||panel.restyling||time!==state.times[state.index]||field!==panelSelection(state,key).field||model!==panelSelection(state,key).model)return false;
  if(!ready){discardFrame(panel,frame);$('map-error-'+key).textContent='Next frame could not load. The previous forecast remains visible; try again.';$('map-error-'+key).hidden=false;return false;}
  clearPressure(panel);clearContours(panel);if(panel.map.getLayer('weather'))panel.map.removeLayer('weather');
  panel.sourceId=frame.id;panel.url=url;panel.loaded=true;
@@ -171,58 +171,95 @@ async function drawPanel(key,model){
  for(const layer of panel.map.getStyle().layers)if(['line','symbol'].includes(layer.type)&&layer.id!=='coast-line')panel.map.moveLayer(layer.id);
  const before=panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
  drawContours(panel,before);drawPressure(panel,model,before);drawCoastline(panel.map,before);
- $('panel-label-'+key).textContent=modelName(model)+' · '+stamp(time)+' UTC';panel.displayedTime=time;warmUpcoming(panel,model);return true;
+ $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';panel.displayedTime=time;panel.displayedField=field;warmUpcoming(panel,model,field);return true;
 }
 async function setTime(){
  if(!state.times.length)return;const generation=++timeGeneration;state.index=Math.max(0,Math.min(state.index,state.times.length-1));const time=state.times[state.index];requestedTime=Date.parse(time);
  $('map-time').value=state.index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');$('map-time-label').textContent=stamp(time);$('previous-time').disabled=state.index===0;$('next-time').disabled=state.index===state.times.length-1;setLegend();pressureNote();dismissLocation();$('animation-status').textContent='Loading frame…';
- const targets=state.compare?[['a',state.model],['b',state.modelB]]:[['a',state.model]];
- await Promise.all(targets.map(async([key,model])=>{const p=panels[key];await p.ready;if(p.restyling||generation!==timeGeneration||!hasFieldTime(state.metas[model],state.field,time)||!sourceVariable(state.metas[model],state.field))return;return prepareFrame(p,concreteURL(model,state.metas[model],time,state.field)).ready;}));
+ const targets=panelSelections(state);
+ await Promise.all(targets.map(async({key,model,field})=>{const p=panels[key];await p.ready;if(p.restyling||generation!==timeGeneration||!hasFieldTime(state.metas[model],field,time)||!sourceVariable(state.metas[model],field))return;return prepareFrame(p,concreteURL(model,state.metas[model],time,field)).ready;}));
  if(generation!==timeGeneration)return;
- const loaded=await Promise.all([drawPanel('a',state.model),...(state.compare?[drawPanel('b',state.modelB)]:[])]);
+ const loaded=await Promise.all(targets.map(({key,model})=>drawPanel(key,model)));
  if(generation!==timeGeneration)return;
- if(loaded.every(Boolean)){$('animation-status').textContent='Next frames loading in background';status('Click the map for a value and local charts.');nextAnimation();}else{pauseAnimation();$('animation-status').textContent='Frame unavailable — previous image retained';}
+ if(loaded.every(Boolean)){$('animation-status').textContent='Next frames loading in background';status('Click a map for a value and local charts.');nextAnimation();}else{pauseAnimation();$('animation-status').textContent='Frame unavailable — previous image retained';}
 }
-function setLegend(){const f=fields.find(f=>f.key===state.field);const min=f.stops[0],max=f.stops.at(-1);$('legend-title').textContent=f.unit;$('legend-gradient').style.background=`linear-gradient(to right,${f.colors.map((c,i)=>c+' '+100*(f.stops[i]-min)/(max-min)+'%').join(',')})`;$('legend-ticks').replaceChildren();$('legend-ticks').style.cssText='';[min,(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2));$('legend-ticks').append(span);});$('legend-gradient').hidden=!!f.bands;$('legend-ticks').hidden=!!f.bands;$('legend-bands').hidden=!f.bands;$('legend-bands').replaceChildren();if(f.bands)f.stops.forEach((v,i)=>{const item=document.createElement('div');const swatch=document.createElement('i');swatch.style.background=f.colors[i];const label=document.createElement('span');label.textContent=f.categorical?String(v):i===f.stops.length-1?v+'+':v+'–<'+f.stops[i+1];item.append(swatch,label);$('legend-bands').append(item);});if(f.temperatureBands){
- const colors=f.colors;const gradient=$('legend-gradient');
- gradient.style.background='linear-gradient(to right,'+colors.flatMap((c,i)=>[c+' '+100*i/colors.length+'%',c+' '+100*(i+1)/colors.length+'%']).join(',')+')';
- gradient.title=f.stops.slice(1).join(', ')+' °C';
- $('legend-ticks').replaceChildren();$('legend-ticks').style.cssText='';$('legend-ticks').style.cssText='display:block;position:relative;height:16px';[f.stops[1],0,f.stops.at(-1)].forEach(v=>{const span=document.createElement('span');span.textContent=v+'°';span.style.cssText='position:absolute;transform:translateX(-50%);left:'+100*f.stops.indexOf(v)/f.colors.length+'%';$('legend-ticks').append(span);});
- }else $('legend-gradient').removeAttribute('title');
- $('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+f.stops[1]+' to '+f.stops.at(-1)+'°C; end colours extend beyond this range.':'';
- let note=f.note;const ids=state.compare?[state.model,state.modelB]:[state.model];$('field-availability').textContent=ids.map(id=>modelName(id)+': '+(sourceVariable(state.metas[id],f.key)?'available':'not supplied')).join(' · ');$('map-contours').disabled=!!f.categorical;if(['precipitation','rain','showers','snowfall_water_equivalent'].includes(f.key)){const times=fieldSource(state.metas[state.model],f.key)?.valid_times??[];const idx=times.indexOf(state.times[state.index]);note+=' '+(idx>0?`First model interval: ${(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000} hours ending at the displayed time.`:'Initial model time: an accumulation interval is not defined.');if(state.compare){const other=fieldSource(state.metas[state.modelB],f.key)?.valid_times??[];const j=other.indexOf(state.times[state.index]);note+=' '+(j>0?`Second model interval: ${(Date.parse(other[j])-Date.parse(other[j-1]))/3600000} hours.`:'Second model is at its initial time.');}}$('variable-note').textContent=note;const interval=f.key==='pressure_msl'?'4 hPa':f.key.startsWith('geopotential_height_')?(Number(f.key.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':f.key==='freezing_level_height'?'250 m':f.key.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';$('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+interval+'. Labels use the displayed units.';}
-function populateVariables(){
- const metas=(state.compare?[state.model,state.modelB]:[state.model]).map(id=>state.metas[id]).filter(Boolean);
- const available=availableFields(fields,metas);
- $('map-variable').replaceChildren();
- const groups=new Map();
- for(const f of available){
-  const group=variableGroup(f.key);
-  if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);$('map-variable').append(element);}
-  const option=document.createElement('option');option.value=f.key;
-  const only=state.compare&&!metas.every(m=>sourceVariable(m,f.key));
-  option.textContent=f.name+(only?' · one model':'');groups.get(group).append(option);
+function setLegend(){
+ for(const {key,model,field} of panelSelections(state)){
+  const f=fields.find(f=>f.key===field);if(!f)continue;
+  const el=name=>$(name+'-'+key),gradient=el('legend-gradient'),ticks=el('legend-ticks'),bands=el('legend-bands');
+  const min=f.temperatureBands?f.stops[1]:f.stops[0],max=f.stops.at(-1);
+  el('legend-title').textContent=f.unit;
+  gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
+  gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(f.stops[i]-min)/(max-min)+'%')).join(',')+')';
+  [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
+  ticks.classList.toggle('temperature-ticks',!!f.temperatureBands);
+  if(f.bands)f.stops.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categorical?String(v):i===f.stops.length-1?v+'+':v+'–<'+f.stops[i+1];item.title=range+' '+f.unit;item.setAttribute('aria-label',range+' '+f.unit);swatch.style.background=f.colors[i];label.textContent=v+(i===f.stops.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
+  bands.style.gridTemplateColumns='repeat('+f.stops.length+',minmax(0,1fr))';
+  el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
+  let note=f.note,interval='';
+  if(['precipitation','rain','showers','snowfall_water_equivalent'].includes(field)){
+   const times=fieldSource(state.metas[model],field)?.valid_times??[],idx=times.indexOf(state.times[state.index]);
+   interval=idx>0?(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000+' h ending at valid time':'Initial model time';
+   note+=' '+(idx>0?'Accumulation: '+interval+'.':'An accumulation interval is not defined at the initial model time.');
+  }
+  el('legend-interval').textContent=interval;
+  el('variable-note').textContent=note;
+  el('field-availability').textContent=modelName(model)+' · '+f.name;
+  const meta=state.metas[model],source=fieldSource(meta,field);
+  if(meta&&source)el('run').textContent=stamp(meta.reference_time)+' UTC · ends '+stamp(source.valid_times.at(-1));
+  const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';
+  el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
- if(!available.some(f=>f.key===state.field))state.field=available[0]?.key;
- $('map-variable').value=state.field;
+ $('map-contours').disabled=panelSelections(state).every(({field})=>fields.find(f=>f.key===field)?.categorical);
+}
+function populateVariables(){
+ for(const {key,model,field} of panelSelections(state)){
+  const available=availableFields(fields,[state.metas[model]]),select=$(key==='a'?'map-variable':'map-variable-b'),groups=new Map();select.replaceChildren();
+  for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
+  const selected=available.some(f=>f.key===field)?field:available.find(f=>f.key==='temperature_2m')?.key??available[0]?.key;
+  state[key==='a'?'field':'fieldB']=selected;select.value=selected??'';
+ }
+}
+function refreshTimeline(){
+ state.times=panelForecastTimes(state);if(!state.times.length)throw new Error('These layers have no available forecast times.');
+ state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
+ $('map-time').max=state.times.length-1;$('range-start').textContent=stamp(state.times[0]);$('range-end').textContent=stamp(state.times.at(-1));
 }
 async function loadModelRun(id,force){
  const load=url=>cachedJSON(url,{force,kind:'metadata',ttl:600000});
  return loadSpatialModel(id,load,$('map-run-mode').value);
 }
 $('map-run-mode').addEventListener('change',()=>configure());
-async function configure(force=false){pauseAnimation();++timeGeneration;for(const p of Object.values(panels))p.version++;const generation=++state.generation;$('reload-maps').disabled=true;status('Checking available variables and forecast times…');const ids=state.compare?[state.model,state.modelB]:[state.model];try{const pairs=await Promise.all(ids.map(async id=>[id,await loadModelRun(id,force)]));if(generation!==state.generation)return;state.metas=Object.fromEntries(pairs);$('ukv-run-note').textContent=$('map-run-mode').value==='extended'?'Uses the recent completed run reaching furthest ahead for each model.':'Uses the newest published run for each model.';pressureNote();const metas=pairs.map(p=>p[1]);
- extendCatalogue(fields,metas,OM,settings);populateVariables();
- if(!fields.some(f=>f.key===state.field&&metas.some(m=>sourceVariable(m,f.key))))throw new Error('No map fields are available for these runs.');
-
- state.times=forecastTimes(metas);if(!state.times.length)throw new Error('These runs have no available forecast times.');state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
- $('map-time').max=state.times.length-1;$('range-start').textContent=stamp(state.times[0]);$('range-end').textContent=stamp(state.times.at(-1));$('run-a').textContent=modelName(state.model)+' · '+stamp(metas[0].reference_time)+' · ends '+stamp(metas[0].valid_times.at(-1));$('run-b').textContent=state.compare?modelName(state.modelB)+' · '+stamp(metas[1].reference_time)+' · ends '+stamp(metas[1].valid_times.at(-1)):'';setLegend();setTime();
- }catch(error){if(generation===state.generation){state.times=[];for(const [key,p]of Object.entries(panels)){clearPressure(p);clearContours(p);if(p.map.getLayer('weather'))p.map.removeLayer('weather');p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}finally{if(generation===state.generation)$('reload-maps').disabled=false;}}
-$('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});$('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
-$('map-variable').addEventListener('change',e=>{pauseAnimation();state.field=e.target.value;setLegend();setTime();});
-$('compare-maps').addEventListener('change',async e=>{state.compare=e.target.checked;$('panel-b').hidden=!state.compare;$('second-model-control').hidden=!state.compare;if(state.compare&&!panels.b)makeMap('b');a.map.resize();panels.b?.map.resize();await configure();});
-$('map-contours').addEventListener('change',e=>{state.contours=e.target.checked;for(const p of Object.values(panels))for(const id of ['contour-lines','contour-labels'])if(p.map.getLayer(id))p.map.setLayoutProperty(id,'visibility',state.contours||(state.field==='pressure_msl'&&state.isobars)?'visible':'none');});
-$('map-mslp').addEventListener('change',e=>{state.isobars=e.target.checked;for(const [key,panel]of Object.entries(panels)){if(panel.restyling||!state.metas[key==='a'?state.model:state.modelB])continue;const before=panel.map.getStyle().layers.find(l=>l.type==='symbol'&&!['contour-labels','mslp-labels'].includes(l.id))?.id;drawPressure(panel,key==='a'?state.model:state.modelB,before);}pressureNote();});
+async function configure(force=false){
+ pauseAnimation();++timeGeneration;for(const p of Object.values(panels)){p.version++;p.displayedTime=null;}
+ const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;
+ status('Checking model runs…');
+ try{
+  const pairs=await Promise.all(panelModelIds(state).map(async id=>[id,await loadModelRun(id,force)]));if(generation!==state.generation)return;
+  state.metas=Object.fromEntries(pairs);const metas=pairs.map(p=>p[1]);
+  $('ukv-run-note').textContent=$('map-run-mode').value==='extended'?'Uses the recent completed run reaching furthest ahead for each model.':'Uses the newest published run for each model.';
+  extendCatalogue(fields,metas,OM,settings);populateVariables();
+  if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
+  refreshTimeline();
+  setLegend();setTime();
+ }catch(error){if(generation===state.generation){state.times=[];for(const p of Object.values(panels)){clearPressure(p);clearContours(p);if(p.map.getLayer('weather'))p.map.removeLayer('weather');p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
+ finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;}}
+}
+$('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
+$('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
+for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB']])$(id).addEventListener('change',e=>{pauseAnimation();state[property]=e.target.value;refreshTimeline();setTime();});
+let comparisonInitialized=false;
+$('compare-maps').addEventListener('change',async e=>{
+ state.compare=e.target.checked;
+ if(state.compare&&!comparisonInitialized){state.modelB=state.model;$('map-model-b').value=state.modelB;comparisonInitialized=true;}
+ $('panel-b').hidden=!state.compare;$('layer-notes-b').hidden=!state.compare;
+ if(state.compare&&!panels.b)makeMap('b');a.map.resize();panels.b?.map.resize();await configure();
+});
+function updateContourVisibility(){
+ for(const {key,field}of panelSelections(state))for(const id of ['contour-lines','contour-labels'])if(panels[key].map.getLayer(id))panels[key].map.setLayoutProperty(id,'visibility',state.contours||(field==='pressure_msl'&&state.isobars)?'visible':'none');
+}
+$('map-contours').addEventListener('change',e=>{state.contours=e.target.checked;updateContourVisibility();});
+$('map-mslp').addEventListener('change',e=>{state.isobars=e.target.checked;for(const {key,model}of panelSelections(state)){const panel=panels[key];if(panel.restyling||!state.metas[model])continue;const before=panel.map.getStyle().layers.find(l=>l.type==='symbol'&&!['contour-labels','mslp-labels'].includes(l.id))?.id;drawPressure(panel,model,before);}updateContourVisibility();pressureNote();});
 $('map-roads').addEventListener('change',e=>{roads=e.target.checked;try{localStorage.setItem('snowline-roads',String(roads));}catch{}for(const panel of Object.values(panels))if(panel.map.isStyleLoaded())applyRoads(panel.map);});
 $('map-background').addEventListener('change',e=>{pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';background=e.target.value;try{localStorage.setItem('snowline-background',background);}catch{}for(const panel of Object.values(panels)){panel.restyling=true;panel.loaded=false;panel.version++;for(const frame of panel.frames?.values()??[])frame.cancel?.();panel.frames=new Map();panel.map.setStyle('https://tiles.openfreemap.org/styles/'+backgrounds[background]);}});
 $('reload-maps').addEventListener('click',()=>configure(true));$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{if(state.times.length)$('map-time-label').textContent=stamp(state.times[Number(e.target.value)]);});
