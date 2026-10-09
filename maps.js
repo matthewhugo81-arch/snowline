@@ -1,3 +1,4 @@
+import {setupMobileMap} from './map-mobile.js?v=20261009-mobile';
 import {ForecastFrames,frameWindow} from './map-frames.js?v=20261009-loading';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261009-overlays';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261009-denser-grid';
@@ -9,6 +10,7 @@ import {MODELS,finite} from './data.js';
 import {cachedJSON,usageText} from './cache.js';
 import {selectEventPoint} from './event-analysis.js';
 const $=id=>document.getElementById(id);
+setupMobileMap();
 const UK=[-11,49,2.7,61.6];
 const tempColors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643'];
 const referenceColors=["#320032","#640064","#960096","#c800c8","#fa00fe","#c800fe","#9600fe","#6400fe","#3200fe","#0032fe","#0064fe","#0096fe","#00c8fe","#00e6f0","#00e6a0","#00e678","#00e650","#00f028","#00fa00","#fefe00","#fee100","#fec800","#feaf00","#fe9600","#e67d00","#e66400","#dc4b1e","#c8321e","#b4191e","#aa001e","#b40032","#c80064","#fe0096","#fe00c8","#fe00e1","#fe00fa"];
