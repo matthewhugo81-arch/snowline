@@ -127,10 +127,8 @@ function drawPressure(panel,model,before){
 }
 function drawCoastline(map,before){
  if(!map.getSource('coastline'))map.addSource('coastline',{type:'geojson',data:'coastline.geojson'});
- for(const [id,color,width] of [['coast-halo','#ffffff',2.5],['coast-line','#455464',1.1]]){
-  if(!map.getLayer(id))map.addLayer({id,type:'line',source:'coastline',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':color,'line-width':width,'line-opacity':id==='coast-halo'?0.75:1}},before);
-  else map.moveLayer(id,before);
- }
+ if(!map.getLayer('coast-line'))map.addLayer({id:'coast-line',type:'line',source:'coastline',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#000000','line-width':1.6,'line-opacity':1}},before);
+ else map.moveLayer('coast-line',before);
 }
 function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,playTimer=null,timeGeneration=0,frameSequence=0;
@@ -170,7 +168,7 @@ async function drawPanel(key,model){
  panel.sourceId=frame.id;panel.url=url;panel.loaded=true;
  panel.map.addLayer({id:'weather',type:'raster',source:frame.id,paint:{'raster-opacity':state.opacity,'raster-fade-duration':0,'raster-resampling':fields.find(f=>f.key===field)?.bands?'nearest':'linear'}});
  if(panel.map.getLayer(frame.layer))panel.map.removeLayer(frame.layer);
- for(const layer of panel.map.getStyle().layers)if(['line','symbol'].includes(layer.type)&&!['coast-halo','coast-line'].includes(layer.id))panel.map.moveLayer(layer.id);
+ for(const layer of panel.map.getStyle().layers)if(['line','symbol'].includes(layer.type)&&layer.id!=='coast-line')panel.map.moveLayer(layer.id);
  const before=panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
  drawContours(panel,before);drawPressure(panel,model,before);drawCoastline(panel.map,before);
  $('panel-label-'+key).textContent=modelName(model)+' · '+stamp(time)+' UTC';panel.displayedTime=time;warmUpcoming(panel,model);return true;
