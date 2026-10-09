@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as OM from '../vendor/index.mjs';
-import {sourceVariable,canonicalVariable,describeVariable,extendCatalogue,availableFields} from '../map-catalogue.js';
+import {sourceVariable,canonicalVariable,describeVariable,extendCatalogue,availableFields,PRECIPITATION_SCALE} from '../map-catalogue.js';
 
 test('new layers use physical units and appropriate renderer scales',()=>{
  const expected={wind_gusts_10m:'m/s',visibility:'m',cloud_cover_low:'%',cape:'J/kg',convective_inhibition:'J/kg',surface_temperature:'°C',soil_moisture_0_to_7cm:'m³/m³',geopotential_height_500hPa:'m',temperature_500hPa:'°C',relative_humidity_700hPa:'%',wind_speed_300hPa:'m/s',shortwave_radiation:'W/m²',total_column_integrated_water_vapour:'kg/m²'};
@@ -45,4 +45,24 @@ test('upper-air levels have a consistent surface-to-stratosphere order',()=>{
  const meta={variables:['temperature_10hPa','temperature_500hPa','temperature_925hPa','temperature_300hPa']};
  const fields=[];extendCatalogue(fields,[meta],OM,{colorScales:{}});
  assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['temperature_925hPa','temperature_500hPa','temperature_300hPa','temperature_10hPa']);
+});
+
+test('precipitation renderer honours all reference boundaries, including opaque dry grey',()=>{
+ const expected=[[0,'#6f6f6f'],[.5,'#231496'],[1,'#1538c7'],[2,'#125c13'],[4,'#807e10'],[6,'#a1a13b'],[8,'#b08131'],[10,'#a35a35'],[15,'#993232'],[20,'#c43650'],[25,'#ba2388'],[30,'#dec4c4'],[40,'#c9bcbc'],[50,'#f0e7e7']];
+ const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),1];
+ const scale={type:'breakpoint',breakpoints:PRECIPITATION_SCALE.stops,colors:PRECIPITATION_SCALE.colors.map(rgba)};
+ for(const [i,[threshold,color]]of expected.entries()){
+  assert.deepEqual(OM.getColor(scale,threshold,false),rgba(color));
+  if(i>0)assert.deepEqual(OM.getColor(scale,threshold-.00001,false),rgba(expected[i-1][1]));
+ }
+ assert.deepEqual(OM.getColor(scale,100,false),rgba('#f0e7e7'));
+});
+test('rain and showers share the precipitation map bands and remain discrete',()=>{
+ for(const key of ['rain','showers']){
+  const field=describeVariable(key,OM);
+  assert.equal(field.bands,true);
+  assert.deepEqual(field.stops,PRECIPITATION_SCALE.stops);
+  assert.deepEqual(field.colors,PRECIPITATION_SCALE.colors);
+  assert.equal(field.unit,'mm water');
+ }
 });

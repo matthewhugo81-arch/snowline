@@ -8,6 +8,8 @@ Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK ma
 
 Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Map wind layers retain their native m/s units; location charts use mph.
 
+Precipitation, rain and showers maps share the supplied 14-band scale: 0, 0.5, 1, 2, 4, 6, 8, 10, 15, 20, 25, 30, 40 and 50 mm. The 0–<0.5 mm band is grey, values at 50 mm or above use the final colour, and missing grid data remains missing. Colours change at the exact thresholds without blending between bands. Amounts refer to the model interval shown beside the map, which can differ between models and forecast times.
+
 The UK maps were imported from Snowline Sites version 23, source commit `7e347e9cb6daa96b403fdcb64c7e543043c3dddb`, on 9 October 2026. Existing GitHub chart exports, table averages and mph wind charts are preserved.
 
 Each variable chart has a **Data** button in its top-right corner. It opens an hourly table for the selected chart models, all models, or one model. Choose the chart time window or the full dataset returned by the models (including earlier hours). **Download CSV** opens in Excel/Google Sheets; **Download table** saves a standalone HTML table with the colour scale. CSV retains supplied numeric precision, identifies the location, variable, units and UTC timestamps, and leaves missing values blank. Model retrieval times and data availability appear in the table view and HTML export.

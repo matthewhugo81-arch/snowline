@@ -3,6 +3,13 @@
 export const PRESSURE_LEVELS = [1000,925,850,700,500,300,250,200,100,50,10];
 const HEIGHT_LEVELS = [50,100,200,300];
 const GROUPS = ['Temperature','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+// Exact 14-band map palette from the supplied precipitation-scale reference.
+// The grey 0–<0.5 mm band is opaque; missing grid data remains missing.
+export const PRECIPITATION_SCALE = {
+ stops:[0,.5,1,2,4,6,8,10,15,20,25,30,40,50],
+ colors:['#6f6f6f','#231496','#1538c7','#125c13','#807e10','#a1a13b','#b08131','#a35a35','#993232','#c43650','#ba2388','#dec4c4','#c9bcbc','#f0e7e7'],
+ bands:true
+};
 export function sourceVariable(meta,key){
  const vars=meta?.variables??[];
  if(key.startsWith('wind_speed_')){
@@ -57,6 +64,7 @@ const extras={
 };
 export function describeVariable(key,OM){
  let [name,scaleKey,note]=extras[key]??[];
+ if(key==='rain'||key==='showers')return {key,name,note,group:variableGroup(key),unit:'mm water',...PRECIPITATION_SCALE};
  let unit;
  const pressure=key.match(/^(temperature|relative_humidity|wind_speed|geopotential_height)_(\d+)hPa$/);
  const height=key.match(/^(temperature|wind_speed)_(\d+)m$/);
