@@ -98,6 +98,16 @@
 
 .mobile-only,.expanded-map-title{display:none}
 #expanded-map:not([open]){display:none}
+@media(min-width:651px){
+ .map-main{--portrait-map-height:clamp(600px,calc(100dvh - 407px),900px);--portrait-map-width:calc(var(--portrait-map-height) * .8);max-width:calc(274px + var(--portrait-map-width) + 2px)}
+ .map-view,.map-canvases:has(#panel-b:not([hidden])) .map-view{height:var(--portrait-map-height)}
+}
+@media(min-width:651px) and (max-width:1050px){
+ .map-main{max-width:calc(250px + var(--portrait-map-width) + 2px)}
+}
+@media(min-width:1051px){
+ .map-main:has(#panel-b:not([hidden])){max-width:calc(274px + var(--portrait-map-width) * 2 + 4px)}
+}
 @media(max-width:650px){
  .map-page header{padding:7px 10px;gap:6px;flex-wrap:nowrap}
  .map-page .brand{font-size:18px;gap:5px}
