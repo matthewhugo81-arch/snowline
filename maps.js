@@ -1,6 +1,6 @@
 import {forecastTimes} from './map-runs.js';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261009-gfs';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-gfs';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261009-white-rain';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
 import {MODELS,finite} from './data.js';
@@ -17,7 +17,7 @@ const fields=[
  {key:'dew_point_2m',name:'2 m dew point',unit:'°C',note:'Available where the spatial model feed includes dew point.',stops:[-15,-10,-5,0,3,7,12,18],colors:tempColors},
  {key:'soil_temperature_0cm',name:'0 cm soil temperature',unit:'°C',note:'Modelled ground temperature, not a road-surface forecast.',stops:[-15,-10,-5,0,3,7,12,18],colors:tempColors},
  {key:'soil_temperature_0_to_7cm',name:'0–7 cm soil temperature',unit:'°C',note:'Average temperature in a soil layer; not road or grass-minimum temperature.',stops:[-15,-10,-5,0,3,7,12,18],colors:tempColors},
- {key:'precipitation',name:'Precipitation',unit:'mm water',note:'Precipitation over the native model interval. Grey means 0 to below 0.5 mm. Check the interval shown with the valid time.',...PRECIPITATION_SCALE},
+ {key:'precipitation',name:'Precipitation',unit:'mm water',note:'Precipitation over the native model interval. White means 0 to below 0.5 mm. Check the interval shown with the valid time.',...PRECIPITATION_SCALE},
  {key:'snowfall_water_equivalent',name:'Snowfall · water equivalent',unit:'mm water',note:'Water contained in falling snow over the model interval. This is not snow depth or a D-category amount.',stops:[0,.1,.25,.5,1,2,5,10],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
  {key:'snow_depth',name:'Snow depth',unit:'m snow',note:'Existing snow on the ground. Kept in the spatial feed’s native metres.',stops:[0,.01,.02,.05,.1,.2,.5,1],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
  {key:'snow_depth_water_equivalent',name:'Snow cover · water equivalent',unit:'mm water',note:'Water equivalent of existing snow cover, not its physical depth.',stops:[0,1,5,10,25,50,100,200],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
@@ -106,7 +106,7 @@ function drawContours(panel,before){
  panel.map.addLayer({id:'contour-labels',type:'symbol',source:'contour-source','source-layer':'contours',layout:{visibility,'symbol-placement':field.key==='pressure_msl'?'point':'line','symbol-spacing':140,'text-max-angle':85,'text-font':['Noto Sans Regular'],'text-field':['to-string',['get','value']],'text-size':10,'text-padding':field.key==='pressure_msl'?24:6,'text-offset':[0,-0.5]},paint:{'text-color':'#000000','text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1}},before);
 }
 function clearPressure(panel){
- for(const id of ['mslp-labels','mslp-lines','mslp-halo'])if(panel.map.getLayer(id))panel.map.removeLayer(id);
+ for(const id of ['mslp-labels','mslp-lines'])if(panel.map.getLayer(id))panel.map.removeLayer(id);
  if(panel.map.getSource('mslp-source'))panel.map.removeSource('mslp-source');
 }
 function pressureNote(){
@@ -122,8 +122,8 @@ function drawPressure(panel,model,before){
  if(!state.isobars||state.field==='pressure_msl'||!sourceVariable(state.metas[model],'pressure_msl'))return;
  const time=state.times[state.index];if(!time||!hasFieldTime(state.metas[model],'pressure_msl',time))return;
  panel.map.addSource('mslp-source',{type:'vector',url:concreteURL(model,state.metas[model],time,'pressure_msl'),maxzoom:10});
- for(const [id,color,width,opacity] of [['mslp-halo','#ffffff',3,0.65],['mslp-lines','#000000',1.2,1]])panel.map.addLayer({id,type:'line',source:'mslp-source','source-layer':'contours',layout:{'line-join':'round'},paint:{'line-color':color,'line-width':width,'line-opacity':opacity}},before);
- panel.map.addLayer({id:'mslp-labels',type:'symbol',source:'mslp-source','source-layer':'contours',layout:{'symbol-placement':'point','text-allow-overlap':false,'text-font':['Noto Sans Regular'],'text-field':['to-string',['case',['>', ['to-number',['get','value']],2000],['/', ['to-number',['get','value']],100],['to-number',['get','value']]]],'text-size':12,'text-padding':24,'text-offset':[0,-0.6]},paint:{'text-color':'#000000','text-halo-color':'#ffffff','text-halo-width':1.5}},before);
+ panel.map.addLayer({id:'mslp-lines',type:'line',source:'mslp-source','source-layer':'contours',layout:{'line-join':'round'},paint:{'line-color':'#000000','line-width':0.8,'line-opacity':1}},before);
+ panel.map.addLayer({id:'mslp-labels',type:'symbol',source:'mslp-source','source-layer':'contours',layout:{'symbol-placement':'point','text-allow-overlap':false,'text-font':['Noto Sans Regular'],'text-field':['to-string',['case',['>', ['to-number',['get','value']],2000],['/', ['to-number',['get','value']],100],['to-number',['get','value']]]],'text-size':12,'text-padding':24,'text-offset':[0,-0.6]},paint:{'text-color':'#000000','text-halo-width':0}},before);
 }
 function drawCoastline(map,before){
  if(!map.getSource('coastline'))map.addSource('coastline',{type:'geojson',data:'coastline.geojson'});

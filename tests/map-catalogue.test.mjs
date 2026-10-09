@@ -47,8 +47,8 @@ test('upper-air levels have a consistent surface-to-stratosphere order',()=>{
  assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['temperature_925hPa','temperature_500hPa','temperature_300hPa','temperature_10hPa']);
 });
 
-test('precipitation renderer honours all reference boundaries, including opaque dry grey',()=>{
- const expected=[[0,'#6f6f6f'],[.5,'#231496'],[1,'#1538c7'],[2,'#125c13'],[4,'#807e10'],[6,'#a1a13b'],[8,'#b08131'],[10,'#a35a35'],[15,'#993232'],[20,'#c43650'],[25,'#ba2388'],[30,'#dec4c4'],[40,'#c9bcbc'],[50,'#f0e7e7']];
+test('precipitation renderer preserves rain boundaries with an opaque white dry band',()=>{
+ const expected=[[0,'#ffffff'],[.5,'#231496'],[1,'#1538c7'],[2,'#125c13'],[4,'#807e10'],[6,'#a1a13b'],[8,'#b08131'],[10,'#a35a35'],[15,'#993232'],[20,'#c43650'],[25,'#ba2388'],[30,'#dec4c4'],[40,'#c9bcbc'],[50,'#f0e7e7']];
  const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),1];
  const scale={type:'breakpoint',breakpoints:PRECIPITATION_SCALE.stops,colors:PRECIPITATION_SCALE.colors.map(rgba)};
  for(const [i,[threshold,color]]of expected.entries()){
