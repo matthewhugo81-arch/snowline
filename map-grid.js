@@ -28,7 +28,7 @@ export function nearestGridPoint(grid,latitude,lon){
 }
 
 export function visibleGridPoints(grid,width,height,unproject,project){
- const spacing=Math.max(70,Math.sqrt(width*height/180)),seen=new Set(),points=[];
+ const spacing=Math.max(42,Math.sqrt(width*height/540)),seen=new Set(),points=[];
  for(let y=48;y<height-24;y+=spacing)for(let x=28;x<width-20;x+=spacing){
   const position=unproject([x,y]),point=nearestGridPoint(grid,position.lat,position.lng);
   if(!point||seen.has(point.id))continue;
@@ -42,7 +42,7 @@ export function visibleGridPoints(grid,width,height,unproject,project){
 export function gridValueLabel(value,field){
  if(!Number.isFinite(value))return null;
  if(field.key==='pressure_msl'&&value>2000)value/=100;
- const digits=field.unit==='m snow'||field.unit==='m³/m³'?3:field.unit==='°C'||field.unit==='m/s'||field.unit==='mm water'?1:0;
+ const digits=field.unit==='m snow'||field.unit==='m³/m³'?3:field.unit==='m/s'||field.unit==='mm water'?1:0;
  const rounded=Number(value.toFixed(digits));
  return Object.is(rounded,-0)?'0':String(rounded);
 }

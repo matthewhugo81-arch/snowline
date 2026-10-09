@@ -32,7 +32,7 @@ test('grid bounds reject unsupported points and regular global grids wrap longit
 test('screen thinning bounds label count and deduplicates coarse native points',()=>{
  const grid=nativeGrid('ncep_gfs013');
  const points=visibleGridPoints(grid,1920,1080,([x,y])=>({lat:61-y/90,lng:-12+x/100}),([lon,lat])=>({x:(lon+12)*100,y:(61-lat)*90}));
- assert.ok(points.length>50&&points.length<=180);
+ assert.ok(points.length>300&&points.length<=540);
  assert.equal(new Set(points.map(point=>point.id)).size,points.length);
  const repeated=visibleGridPoints(grid,800,500,()=>({lat:55,lng:-4}),()=>({x:400,y:250}));
  assert.equal(repeated.length,1);
@@ -42,6 +42,10 @@ test('grid label units preserve small amounts and reject missing values',()=>{
  assert.equal(gridValueLabel(100120,{key:'pressure_msl',unit:'hPa'}),'1001');
  assert.equal(gridValueLabel(.035,{unit:'m snow'}),'0.035');
  assert.equal(gridValueLabel(.8,{unit:'mm water'}),'0.8');
+ assert.equal(gridValueLabel(3.9,{unit:'°C'}),'4');
+ assert.equal(gridValueLabel(-2.7,{unit:'°C'}),'-3');
+ assert.equal(gridValueLabel(.4,{unit:'°C'}),'0');
+ assert.equal(gridValueLabel(-.4,{unit:'°C'}),'0');
  assert.equal(gridValueLabel(-.001,{unit:'°C'}),'0');
  for(const value of [NaN,Infinity,null,undefined])assert.equal(gridValueLabel(value,{unit:'°C'}),null);
 });
