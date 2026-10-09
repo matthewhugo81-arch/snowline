@@ -11,6 +11,7 @@ export const PRECIPITATION_SCALE = {
  bands:true
 };
 export function sourceVariable(meta,key){
+ if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
  if(key.startsWith('wind_speed_')){
   const suffix=key.slice(11),u='wind_u_component_'+suffix,v='wind_v_component_'+suffix;

@@ -1,13 +1,13 @@
-import {chooseRun,hasTime,forecastTimes} from './map-runs.js';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-precip';
+import {forecastTimes} from './map-runs.js';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261009-gfs';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-gfs';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
 import {MODELS,finite} from './data.js';
 import {cachedJSON,usageText} from './cache.js';
 import {selectEventPoint} from './event-analysis.js';
 const $=id=>document.getElementById(id);
-const UK=[-11,49,2.7,61.6];const BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
-const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
+const UK=[-11,49,2.7,61.6];
 const tempColors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643'];
 const referenceColors=["#320032","#640064","#960096","#c800c8","#fa00fe","#c800fe","#9600fe","#6400fe","#3200fe","#0032fe","#0064fe","#0096fe","#00c8fe","#00e6f0","#00e6a0","#00e678","#00e650","#00f028","#00fa00","#fefe00","#fee100","#fec800","#feaf00","#fe9600","#e67d00","#e66400","#dc4b1e","#c8321e","#b4191e","#aa001e","#b40032","#c80064","#fe0096","#fe00c8","#fe00e1","#fe00fa"];
 const fields=[
@@ -100,14 +100,16 @@ function clearPressure(panel){
 }
 function pressureNote(){
  const ids=state.compare?[state.model,state.modelB]:[state.model];
- const missing=ids.filter(id=>!state.metas[id]?.variables.includes('pressure_msl'));
- $('mslp-note').textContent=missing.length?'MSLP unavailable for '+missing.map(modelName).join(', ')+'.':'Isobars every 4 hPa, from each model at the displayed time.';
+ const missing=ids.filter(id=>!hasFieldTime(state.metas[id],'pressure_msl',state.times[state.index]));
+ const warnings=ids.flatMap(id=>state.metas[id]?.sourceWarnings??[]);
+ $('mslp-note').textContent=warnings.length?warnings.join(' '):missing.length?'MSLP not available for '+missing.map(modelName).join(', ')+' at this forecast time.':'Isobars every 4 hPa, from each model at the displayed time.';
+ if(ids.includes('gfs_global')&&!missing.includes('gfs_global'))$('mslp-note').textContent+=' GFS isobars use its 0.25° grid from the same run.';
  $('map-mslp').disabled=missing.length===ids.length;
 }
 function drawPressure(panel,model,before){
  clearPressure(panel);
- if(!state.isobars||state.field==='pressure_msl'||!state.metas[model]?.variables.includes('pressure_msl'))return;
- const time=state.times[state.index];if(!time||!hasTime(state.metas[model],time))return;
+ if(!state.isobars||state.field==='pressure_msl'||!sourceVariable(state.metas[model],'pressure_msl'))return;
+ const time=state.times[state.index];if(!time||!hasFieldTime(state.metas[model],'pressure_msl',time))return;
  panel.map.addSource('mslp-source',{type:'vector',url:concreteURL(model,state.metas[model],time,'pressure_msl'),maxzoom:10});
  for(const [id,color,width,opacity] of [['mslp-halo','#ffffff',3,0.65],['mslp-lines','#000000',1.2,1]])panel.map.addLayer({id,type:'line',source:'mslp-source','source-layer':'contours',layout:{'line-join':'round'},paint:{'line-color':color,'line-width':width,'line-opacity':opacity}},before);
  panel.map.addLayer({id:'mslp-labels',type:'symbol',source:'mslp-source','source-layer':'contours',layout:{'symbol-placement':'point','text-allow-overlap':false,'text-font':['Noto Sans Regular'],'text-field':['to-string',['case',['>', ['to-number',['get','value']],2000],['/', ['to-number',['get','value']],100],['to-number',['get','value']]]],'text-size':12,'text-padding':24,'text-offset':[0,-0.6]},paint:{'text-color':'#000000','text-halo-color':'#ffffff','text-halo-width':1.5}},before);
@@ -119,7 +121,7 @@ function drawCoastline(map,before){
   else map.moveLayer(id,before);
  }
 }
-function concreteURL(model,meta,time,field){const run=new Date(meta.reference_time);const valid=new Date(time);const two=n=>String(n).padStart(2,'0');return 'om://'+BASE+domains[model]+'/'+run.getUTCFullYear()+'/'+two(run.getUTCMonth()+1)+'/'+two(run.getUTCDate())+'/'+two(run.getUTCHours())+two(run.getUTCMinutes())+'Z/'+valid.toISOString().slice(0,10)+'T'+two(valid.getUTCHours())+two(valid.getUTCMinutes())+'.om?'+new URLSearchParams({variable:sourceVariable(meta,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
+function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,playTimer=null,timeGeneration=0,frameSequence=0;
 function pauseAnimation(){playing=false;clearTimeout(playTimer);$('play-map').textContent='▶ Play';$('play-map').setAttribute('aria-pressed','false');}
 function nextAnimation(){clearTimeout(playTimer);if(!playing)return;playTimer=setTimeout(()=>{if(!playing)return;if(state.index>=state.times.length-1){pauseAnimation();return;}state.index++;setTime();},900);}
@@ -134,19 +136,19 @@ function prepareFrame(panel,url){
  return frame;
 }
 function warmUpcoming(panel,model){
- if(panel.restyling||!state.metas[model]||!sourceVariable(state.metas[model],state.field))return;const upcoming=state.times.slice(state.index+1,state.index+3).filter(t=>hasTime(state.metas[model],t)).map(t=>concreteURL(model,state.metas[model],t,state.field));if(state.isobars&&state.metas[model].variables.includes('pressure_msl'))upcoming.push(...state.times.slice(state.index,state.index+3).filter(t=>hasTime(state.metas[model],t)).map(t=>concreteURL(model,state.metas[model],t,'pressure_msl')));
+ if(panel.restyling||!state.metas[model]||!sourceVariable(state.metas[model],state.field))return;const upcoming=state.times.slice(state.index+1,state.index+3).filter(t=>hasFieldTime(state.metas[model],state.field,t)).map(t=>concreteURL(model,state.metas[model],t,state.field));if(state.isobars&&sourceVariable(state.metas[model],'pressure_msl'))upcoming.push(...state.times.slice(state.index,state.index+3).filter(t=>hasFieldTime(state.metas[model],'pressure_msl',t)).map(t=>concreteURL(model,state.metas[model],t,'pressure_msl')));
  for(const frame of [...(panel.frames?.values()??[])])if(frame.id!==panel.sourceId&&!upcoming.includes(frame.url))discardFrame(panel,frame);
  for(const url of upcoming)prepareFrame(panel,url);
 }
 
 async function drawPanel(key,model){
  const panel=panels[key];await panel.ready;if(panel.restyling)return false;const version=++panel.version;const meta=state.metas[model],time=state.times[state.index],field=state.field;if(!meta||!time)return false;
- if(!sourceVariable(meta,field)||!hasTime(meta,time)){
+ if(!sourceVariable(meta,field)||!hasFieldTime(meta,field,time)){
   clearPressure(panel);clearContours(panel);if(panel.map.getLayer('weather'))panel.map.removeLayer('weather');
   panel.sourceId=null;panel.url=null;panel.loaded=false;panel.displayedTime=null;
   for(const frame of [...(panel.frames?.values()??[])])discardFrame(panel,frame);
   $('panel-label-'+key).textContent=modelName(model)+' · '+stamp(time)+' UTC';
-  $('map-error-'+key).textContent=!hasTime(meta,time)?'No forecast at this time. This run ends '+stamp(meta.valid_times.at(-1))+' UTC.':fields.find(f=>f.key===field).name+' is not supplied in this model’s map feed.';$('map-error-'+key).hidden=false;
+  $('map-error-'+key).textContent=!sourceVariable(meta,field)?fields.find(f=>f.key===field).name+' is not supplied in this model’s map feed.':'No forecast for this layer at this time. Its data ends '+stamp(fieldSource(meta,field).valid_times.at(-1))+' UTC.';$('map-error-'+key).hidden=false;
   drawPressure(panel,model,panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id);return true;
  }
  const url=concreteURL(model,meta,time,field);$('map-error-'+key).hidden=true;
@@ -164,9 +166,9 @@ async function drawPanel(key,model){
 }
 async function setTime(){
  if(!state.times.length)return;const generation=++timeGeneration;state.index=Math.max(0,Math.min(state.index,state.times.length-1));const time=state.times[state.index];requestedTime=Date.parse(time);
- $('map-time').value=state.index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');$('map-time-label').textContent=stamp(time);$('previous-time').disabled=state.index===0;$('next-time').disabled=state.index===state.times.length-1;setLegend();dismissLocation();$('animation-status').textContent='Loading frame…';
+ $('map-time').value=state.index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');$('map-time-label').textContent=stamp(time);$('previous-time').disabled=state.index===0;$('next-time').disabled=state.index===state.times.length-1;setLegend();pressureNote();dismissLocation();$('animation-status').textContent='Loading frame…';
  const targets=state.compare?[['a',state.model],['b',state.modelB]]:[['a',state.model]];
- await Promise.all(targets.map(async([key,model])=>{const p=panels[key];await p.ready;if(p.restyling||generation!==timeGeneration||!hasTime(state.metas[model],time)||!sourceVariable(state.metas[model],state.field))return;return prepareFrame(p,concreteURL(model,state.metas[model],time,state.field)).ready;}));
+ await Promise.all(targets.map(async([key,model])=>{const p=panels[key];await p.ready;if(p.restyling||generation!==timeGeneration||!hasFieldTime(state.metas[model],state.field,time)||!sourceVariable(state.metas[model],state.field))return;return prepareFrame(p,concreteURL(model,state.metas[model],time,state.field)).ready;}));
  if(generation!==timeGeneration)return;
  const loaded=await Promise.all([drawPanel('a',state.model),...(state.compare?[drawPanel('b',state.modelB)]:[])]);
  if(generation!==timeGeneration)return;
@@ -179,7 +181,7 @@ function setLegend(){const f=fields.find(f=>f.key===state.field);const min=f.sto
  $('legend-ticks').replaceChildren();$('legend-ticks').style.cssText='';$('legend-ticks').style.cssText='display:block;position:relative;height:16px';[f.stops[1],0,f.stops.at(-1)].forEach(v=>{const span=document.createElement('span');span.textContent=v+'°';span.style.cssText='position:absolute;transform:translateX(-50%);left:'+100*f.stops.indexOf(v)/f.colors.length+'%';$('legend-ticks').append(span);});
  }else $('legend-gradient').removeAttribute('title');
  $('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+f.stops[1]+' to '+f.stops.at(-1)+'°C; end colours extend beyond this range.':'';
- let note=f.note;const ids=state.compare?[state.model,state.modelB]:[state.model];$('field-availability').textContent=ids.map(id=>modelName(id)+': '+(sourceVariable(state.metas[id],f.key)?'available':'not supplied')).join(' · ');$('map-contours').disabled=!!f.categorical;if(['precipitation','rain','showers','snowfall_water_equivalent'].includes(f.key)){const times=state.metas[state.model]?.valid_times??[];const idx=times.indexOf(state.times[state.index]);note+=' '+(idx>0?`First model interval: ${(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000} hours ending at the displayed time.`:'Initial model time: an accumulation interval is not defined.');if(state.compare){const other=state.metas[state.modelB]?.valid_times??[];const j=other.indexOf(state.times[state.index]);note+=' '+(j>0?`Second model interval: ${(Date.parse(other[j])-Date.parse(other[j-1]))/3600000} hours.`:'Second model is at its initial time.');}}$('variable-note').textContent=note;const interval=f.key==='pressure_msl'?'4 hPa':f.key.startsWith('geopotential_height_')?(Number(f.key.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':f.key==='freezing_level_height'?'250 m':f.key.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';$('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+interval+'. Labels use the displayed units.';}
+ let note=f.note;const ids=state.compare?[state.model,state.modelB]:[state.model];$('field-availability').textContent=ids.map(id=>modelName(id)+': '+(sourceVariable(state.metas[id],f.key)?'available':'not supplied')).join(' · ');$('map-contours').disabled=!!f.categorical;if(['precipitation','rain','showers','snowfall_water_equivalent'].includes(f.key)){const times=fieldSource(state.metas[state.model],f.key)?.valid_times??[];const idx=times.indexOf(state.times[state.index]);note+=' '+(idx>0?`First model interval: ${(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000} hours ending at the displayed time.`:'Initial model time: an accumulation interval is not defined.');if(state.compare){const other=fieldSource(state.metas[state.modelB],f.key)?.valid_times??[];const j=other.indexOf(state.times[state.index]);note+=' '+(j>0?`Second model interval: ${(Date.parse(other[j])-Date.parse(other[j-1]))/3600000} hours.`:'Second model is at its initial time.');}}$('variable-note').textContent=note;const interval=f.key==='pressure_msl'?'4 hPa':f.key.startsWith('geopotential_height_')?(Number(f.key.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':f.key==='freezing_level_height'?'250 m':f.key.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';$('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+interval+'. Labels use the displayed units.';}
 function populateVariables(){
  const metas=(state.compare?[state.model,state.modelB]:[state.model]).map(id=>state.metas[id]).filter(Boolean);
  const available=availableFields(fields,metas);
@@ -196,9 +198,8 @@ function populateVariables(){
  $('map-variable').value=state.field;
 }
 async function loadModelRun(id,force){
- const base=BASE+domains[id]+'/';const load=url=>cachedJSON(url,{force,kind:'metadata',ttl:600000});
- const latest=await load(base+'latest.json');
- return chooseRun(latest,base,load,$('map-run-mode').value);
+ const load=url=>cachedJSON(url,{force,kind:'metadata',ttl:600000});
+ return loadSpatialModel(id,load,$('map-run-mode').value);
 }
 $('map-run-mode').addEventListener('change',()=>configure());
 async function configure(force=false){pauseAnimation();++timeGeneration;for(const p of Object.values(panels))p.version++;const generation=++state.generation;$('reload-maps').disabled=true;status('Checking available variables and forecast times…');const ids=state.compare?[state.model,state.modelB]:[state.model];try{const pairs=await Promise.all(ids.map(async id=>[id,await loadModelRun(id,force)]));if(generation!==state.generation)return;state.metas=Object.fromEntries(pairs);$('ukv-run-note').textContent=$('map-run-mode').value==='extended'?'Uses the recent completed run reaching furthest ahead for each model.':'Uses the newest published run for each model.';pressureNote();const metas=pairs.map(p=>p[1]);

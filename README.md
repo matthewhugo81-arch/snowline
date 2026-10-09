@@ -8,6 +8,8 @@ Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK ma
 
 Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Map wind layers retain their native m/s units; location charts use mph.
 
+GFS global combines Open-Meteo's `ncep_gfs013` surface grid with its `ncep_gfs025` companion grid for MSLP, gusts, visibility and upper-air fields. Each layer uses its actual source grid. Both feeds must have the same initialization time, and a field is rendered only at a valid time supplied by that feed. A missing companion run leaves surface forecasts usable and displays a retry message. MSLP labels remain in hPa, with isobars every 4 hPa.
+
 Precipitation, rain and showers maps share the supplied 14-band scale: 0, 0.5, 1, 2, 4, 6, 8, 10, 15, 20, 25, 30, 40 and 50 mm. The 0–<0.5 mm band is grey, values at 50 mm or above use the final colour, and missing grid data remains missing. Colours change at the exact thresholds without blending between bands. Amounts refer to the model interval shown beside the map, which can differ between models and forecast times.
 
 The UK maps were imported from Snowline Sites version 23, source commit `7e347e9cb6daa96b403fdcb64c7e543043c3dddb`, on 9 October 2026. Existing GitHub chart exports, table averages and mph wind charts are preserved.
