@@ -81,6 +81,7 @@ function plot(container,series,config,times){
 function render(){
  const models=selectedModels(),times=state.times.slice(0,state.hours);if(!times.length)return;state.index=Math.min(state.index,times.length-1);
  const time=times[state.index];for(const v of VARIABLES){const label=$('time-'+v.key);label.dateTime=time;label.textContent=date.format(new Date(time))+' UTC';}$('time-slider').max=times.length-1;$('time-slider').value=state.index;$('selected-time').textContent=date.format(new Date(time))+' UTC';$('time-slider').setAttribute('aria-valuetext',date.format(new Date(time))+' UTC');
+ if($('nav-maps'))$('nav-maps').href='maps.html?'+new URLSearchParams({lat:state.location.latitude,lon:state.location.longitude,time});
  const available=models.filter(m=>VARIABLES.some(v=>times.some(t=>finite(valueAt(m,v.key,t)))));
  $('models-count').textContent=`${available.length} / ${state.selected.size}`;$('models-detail').textContent=state.loading?'Forecasts are still loading':'Selected models with data in this window';
  const votes=times.map(t=>agreement(models,t));const validVotes=votes.filter(v=>v.valid);const peak=validVotes.length?validVotes.reduce((a,b)=>b.percent>a.percent?b:a):null;

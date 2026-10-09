@@ -1,8 +1,14 @@
 # Snowline
 
-Local multi-model weather charts: snowfall, snow depth, temperature, dew point, humidity, precipitation, wind speed and wind gusts.
+UK model maps and local multi-model weather charts: snowfall, snow depth, temperature, dew point, humidity, precipitation, wind speed and wind gusts.
 
 A static website using Open-Meteo. No build step is required. GitHub Pages serves the main branch from the repository root.
+
+Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK maps](https://matthewhugo81-arch.github.io/snowline/maps.html). The map page includes model comparison, weather layers, MSLP isobars, forecast animation and point event analysis. Click a map location to open its charts; navigation retains the chosen location and valid time.
+
+Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Map wind layers retain their native m/s units; location charts use mph.
+
+The UK maps were imported from Snowline Sites version 23, source commit `7e347e9cb6daa96b403fdcb64c7e543043c3dddb`, on 9 October 2026. Existing GitHub chart exports, table averages and mph wind charts are preserved.
 
 Each variable chart has a **Data** button in its top-right corner. It opens an hourly table for the selected chart models, all models, or one model. Choose the chart time window or the full dataset returned by the models (including earlier hours). **Download CSV** opens in Excel/Google Sheets; **Download table** saves a standalone HTML table with the colour scale. CSV retains supplied numeric precision, identifies the location, variable, units and UTC timestamps, and leaves missing values blank. Model retrieval times and data availability appear in the table view and HTML export.
 
