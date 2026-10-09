@@ -1,5 +1,9 @@
 import {hasFieldTime} from './map-sources.js?v=20261009-white-rain';
 
+export function createPanelOverlays(){
+ return Object.fromEntries(['a','b'].map(key=>[key,{contours:true,isobars:true,grid:false}]));
+}
+
 export function panelSelection(state,key){
  return key==='b'?{key,model:state.modelB,field:state.fieldB}:{key:'a',model:state.model,field:state.field};
 }

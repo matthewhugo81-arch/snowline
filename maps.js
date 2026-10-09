@@ -1,4 +1,5 @@
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes} from './map-panels.js?v=20261009-panel-fields';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261009-overlays';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261009-overlays';
 import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261009-white-rain';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
@@ -38,6 +39,8 @@ function applyRoads(map){for(const layer of map.getStyle().layers)if(['transport
 const backgrounds={light:'positron',streets:'liberty'};
 let background='light';try{const saved=localStorage.getItem('snowline-background');if(Object.hasOwn(backgrounds,saved))background=saved;else if(saved)localStorage.setItem('snowline-background',background);}catch{}
 $('map-background').value=background;
+let terrain=true;try{terrain=localStorage.getItem('snowline-terrain')!=='false';}catch{}
+$('map-terrain').checked=terrain;
 const panels={};
 let locationPopup=null,locationMarker=null;
 function dismissLocation(){
@@ -48,8 +51,8 @@ function dismissLocation(){
 document.addEventListener('click',event=>{if(!event.target.closest('.maplibregl-map'))dismissLocation();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissLocation();});
 function viewportBounds(){const visible=Object.entries(panels).filter(([key])=>key==='a'||state.compare).map(([,p])=>p.map.getBounds());if(!visible.length)return;OM.updateCurrentBounds([Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))]);}
-let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,contours:true,isobars:true};
-$('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';$('map-mslp').checked=state.isobars;
+let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
+$('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(MODELS.some(m=>m.id===params.get('model')))state.model=params.get('model');
 const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
@@ -72,11 +75,12 @@ $('map-model').value=state.model;$('map-model-b').value=state.modelB;
 function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:2.5,maxZoom:10,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:{compact:true}});
  map.touchZoomRotate.disableRotation();
+ map.once('load',()=>{const credits=map.getContainer().querySelector('.maplibregl-compact-show .maplibregl-ctrl-attrib-button');credits?.click();});
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');map.fitBounds([[UK[0],UK[1]],[UK[2],UK[3]]],{padding:25,duration:0});
- const panel={key,map,ready:new Promise(resolve=>map.on('load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('dataloading',viewportBounds);map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);});new ResizeObserver(()=>map.resize()).observe($('map-'+key));
- map.on('style.load',()=>{applyRoads(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
- map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note').textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||(event.sourceId&&event.sourceId!==panel.sourceId))return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
- map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded){panel.loaded=true;status('Click a map for a value and local charts.');}});
+ const panel={key,map,ready:new Promise(resolve=>map.on('load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('dataloading',viewportBounds);map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);});map.on('movestart',()=>clearGridValues(panel));new ResizeObserver(()=>map.resize()).observe($('map-'+key));
+ map.on('style.load',()=>{applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
+ map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||(event.sourceId&&event.sourceId!==panel.sourceId))return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
+ map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
 locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await OM.getValueFromLatLong(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${result.value.toFixed(2)} ${field.unit} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
@@ -101,7 +105,7 @@ function drawContours(panel,before){
  const field=fields.find(f=>f.key===panelSelection(state,panel.key).field);const url=panel.url;if(field.categorical)return;
  panel.map.addSource('contour-source',{type:'vector',url,maxzoom:10});
  if(/^wind_speed_|^ocean_current_speed$/.test(field.key))for(const [id,color,width]of [['wind-halo','#ffffff',2.6],['wind-arrows','#111111',1]])panel.map.addLayer({id,type:'line',source:'contour-source','source-layer':'wind-arrows',paint:{'line-color':color,'line-width':width}},before);
- const visibility=state.contours||(field.key==='pressure_msl'&&state.isobars)?'visible':'none';
+ const overlay=state.overlays[panel.key];const visibility=overlay.contours||(field.key==='pressure_msl'&&overlay.isobars)?'visible':'none';
  panel.map.addLayer({id:'contour-lines',type:'line',source:'contour-source','source-layer':'contours',layout:{visibility,'line-join':'round'},paint:{'line-color':'#000000','line-width':0.7,'line-opacity':0.8}},before);
  panel.map.addLayer({id:'contour-labels',type:'symbol',source:'contour-source','source-layer':'contours',layout:{visibility,'symbol-placement':field.key==='pressure_msl'?'point':'line','symbol-spacing':140,'text-max-angle':85,'text-font':['Noto Sans Regular'],'text-field':['to-string',['get','value']],'text-size':10,'text-padding':field.key==='pressure_msl'?24:6,'text-offset':[0,-0.5]},paint:{'text-color':'#000000','text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1}},before);
 }
@@ -110,16 +114,16 @@ function clearPressure(panel){
  if(panel.map.getSource('mslp-source'))panel.map.removeSource('mslp-source');
 }
 function pressureNote(){
- const ids=panelModelIds(state);
- const missing=ids.filter(id=>!hasFieldTime(state.metas[id],'pressure_msl',state.times[state.index]));
- const warnings=ids.flatMap(id=>state.metas[id]?.sourceWarnings??[]);
- $('mslp-note').textContent=warnings.length?warnings.join(' '):missing.length?'MSLP not available for '+missing.map(modelName).join(', ')+' at this forecast time.':'Isobars every 4 hPa, from each model at the displayed time.';
- if(ids.includes('gfs_global')&&!missing.includes('gfs_global'))$('mslp-note').textContent+=' GFS isobars use its 0.25° grid from the same run.';
- $('map-mslp').disabled=missing.length===ids.length;
+ for(const {key,model}of panelSelections(state)){
+  const missing=!hasFieldTime(state.metas[model],'pressure_msl',state.times[state.index]),warnings=state.metas[model]?.sourceWarnings??[];
+  $('mslp-note-'+key).textContent=warnings.length?warnings.join(' '):missing?'MSLP is unavailable at this time.':'MSLP isobars every 4 hPa.';
+  if(model==='gfs_global'&&!missing)$('mslp-note-'+key).textContent+=' Uses the GFS 0.25° grid from the same run.';
+  $('map-mslp-'+key).disabled=missing;
+ }
 }
 function drawPressure(panel,model,before){
  clearPressure(panel);
- if(!state.isobars||panelSelection(state,panel.key).field==='pressure_msl'||!sourceVariable(state.metas[model],'pressure_msl'))return;
+ if(!state.overlays[panel.key].isobars||panelSelection(state,panel.key).field==='pressure_msl'||!sourceVariable(state.metas[model],'pressure_msl'))return;
  const time=state.times[state.index];if(!time||!hasFieldTime(state.metas[model],'pressure_msl',time))return;
  panel.map.addSource('mslp-source',{type:'vector',url:concreteURL(model,state.metas[model],time,'pressure_msl'),maxzoom:10});
  panel.map.addLayer({id:'mslp-lines',type:'line',source:'mslp-source','source-layer':'contours',layout:{'line-join':'round'},paint:{'line-color':'#000000','line-width':0.8,'line-opacity':1}},before);
@@ -127,8 +131,51 @@ function drawPressure(panel,model,before){
 }
 function drawCoastline(map,before){
  if(!map.getSource('coastline'))map.addSource('coastline',{type:'geojson',data:'coastline.geojson'});
- if(!map.getLayer('coast-line'))map.addLayer({id:'coast-line',type:'line',source:'coastline',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#000000','line-width':1.6,'line-opacity':1}},before);
+ if(!map.getLayer('coast-line'))map.addLayer({id:'coast-line',type:'line',source:'coastline',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#000000','line-width':['interpolate',['linear'],['zoom'],3,1,6,1.25,10,1.6],'line-opacity':1}},before);
  else map.moveLayer('coast-line',before);
+}
+function drawTerrain(map){
+ if(!terrain){if(map.getLayer('terrain-shading'))map.setLayoutProperty('terrain-shading','visibility','none');return;}
+ if(!map.getSource('terrain-dem'))map.addSource('terrain-dem',{type:'raster-dem',tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],tileSize:256,maxzoom:15,encoding:'terrarium',attribution:'Terrain: <a href="map-credits.html#terrain">Mapzen / terrain sources</a>'});
+ if(!map.getLayer('terrain-shading')){
+  const water=map.getStyle().layers.find(layer=>layer.type==='fill'&&layer['source-layer']==='water');
+  map.addLayer({id:'terrain-shading',type:'hillshade',source:'terrain-dem',paint:{'hillshade-exaggeration':.8,'hillshade-illumination-direction':315,'hillshade-illumination-anchor':'map','hillshade-shadow-color':'#263c32','hillshade-highlight-color':'#ffffff','hillshade-accent-color':'#506658'}},water?.id);
+ }else map.setLayoutProperty('terrain-shading','visibility','visible');
+}
+const emptyGrid=()=>({type:'FeatureCollection',features:[]});
+function clearGridValues(panel){
+ clearTimeout(panel.gridTimer);panel.gridVersion=(panel.gridVersion??0)+1;
+ panel.map.getSource('grid-values')?.setData(emptyGrid());
+ const note=$('grid-note-'+panel.key);note.hidden=!state.overlays[panel.key].grid;
+ if(!note.hidden)note.textContent='Grid values loading…';
+}
+function scheduleGridValues(panel){
+ if(!state.overlays[panel.key].grid||panel.restyling)return;
+ clearTimeout(panel.gridTimer);panel.gridTimer=setTimeout(()=>drawGridValues(panel),150);
+}
+async function drawGridValues(panel){
+ if(!state.overlays[panel.key].grid||!panel.loaded||panel.restyling||panel.displayedTime!==state.times[state.index])return;
+ const {key,map}=panel,version=panel.gridVersion=(panel.gridVersion??0)+1;
+ const {model,field}=panelSelection(state,key),time=panel.displayedTime;
+ if(field!==panel.displayedField||model!==panel.displayedModel)return;
+ const source=fieldSource(state.metas[model],field,time),domain=OM.domainOptions.find(item=>item.value===source?.domain);
+ const note=$('grid-note-'+key);note.hidden=false;
+ if(!domain){note.textContent='Grid values unavailable for this model.';return;}
+ try{
+  const grid=OM.GridFactory.create(domain.grid),canvas=map.getCanvas(),f=fields.find(item=>item.key===field);
+  const points=visibleGridPoints(grid,canvas.clientWidth,canvas.clientHeight,p=>map.unproject(p),p=>map.project(p));
+  const valueURL=panel.url.replace(/interpolation=[^&]+/,'interpolation=nearest');
+  const features=(await Promise.all(points.map(async point=>{
+   const result=await OM.getValueFromLatLong(point.lat,point.lon,valueURL,map.getZoom());
+   const label=gridValueLabel(result?.value,f);if(label===null)return null;
+   return {type:'Feature',id:point.id,properties:{label,value:result.value},geometry:{type:'Point',coordinates:[point.lon,point.lat]}};
+  }))).filter(Boolean);
+  if(version!==panel.gridVersion||!state.overlays[key].grid||panel.restyling)return;
+  const data={type:'FeatureCollection',features};
+  if(map.getSource('grid-values'))map.getSource('grid-values').setData(data);else map.addSource('grid-values',{type:'geojson',data});
+  if(!map.getLayer('grid-labels'))map.addLayer({id:'grid-labels',type:'symbol',source:'grid-values',layout:{'text-field':['get','label'],'text-font':['Noto Sans Regular'],'text-size':11,'text-padding':7,'text-allow-overlap':false},paint:{'text-color':'#101820','text-halo-color':'rgba(255,255,255,0.9)','text-halo-width':1.5}});else map.moveLayer('grid-labels');
+  note.textContent=features.length?'Grid values · '+f.unit:'No grid values in this area.';
+ }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
 function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,playTimer=null,timeGeneration=0,frameSequence=0;
@@ -145,7 +192,7 @@ function prepareFrame(panel,url){
  return frame;
 }
 function warmUpcoming(panel,model,field){
- if(panel.restyling||!state.metas[model]||!sourceVariable(state.metas[model],field))return;const upcoming=state.times.slice(state.index+1,state.index+3).filter(t=>hasFieldTime(state.metas[model],field,t)).map(t=>concreteURL(model,state.metas[model],t,field));if(state.isobars&&sourceVariable(state.metas[model],'pressure_msl'))upcoming.push(...state.times.slice(state.index,state.index+3).filter(t=>hasFieldTime(state.metas[model],'pressure_msl',t)).map(t=>concreteURL(model,state.metas[model],t,'pressure_msl')));
+ if(panel.restyling||!state.metas[model]||!sourceVariable(state.metas[model],field))return;const upcoming=state.times.slice(state.index+1,state.index+3).filter(t=>hasFieldTime(state.metas[model],field,t)).map(t=>concreteURL(model,state.metas[model],t,field));if(state.overlays[panel.key].isobars&&sourceVariable(state.metas[model],'pressure_msl'))upcoming.push(...state.times.slice(state.index,state.index+3).filter(t=>hasFieldTime(state.metas[model],'pressure_msl',t)).map(t=>concreteURL(model,state.metas[model],t,'pressure_msl')));
  for(const frame of [...(panel.frames?.values()??[])])if(frame.id!==panel.sourceId&&!upcoming.includes(frame.url))discardFrame(panel,frame);
  for(const url of upcoming)prepareFrame(panel,url);
 }
@@ -155,6 +202,7 @@ async function drawPanel(key,model){
  if(!sourceVariable(meta,field)||!hasFieldTime(meta,field,time)){
   clearPressure(panel);clearContours(panel);if(panel.map.getLayer('weather'))panel.map.removeLayer('weather');
   panel.sourceId=null;panel.url=null;panel.loaded=false;panel.displayedTime=null;
+  if(state.overlays[key].grid)$('grid-note-'+key).textContent='No grid values at this time.';
   for(const frame of [...(panel.frames?.values()??[])])discardFrame(panel,frame);
   $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';
   $('map-error-'+key).textContent=!sourceVariable(meta,field)?fields.find(f=>f.key===field).name+' is not supplied in this model’s map feed.':'No forecast for this layer at this time. Its data ends '+stamp(fieldSource(meta,field).valid_times.at(-1))+' UTC.';$('map-error-'+key).hidden=false;
@@ -163,7 +211,7 @@ async function drawPanel(key,model){
  const url=concreteURL(model,meta,time,field);$('map-error-'+key).hidden=true;
  const frame=prepareFrame(panel,url);const ready=await frame.ready;
  if(version!==panel.version||panel.restyling||time!==state.times[state.index]||field!==panelSelection(state,key).field||model!==panelSelection(state,key).model)return false;
- if(!ready){discardFrame(panel,frame);$('map-error-'+key).textContent='Next frame could not load. The previous forecast remains visible; try again.';$('map-error-'+key).hidden=false;return false;}
+ if(!ready){discardFrame(panel,frame);$('map-error-'+key).textContent='Next frame could not load. The previous forecast remains visible; try again.';$('map-error-'+key).hidden=false;if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';return false;}
  clearPressure(panel);clearContours(panel);if(panel.map.getLayer('weather'))panel.map.removeLayer('weather');
  panel.sourceId=frame.id;panel.url=url;panel.loaded=true;
  panel.map.addLayer({id:'weather',type:'raster',source:frame.id,paint:{'raster-opacity':state.opacity,'raster-fade-duration':0,'raster-resampling':fields.find(f=>f.key===field)?.bands?'nearest':'linear'}});
@@ -171,12 +219,12 @@ async function drawPanel(key,model){
  for(const layer of panel.map.getStyle().layers)if(['line','symbol'].includes(layer.type)&&layer.id!=='coast-line')panel.map.moveLayer(layer.id);
  const before=panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
  drawContours(panel,before);drawPressure(panel,model,before);drawCoastline(panel.map,before);
- $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';panel.displayedTime=time;panel.displayedField=field;warmUpcoming(panel,model,field);return true;
+ $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;warmUpcoming(panel,model,field);scheduleGridValues(panel);return true;
 }
 async function setTime(){
  if(!state.times.length)return;const generation=++timeGeneration;state.index=Math.max(0,Math.min(state.index,state.times.length-1));const time=state.times[state.index];requestedTime=Date.parse(time);
  $('map-time').value=state.index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');$('map-time-label').textContent=stamp(time);$('previous-time').disabled=state.index===0;$('next-time').disabled=state.index===state.times.length-1;setLegend();pressureNote();dismissLocation();$('animation-status').textContent='Loading frame…';
- const targets=panelSelections(state);
+ const targets=panelSelections(state);for(const {key}of targets)clearGridValues(panels[key]);
  await Promise.all(targets.map(async({key,model,field})=>{const p=panels[key];await p.ready;if(p.restyling||generation!==timeGeneration||!hasFieldTime(state.metas[model],field,time)||!sourceVariable(state.metas[model],field))return;return prepareFrame(p,concreteURL(model,state.metas[model],time,field)).ready;}));
  if(generation!==timeGeneration)return;
  const loaded=await Promise.all(targets.map(({key,model})=>drawPanel(key,model)));
@@ -210,7 +258,7 @@ function setLegend(){
   const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
- $('map-contours').disabled=panelSelections(state).every(({field})=>fields.find(f=>f.key===field)?.categorical);
+ for(const {key,field}of panelSelections(state))$('map-contours-'+key).disabled=!!fields.find(f=>f.key===field)?.categorical;
 }
 function populateVariables(){
  for(const {key,model,field} of panelSelections(state)){
@@ -231,7 +279,7 @@ async function loadModelRun(id,force){
 }
 $('map-run-mode').addEventListener('change',()=>configure());
 async function configure(force=false){
- pauseAnimation();++timeGeneration;for(const p of Object.values(panels)){p.version++;p.displayedTime=null;}
+ pauseAnimation();++timeGeneration;for(const p of Object.values(panels)){p.version++;p.displayedTime=null;clearGridValues(p);}
  const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;
  status('Checking model runs…');
  try{
@@ -255,13 +303,18 @@ $('compare-maps').addEventListener('change',async e=>{
  $('panel-b').hidden=!state.compare;$('layer-notes-b').hidden=!state.compare;
  if(state.compare&&!panels.b)makeMap('b');a.map.resize();panels.b?.map.resize();await configure();
 });
-function updateContourVisibility(){
- for(const {key,field}of panelSelections(state))for(const id of ['contour-lines','contour-labels'])if(panels[key].map.getLayer(id))panels[key].map.setLayoutProperty(id,'visibility',state.contours||(field==='pressure_msl'&&state.isobars)?'visible':'none');
+function updateContourVisibility(key){
+ const {field}=panelSelection(state,key),overlay=state.overlays[key],panel=panels[key];if(!panel)return;
+ for(const id of ['contour-lines','contour-labels'])if(panel.map.getLayer(id))panel.map.setLayoutProperty(id,'visibility',overlay.contours||(field==='pressure_msl'&&overlay.isobars)?'visible':'none');
 }
-$('map-contours').addEventListener('change',e=>{state.contours=e.target.checked;updateContourVisibility();});
-$('map-mslp').addEventListener('change',e=>{state.isobars=e.target.checked;for(const {key,model}of panelSelections(state)){const panel=panels[key];if(panel.restyling||!state.metas[model])continue;const before=panel.map.getStyle().layers.find(l=>l.type==='symbol'&&!['contour-labels','mslp-labels'].includes(l.id))?.id;drawPressure(panel,model,before);}updateContourVisibility();pressureNote();});
+for(const key of ['a','b']){
+ $('map-contours-'+key).addEventListener('change',e=>{state.overlays[key].contours=e.target.checked;updateContourVisibility(key);});
+ $('map-mslp-'+key).addEventListener('change',e=>{state.overlays[key].isobars=e.target.checked;const panel=panels[key],{model}=panelSelection(state,key);if(panel&&!panel.restyling&&state.metas[model]){const before=panel.map.getStyle().layers.find(layer=>layer.type==='symbol'&&!['contour-labels','mslp-labels','grid-labels'].includes(layer.id))?.id;drawPressure(panel,model,before);}updateContourVisibility(key);pressureNote();});
+ $('map-grid-'+key).addEventListener('change',e=>{state.overlays[key].grid=e.target.checked;const panel=panels[key];if(panel){clearGridValues(panel);scheduleGridValues(panel);}});
+}
+$('map-terrain').addEventListener('change',e=>{terrain=e.target.checked;try{localStorage.setItem('snowline-terrain',String(terrain));}catch{}for(const panel of Object.values(panels))if(panel.map.getLayer('terrain-shading')||panel.map.isStyleLoaded())drawTerrain(panel.map);});
 $('map-roads').addEventListener('change',e=>{roads=e.target.checked;try{localStorage.setItem('snowline-roads',String(roads));}catch{}for(const panel of Object.values(panels))if(panel.map.isStyleLoaded())applyRoads(panel.map);});
-$('map-background').addEventListener('change',e=>{pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';background=e.target.value;try{localStorage.setItem('snowline-background',background);}catch{}for(const panel of Object.values(panels)){panel.restyling=true;panel.loaded=false;panel.version++;for(const frame of panel.frames?.values()??[])frame.cancel?.();panel.frames=new Map();panel.map.setStyle('https://tiles.openfreemap.org/styles/'+backgrounds[background]);}});
+$('map-background').addEventListener('change',e=>{pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';background=e.target.value;try{localStorage.setItem('snowline-background',background);}catch{}for(const panel of Object.values(panels)){clearGridValues(panel);panel.restyling=true;panel.loaded=false;panel.version++;for(const frame of panel.frames?.values()??[])frame.cancel?.();panel.frames=new Map();panel.map.setStyle('https://tiles.openfreemap.org/styles/'+backgrounds[background]);}});
 $('reload-maps').addEventListener('click',()=>configure(true));$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{if(state.times.length)$('map-time-label').textContent=stamp(state.times[Number(e.target.value)]);});
 $('previous-time').addEventListener('click',()=>{pauseAnimation();state.index--;setTime();});$('next-time').addEventListener('click',()=>{pauseAnimation();state.index++;setTime();});
 $('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.map.getLayer('weather'))p.map.setPaintProperty('weather','raster-opacity',state.opacity);});
