@@ -7,10 +7,11 @@ import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mp
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
 import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-latest-cycles';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
+import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
-import {MODELS,finite} from './data.js';
+import {MODELS,finite} from './data.js?v=20261010-ukv';
 import {cachedJSON,usageText} from './cache.js';
 import {selectEventPoint} from './event-analysis.js';
 const $=id=>document.getElementById(id);
@@ -321,6 +322,7 @@ function setLegend(){
   el('field-availability').textContent=modelName(model)+' · '+f.name;
   const meta=state.metas[model],source=fieldSource(meta,field);
   if(meta&&source)el('run').textContent='Initialized '+runLabel(meta)+' · layer data ends '+stamp(source.valid_times.at(-1))+' UTC';
+  if(meta&&source&&model==='ukmo_uk_deterministic_2km')el('run').textContent+=' · '+ukvCoverageText(meta);
   const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds';
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
