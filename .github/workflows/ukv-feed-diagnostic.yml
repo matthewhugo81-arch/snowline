@@ -1,0 +1,48 @@
+name: Diagnose UKV forecast horizon
+on:
+  push:
+    branches: [fix/ukv-name-horizon-20261010]
+    paths: [.github/workflows/ukv-feed-diagnostic.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Read live UKV metadata without altering the forecast
+        run: |
+          python3 - <<'PY'
+          import json
+          from datetime import datetime, timedelta, timezone
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
+          base='https://openmeteo.s3.amazonaws.com/data_spatial/ukmo_uk_deterministic_2km/'
+          def get(url):
+              req=Request(url,headers={'Cache-Control':'no-cache','User-Agent':'Snowline-model-feed-diagnostic'})
+              with urlopen(req,timeout=20) as r:
+                  return json.load(r),r.headers.get('Last-Modified')
+          def dt(value):
+              return datetime.fromisoformat(value.replace('Z','+00:00'))
+          def report(label,url):
+              try:
+                  data,modified=get(url)
+                  times=sorted(data.get('valid_times',[]),key=dt)
+                  print('UKV_METADATA '+json.dumps({'label':label,'url':url,'checked_at':datetime.now(timezone.utc).isoformat(),'last_modified':modified,'reference_time':data.get('reference_time'),'completed':data.get('completed'),'first_valid':times[0] if times else None,'last_valid':times[-1] if times else None,'forecast_hours':(dt(times[-1])-dt(data['reference_time'])).total_seconds()/3600 if times else None,'valid_times_count':len(times),'has_precipitation':'precipitation' in data.get('variables',[]),'has_mslp':'pressure_msl' in data.get('variables',[]),'other_metadata':{k:v for k,v in data.items() if k not in ['variables','valid_times']}}),flush=True)
+                  return data
+              except Exception as e:
+                  print('UKV_METADATA '+json.dumps({'label':label,'url':url,'error':str(e)}),flush=True)
+          latest=report('latest',base+'latest.json')
+          if not latest:raise SystemExit('Could not inspect latest UKV metadata')
+          ref=dt(latest['reference_time'])
+          candidates=[ref-timedelta(hours=i) for i in [0,1,2,3]]+[ref+timedelta(hours=1)]
+          for r in candidates:
+              report(r.isoformat(),base+r.strftime('%Y/%m/%d/%H%MZ/')+'meta.json')
+          times=sorted(latest['valid_times'],key=dt)
+          for valid in [dt(times[-1]),dt(times[-1])+timedelta(hours=1)]:
+              url=base+ref.strftime('%Y/%m/%d/%H%MZ/')+valid.strftime('%Y-%m-%dT%H%M.om')
+              try:
+                  with urlopen(Request(url,method='HEAD'),timeout=20) as r:
+                      print('UKV_FILE '+json.dumps({'valid':valid.isoformat(),'url':url,'status':r.status,'bytes':r.headers.get('Content-Length')}),flush=True)
+              except Exception as e:print('UKV_FILE '+json.dumps({'valid':valid.isoformat(),'url':url,'error':str(e)}),flush=True)
+          PY
