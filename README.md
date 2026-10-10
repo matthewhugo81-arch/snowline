@@ -4,7 +4,7 @@ UK model maps and local multi-model weather charts: snowfall, snow depth, temper
 
 A static website using Open-Meteo. No build step is required. GitHub Pages serves the main branch from the repository root.
 
-Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK maps](https://matthewhugo81-arch.github.io/snowline/maps.html). The map page includes model comparison, weather layers, MSLP isobars, forecast animation and point event analysis. Click a map location to open its charts; navigation retains the chosen location and valid time.
+Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK maps](https://matthewhugo81-arch.github.io/snowline/maps.html). The map page includes model comparison, weather layers, MSLP isobars, forecast animation and point event analysis. Every map uses the latest published initialization for the selected model and shows its actual UTC run date/cycle. Click a map location to open its charts; navigation retains the chosen location and valid time.
 
 Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Wind speeds and gusts display in mph on maps, legends, contours, grid-value labels and point readouts; source grids and renderer scales retain native m/s.
 

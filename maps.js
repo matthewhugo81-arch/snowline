@@ -3,7 +3,8 @@ import {ForecastFrames,frameWindow} from './map-frames.js?v=20261009-loading';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261010-valid-frames';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-valid-frames';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-latest-cycles';
+import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
@@ -62,6 +63,8 @@ if(MODELS.some(m=>m.id===params.get('model')))state.model=params.get('model');
 const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
 if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isFinite(initialLon)&&Math.abs(initialLat)<=90&&Math.abs(initialLon)<=180){state.location={latitude:initialLat,longitude:initialLon};$('nav-charts').href='./?'+new URLSearchParams({lat:initialLat,lon:initialLon,time:params.get('time')??''});}
 function modelName(id){return MODELS.find(m=>m.id===id)?.name??id;}
+function panelRunLabel(model){return modelName(model)+' · '+runLabel(state.metas[model]);}
+function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · Valid '+stamp(time)+' UTC';}
 function status(message){$('map-status').textContent=message;}
 function usageUpdate(){$('usage-summary').textContent=usageText();}window.addEventListener('snowline-usage',usageUpdate);usageUpdate();
 const modelGroups=[
@@ -203,7 +206,7 @@ async function drawPanel(key,model){
   panel.sourceId=null;panel.url=null;panel.loaded=false;panel.displayedTime=null;
   if(state.overlays[key].grid)$('grid-note-'+key).textContent='No grid values at this time.';
   for(const frame of [...(panel.frames?.values()??[])])discardFrame(panel,frame);
-  $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';
+  $('panel-label-'+key).textContent=forecastLabel(model,field,time);
   $('map-error-'+key).textContent=!sourceVariable(meta,field)?fields.find(f=>f.key===field).name+' is not supplied in this model’s map feed.':'No forecast for this layer at this time. Its data ends '+stamp(fieldSource(meta,field).valid_times.at(-1))+' UTC.';$('map-error-'+key).hidden=false;
   return false;
  }
@@ -214,7 +217,7 @@ async function drawPanel(key,model){
   if(panel.frameCache.current!==frame)discardFrame(panel,frame);
   if(panel.frameCache.current)discardFrame(panel,panel.frameCache.current);
   clearPressure(panel);clearContours(panel);panel.loaded=false;panel.url=null;panel.sourceId=null;panel.displayedTime=null;
-  $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';
+  $('panel-label-'+key).textContent=forecastLabel(model,field,time);
   $('map-error-'+key).textContent='Forecast frame could not load. No earlier forecast is displayed; choose another time or check latest runs.';$('map-error-'+key).hidden=false;
   if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';return false;
  }
@@ -224,7 +227,7 @@ async function drawPanel(key,model){
  for(const layer of panel.map.getStyle().layers)if(['line','symbol'].includes(layer.type)&&layer.id!=='coast-line')panel.map.moveLayer(layer.id);
  const before=panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
  drawContours(panel,before);drawPressure(panel,model,before);drawCoastline(panel.map,before);
- $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;scheduleGridValues(panel);return true;
+ $('panel-label-'+key).textContent=forecastLabel(model,field,time);panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;scheduleGridValues(panel);return true;
 }
 async function setTime(){
  if(!state.times.length)return;
@@ -261,7 +264,7 @@ function setLegend(){
   el('variable-note').textContent=note;
   el('field-availability').textContent=modelName(model)+' · '+f.name;
   const meta=state.metas[model],source=fieldSource(meta,field);
-  if(meta&&source)el('run').textContent=stamp(meta.reference_time)+' UTC · ends '+stamp(source.valid_times.at(-1));
+  if(meta&&source)el('run').textContent='Initialized '+runLabel(meta)+' · layer data ends '+stamp(source.valid_times.at(-1))+' UTC';
   const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds';
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
@@ -287,10 +290,10 @@ function refreshTimeline(){
  $('map-time').max=state.times.length-1;$('range-start').textContent=stamp(state.times[0]);$('range-end').textContent=stamp(state.times.at(-1));
 }
 async function loadModelRun(id,force){
- const load=url=>cachedJSON(url,{force,kind:'metadata',ttl:600000});
- return loadSpatialModel(id,load,$('map-run-mode').value);
+ const load=url=>cachedJSON(url,{force,kind:'metadata',ttl:60000});
+ return loadSpatialModel(id,load);
 }
-$('map-run-mode').addEventListener('change',()=>configure());
+
 async function configure(force=false){
  pauseAnimation();++timeGeneration;
  state.times=[];state.index=0;
@@ -307,7 +310,7 @@ async function configure(force=false){
  try{
   const pairs=await Promise.all(panelModelIds(state).map(async id=>[id,await loadModelRun(id,force)]));if(generation!==state.generation)return;
   state.metas=Object.fromEntries(pairs);const metas=pairs.map(p=>p[1]);
-  $('ukv-run-note').textContent=$('map-run-mode').value==='extended'?'Uses the recent completed run reaching furthest ahead for each model.':'Uses the newest published run for each model.';
+  $('ukv-run-note').textContent='Latest published cycles: '+pairs.map(([id,meta])=>modelName(id)+' '+runLabel(meta)).join(' · ');
   extendCatalogue(fields,metas,OM,settings);populateVariables();
   if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
   refreshTimeline();

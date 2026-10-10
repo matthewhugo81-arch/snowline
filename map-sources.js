@@ -1,4 +1,4 @@
-import {chooseRun,hasTime,forecastTimes} from './map-runs.js?v=20261010-valid-frames';
+import {chooseRun,hasTime,forecastTimes} from './map-runs.js?v=20261010-latest-cycles';
 import {sourceVariable} from './map-catalogue.js?v=20261009-white-rain';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
@@ -23,12 +23,12 @@ export function fieldDataURL(meta,key,time){
  if(!source)return null;
  return SPATIAL_BASE+source.domain+'/'+runPath(source.reference_time)+time.slice(0,16).replace(':','')+'.om';
 }
-export async function loadSpatialModel(model,load,mode='extended'){
+export async function loadSpatialModel(model,load){
  const domain=domains[model];
  if(!domain)throw new Error('Unknown spatial model');
  const base=SPATIAL_BASE+domain+'/';
  const latest=await load(base+'latest.json');
- const primary={...await chooseRun(latest,base,load,mode),domain};
+ const primary={...await chooseRun(latest),domain};
  const warnings=[];
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{

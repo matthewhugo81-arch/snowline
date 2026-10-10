@@ -1,18 +1,9 @@
 export const UKV='ukmo_uk_deterministic_2km';
 export const hasTime=(meta,time)=>!!meta?.valid_times?.some(value=>Date.parse(value)===Date.parse(time));
 export const forecastTimes=metas=>[...new Map(metas.flatMap(m=>m.valid_times??[]).filter(time=>Number.isFinite(Date.parse(time))).map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
-export async function chooseRun(latest,base,load,mode='extended'){
- if(mode==='latest')return latest;
- const newest=Date.parse(latest.reference_time),cycle=6*3600000;let best=latest;
- const candidates=[];
- for(let time=Math.floor(newest/cycle)*cycle;time>=newest-24*3600000;time-=cycle){
-  if(time===newest)continue;const iso=new Date(time).toISOString();
-  candidates.push({time,path:iso.slice(0,10).replaceAll('-','/')+'/'+iso.slice(11,13)+'00Z/meta.json'});
- }
- const results=await Promise.allSettled(candidates.map(async ({time,path})=>({time,meta:await load(base+path)})));
- for(const result of results){if(result.status!=='fulfilled')continue;const {time,meta}=result.value;
-  if(meta.completed!==true||Date.parse(meta.reference_time)!==time||!Array.isArray(meta.variables)||!meta.valid_times?.length)continue;
-  if(Date.parse(meta.valid_times.at(-1))>Date.parse(best.valid_times.at(-1)))best=meta;
- }
- return best;
+export function runCycleUTC(time){const d=new Date(time);return Number.isFinite(d.getTime())?d.toISOString().slice(11,16).replace(':','')+'Z':'Unknown';}
+export function runLabel(meta){if(!meta?.reference_time)return 'Run unavailable';const d=new Date(meta.reference_time);return Number.isFinite(d.getTime())?d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',timeZone:'UTC'})+' · '+runCycleUTC(meta.reference_time):'Run unavailable';}
+export async function chooseRun(latest){
+ if(!latest||!Number.isFinite(Date.parse(latest.reference_time))||!Array.isArray(latest.variables)||!latest.valid_times?.length||latest.completed===false)throw new Error('Latest model cycle is incomplete or unavailable. Use Check latest runs to retry.');
+ return latest;
 }

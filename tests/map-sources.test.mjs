@@ -54,17 +54,16 @@ test('missing or mismatched companion data preserves surface forecasts and repor
   assert.equal(meta.sourceWarnings.length,1);
  }
 });
-test('longest-forecast mode matches the companion to the chosen older run',async()=>{
- const older={...surface,reference_time:'2026-10-09T00:00:00Z',valid_times:[t0,t1,t2,'2026-10-25T00:00Z']};
+test('latest mode never substitutes an older longer run',async()=>{
+ const requested=[];
  const meta=await loadSpatialModel('gfs_global',async url=>{
+  requested.push(url);
   if(url===SPATIAL_BASE+'ncep_gfs013/latest.json')return surface;
-  if(url===SPATIAL_BASE+'ncep_gfs013/2026/10/09/0000Z/meta.json')return older;
-  if(url===SPATIAL_BASE+'ncep_gfs025/2026/10/09/0000Z/meta.json')return {...upper,reference_time:older.reference_time};
-  throw new Error('Run not present');
- },'extended');
- assert.equal(meta.reference_time,older.reference_time);
- assert.equal(fieldSource(meta,'pressure_msl',t1).reference_time,older.reference_time);
- assert.deepEqual(meta.sourceWarnings,[]);
+  if(url===SPATIAL_BASE+'ncep_gfs025/2026/10/09/0600Z/meta.json')return upper;
+  throw new Error('Older run unexpectedly requested');
+ });
+ assert.equal(meta.reference_time,run);
+ assert.equal(requested.length,2);
 });
 test('UTC timestamp formatting differences identify the same forecast hour',()=>{
  const meta=combineSources(surface,[{...upper,valid_times:['2026-10-09T07:00:00.000Z']}]);
