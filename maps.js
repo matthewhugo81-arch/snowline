@@ -1,5 +1,7 @@
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow} from './map-frames.js?v=20261009-loading';
+import {ForecastFrames,frameWindow} from './map-frames.js?v=20261010-buffered-playback';
+import {ForecastPlayback} from './map-playback.js?v=20261010-buffered-playback';
+import {overlayGroups} from './map-overlay-specs.js?v=20261010-buffered-playback';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261010-valid-frames';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
@@ -55,6 +57,8 @@ function dismissLocation(){
 }
 document.addEventListener('click',event=>{if(!event.target.closest('.maplibregl-map'))dismissLocation();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissLocation();});
+let viewportRefreshTimer;
+function queueViewportRefresh(){clearTimeout(viewportRefreshTimer);viewportRefreshTimer=setTimeout(()=>{if(state.times.length&&!playing)setTime();},120);}
 function viewportBounds(){const visible=Object.entries(panels).filter(([key])=>key==='a'||state.compare).map(([,p])=>p.map.getBounds());if(!visible.length)return;OM.updateCurrentBounds([Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))]);}
 let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
@@ -80,14 +84,14 @@ for(const id of ['map-model','map-model-b']){
 }
 $('map-model').value=state.model;$('map-model-b').value=state.modelB;
 function makeMap(key){
- const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:2.5,maxZoom:10,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:{compact:true}});
+ const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:2.5,maxZoom:10,fadeDuration:0,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:{compact:true}});
  map.touchZoomRotate.disableRotation();
  map.once('load',()=>{const credits=map.getContainer().querySelector('.maplibregl-compact-show .maplibregl-ctrl-attrib-button');credits?.click();});
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');map.fitBounds([[UK[0],UK[1]],[UK[2],UK[3]]],{padding:25,duration:0});
- const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('dataloading',viewportBounds);map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);});map.on('movestart',()=>{panel.frameCache?.suspend(panel.requestedURL);clearGridValues(panel);});new ResizeObserver(()=>map.resize()).observe($('map-'+key));
- map.on('style.load',()=>{applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
+ const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',()=>{pauseAnimation();panel.frameCache?.suspend(panel.requestedURL);clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
+ map.on('style.load',()=>{panel.styleOrdered=false;applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
- map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
+ map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
 locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await OM.getValueFromLatLong(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${displayValue(result.value,field).toFixed(1)} ${displayUnit(field)} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
@@ -107,19 +111,6 @@ function contourLevels(field){
  if(field.key.startsWith('wind_speed_'))return Array.from({length:21},(_,i)=>i*5);
  return field.stops.filter(v=>v>0);
 }
-function clearContours(panel){for(const id of ['wind-arrows','wind-halo','contour-labels','contour-lines'])if(panel.map.getLayer(id))panel.map.removeLayer(id);if(panel.map.getSource('contour-source'))panel.map.removeSource('contour-source');}
-function drawContours(panel,before){
- const field=fields.find(f=>f.key===panelSelection(state,panel.key).field);const url=panel.url;if(field.categorical)return;
- panel.map.addSource('contour-source',{type:'vector',url,maxzoom:10});
- if(/^wind_speed_|^ocean_current_speed$/.test(field.key))for(const [id,color,width]of [['wind-halo','#ffffff',2.6],['wind-arrows','#111111',1]])panel.map.addLayer({id,type:'line',source:'contour-source','source-layer':'wind-arrows',paint:{'line-color':color,'line-width':width}},before);
- const overlay=state.overlays[panel.key];const visibility=overlay.contours||(field.key==='pressure_msl'&&overlay.isobars)?'visible':'none';
- panel.map.addLayer({id:'contour-lines',type:'line',source:'contour-source','source-layer':'contours',layout:{visibility,'line-join':'round'},paint:{'line-color':'#000000','line-width':0.7,'line-opacity':0.8}},before);
- panel.map.addLayer({id:'contour-labels',type:'symbol',source:'contour-source','source-layer':'contours',layout:{visibility,'symbol-placement':field.key==='pressure_msl'?'point':'line','symbol-spacing':140,'text-max-angle':85,'text-font':['Noto Sans Regular'],'text-field':isWindSpeed(field.key)?['to-string',['round',['*',['to-number',['get','value']],2.2369362921]]]:['to-string',['get','value']],'text-size':10,'text-padding':field.key==='pressure_msl'?24:6,'text-offset':[0,-0.5]},paint:{'text-color':'#000000','text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1}},before);
-}
-function clearPressure(panel){
- for(const id of ['mslp-labels','mslp-lines'])if(panel.map.getLayer(id))panel.map.removeLayer(id);
- if(panel.map.getSource('mslp-source'))panel.map.removeSource('mslp-source');
-}
 function pressureNote(){
  for(const {key,model}of panelSelections(state)){
   const missing=!hasFieldTime(state.metas[model],'pressure_msl',state.times[state.index]),warnings=state.metas[model]?.sourceWarnings??[];
@@ -127,14 +118,6 @@ function pressureNote(){
   if(model==='gfs_global'&&!missing)$('mslp-note-'+key).textContent+=' Uses the GFS 0.25° grid from the same run.';
   $('map-mslp-'+key).disabled=missing;
  }
-}
-function drawPressure(panel,model,before){
- clearPressure(panel);
- if(!state.overlays[panel.key].isobars||panelSelection(state,panel.key).field==='pressure_msl'||!sourceVariable(state.metas[model],'pressure_msl'))return;
- const time=state.times[state.index];if(!time||!hasFieldTime(state.metas[model],'pressure_msl',time))return;
- panel.map.addSource('mslp-source',{type:'vector',url:concreteURL(model,state.metas[model],time,'pressure_msl'),maxzoom:10});
- panel.map.addLayer({id:'mslp-lines',type:'line',source:'mslp-source','source-layer':'contours',layout:{'line-join':'round'},paint:{'line-color':'#000000','line-width':0.8,'line-opacity':1}},before);
- panel.map.addLayer({id:'mslp-labels',type:'symbol',source:'mslp-source','source-layer':'contours',layout:{'symbol-placement':'point','text-allow-overlap':false,'text-font':['Noto Sans Regular'],'text-field':['to-string',['case',['>', ['to-number',['get','value']],2000],['/', ['to-number',['get','value']],100],['to-number',['get','value']]]],'text-size':12,'text-padding':24,'text-offset':[0,-0.6]},paint:{'text-color':'#000000','text-halo-width':0}},before);
 }
 function drawCoastline(map,before){
  if(!map.getSource('coastline'))map.addSource('coastline',{type:'geojson',data:'coastline.geojson'});
@@ -154,14 +137,14 @@ function clearGridValues(panel){
  clearTimeout(panel.gridTimer);panel.gridVersion=(panel.gridVersion??0)+1;
  panel.map.getSource('grid-values')?.setData(emptyGrid());
  const note=$('grid-note-'+panel.key);note.hidden=!state.overlays[panel.key].grid;
- if(!note.hidden)note.textContent='Grid values loading…';
+ if(!note.hidden)note.textContent=playing?'Grid values resume when playback is paused.':'Grid values loading…';
 }
 function scheduleGridValues(panel){
- if(!state.overlays[panel.key].grid||panel.restyling)return;
+ if(!panel||playing||!state.overlays[panel.key].grid||panel.restyling)return;
  clearTimeout(panel.gridTimer);panel.gridTimer=setTimeout(()=>drawGridValues(panel),150);
 }
 async function drawGridValues(panel){
- if(!state.overlays[panel.key].grid||!panel.loaded||panel.restyling||panel.displayedTime!==state.times[state.index])return;
+ if(playing||!state.overlays[panel.key].grid||!panel.loaded||panel.restyling||panel.displayedTime!==state.times[state.index])return;
  const {key,map}=panel,version=panel.gridVersion=(panel.gridVersion??0)+1;
  const {model,field}=panelSelection(state,key),time=panel.displayedTime;
  if(field!==panel.displayedField||model!==panel.displayedModel)return;
@@ -185,67 +168,139 @@ async function drawGridValues(panel){
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
 function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
-let playing=false,playTimer=null,timeGeneration=0;
-function pauseAnimation(){playing=false;clearTimeout(playTimer);$('play-map').textContent='▶ Play';$('play-map').setAttribute('aria-pressed','false');}
-function nextAnimation(){clearTimeout(playTimer);if(!playing)return;playTimer=setTimeout(()=>{if(!playing)return;if(state.index>=state.times.length-1){pauseAnimation();return;}state.index++;setTime();},900);}
-function discardFrame(panel,frame){panel.frameCache?.discard(frame);}
-function prepareFrame(panel,url){
- if(!panel.frameCache){panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key);panel.frames=panel.frameCache.frames;}
- return panel.frameCache.prepare(url);
+let playing=false,timeGeneration=0,playback;
+function syncTimeline(index){
+ const time=state.times[index];if(!time)return;
+ $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');
+ $('map-time-label').textContent=stamp(time);
+ $('previous-time').disabled=index===0;$('next-time').disabled=index===state.times.length-1;
 }
-function warmUpcoming(panel,model,field){
- if(panel.restyling||!panel.frameCache||!state.metas[model])return;
- const urls=state.times.map(time=>hasFieldTime(state.metas[model],field,time)?concreteURL(model,state.metas[model],time,field):null);
- panel.frameCache.warm(frameWindow(urls,state.index));
+function pauseAnimation(){
+ const active=playing;playback?.pause();playing=false;
+ if(active){
+  ++timeGeneration;
+  const shown=state.times.indexOf(panels.a?.displayedTime);
+  if(shown>=0){state.index=shown;syncTimeline(shown);}
+ }
+ $('play-map').textContent='▶ Play';$('play-map').setAttribute('aria-pressed','false');
 }
-
-async function drawPanel(key,model){
- const panel=panels[key];await panel.ready;if(panel.restyling)return false;const version=++panel.version;const meta=state.metas[model],time=state.times[state.index],field=panelSelection(state,key).field;if(!meta||!time)return false;
- if(!sourceVariable(meta,field)||!hasFieldTime(meta,field,time)){
-  clearPressure(panel);clearContours(panel);
-  panel.sourceId=null;panel.url=null;panel.loaded=false;panel.displayedTime=null;
-  if(state.overlays[key].grid)$('grid-note-'+key).textContent='No grid values at this time.';
-  for(const frame of [...(panel.frames?.values()??[])])discardFrame(panel,frame);
-  $('panel-label-'+key).textContent=forecastLabel(model,field,time);
-  $('map-error-'+key).textContent=!sourceVariable(meta,field)?fields.find(f=>f.key===field).name+' is not supplied in this model’s map feed.':'No forecast for this layer at this time. Its data ends '+stamp(fieldSource(meta,field).valid_times.at(-1))+' UTC.';$('map-error-'+key).hidden=false;
-  return false;
- }
- const url=concreteURL(model,meta,time,field);$('map-error-'+key).hidden=true;
- const frame=prepareFrame(panel,url);const ready=await frame.ready;
- if(version!==panel.version||panel.restyling||time!==state.times[state.index]||field!==panelSelection(state,key).field||model!==panelSelection(state,key).model)return false;
- if(!ready){
-  if(panel.frameCache.current!==frame)discardFrame(panel,frame);
-  if(panel.frameCache.current)discardFrame(panel,panel.frameCache.current);
-  clearPressure(panel);clearContours(panel);panel.loaded=false;panel.url=null;panel.sourceId=null;panel.displayedTime=null;
-  $('panel-label-'+key).textContent=forecastLabel(model,field,time);
-  $('map-error-'+key).textContent='Forecast frame could not load. No earlier forecast is displayed; choose another time or check latest runs.';$('map-error-'+key).hidden=false;
-  if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';return false;
- }
- clearPressure(panel);clearContours(panel);
- panel.sourceId=frame.id;panel.url=url;panel.loaded=true;
- panel.frameCache.show(frame,state.opacity,fields.find(f=>f.key===field)?.bands?'nearest':'linear');panel.weatherLayer=frame.layer;
- for(const layer of panel.map.getStyle().layers)if(['line','symbol'].includes(layer.type)&&layer.id!=='coast-line')panel.map.moveLayer(layer.id);
- const before=panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id;
- drawContours(panel,before);drawPressure(panel,model,before);drawCoastline(panel.map,before);
- $('panel-label-'+key).textContent=forecastLabel(model,field,time);panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;scheduleGridValues(panel);return true;
+function frameBudget(){
+ return state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2};
+}
+function orderForecastBasemap(panel){
+ if(panel.styleOrdered)return;
+ const map=panel.map;
+ // One reorder per style, not dozens of source/layer mutations per forecast hour.
+ const base=map.getStyle().layers.filter(layer=>['line','symbol'].includes(layer.type)&&layer.id!=='coast-line');
+ for(const layer of base)map.moveLayer(layer.id);
+ panel.rasterBefore=base[0]?.id;panel.overlayBefore=base.find(layer=>layer.type==='symbol')?.id;
+ drawCoastline(map,panel.overlayBefore);panel.styleOrdered=true;
+}
+function panelCache(panel,model,field){
+ const meta=state.metas[model],overlay=state.overlays[panel.key];
+ const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars]);
+ if(panel.frameCache&&panel.cacheKey===signature)return panel.frameCache;
+ panel.frameCache?.clear();orderForecastBasemap(panel);
+ const f=fields.find(item=>item.key===field),descriptors=new Map();
+ panel.frameURLs=state.times.map(time=>{
+  if(!hasFieldTime(meta,field,time))return null;
+  const url=concreteURL(model,meta,time,field);
+  descriptors.set(url,{field:f,url,contours:overlay.contours,isobars:overlay.isobars,pressureURL:overlay.isobars&&hasFieldTime(meta,'pressure_msl',time)?concreteURL(model,meta,time,'pressure_msl'):null});
+  return url;
+ });
+ panel.cacheKey=signature;
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate:url=>overlayGroups(descriptors.get(url))});
+ panel.frames=panel.frameCache.frames;return panel.frameCache;
+}
+function warmUpcoming(panel){
+ if(panel.restyling||!panel.frameCache)return;
+ panel.frameCache.warm(frameWindow(panel.frameURLs,state.index,frameBudget()));
+}
+async function prepareSelection(index,valid=()=>true){
+ const choices=panelSelections(state),time=state.times[index],metas=state.metas;
+ if(!time)return null;
+ await Promise.all(choices.map(({key})=>panels[key].ready));
+ if(!valid()||metas!==state.metas||choices.some(({key,model,field})=>panels[key].restyling||model!==panelSelection(state,key).model||field!==panelSelection(state,key).field))return null;
+ const prepared=choices.map(({key,model,field})=>{
+  const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
+  if(!url)return null;
+  return {panel,cache,frame:cache.prepare(url),key,model,field,time};
+ });
+ if(prepared.some(item=>!item))return null;
+ const ready=await Promise.all(prepared.map(item=>item.frame.ready));
+ return ready.every(Boolean)&&valid()?prepared:null;
 }
 async function setTime(){
- if(!state.times.length)return;
- const valid=panelForecastTimes(state);
- if(!valid.length){pauseAnimation();status('No valid forecast hours for the selected layers.');return;}
- if(valid.length!==state.times.length||valid.some((time,i)=>time!==state.times[i]))refreshTimeline();
- const generation=++timeGeneration;state.index=Math.max(0,Math.min(state.index,state.times.length-1));const time=state.times[state.index];requestedTime=Date.parse(time);
- $('map-time').value=state.index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');$('map-time-label').textContent=stamp(time);$('previous-time').disabled=state.index===0;$('next-time').disabled=state.index===state.times.length-1;setLegend();pressureNote();dismissLocation();$('animation-status').textContent='Loading frame…';
- const targets=panelSelections(state);for(const {key,model,field}of targets){const panel=panels[key];panel.requestedURL=hasFieldTime(state.metas[model],field,time)?concreteURL(model,state.metas[model],time,field):null;panel.frameCache?.stop(panel.requestedURL);clearGridValues(panel);}
- const loaded=await Promise.all(targets.map(({key,model})=>drawPanel(key,model)));
- if(generation!==timeGeneration)return;
- if(loaded.every(Boolean)){for(const {key,model,field}of targets)warmUpcoming(panels[key],model,field);$('animation-status').textContent='Next frames loading in background';status('Click a map for a value and local charts.');nextAnimation();}else{pauseAnimation();$('animation-status').textContent='Frame unavailable — previous image retained';}
+ if(!state.times.length)return false;
+ const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;
+ const time=state.times[index],generation=++timeGeneration;
+ const valid=()=>generation===timeGeneration&&state.times[index]===time&&state.index===index;
+ dismissLocation();requestedTime=Date.parse(time);
+ // The displayed valid-time label does not advance until BOTH panels are ready.
+ $('animation-status').textContent='Loading '+stamp(time)+' UTC…';
+ try{
+  for(const {key,model,field}of panelSelections(state)){
+   const panel=panels[key];await panel.ready;if(!valid()||panel.restyling)return false;
+   const cache=panelCache(panel,model,field);
+   cache.warm(frameWindow(panel.frameURLs,index,frameBudget()));
+   panel.requestedURL=panel.frameURLs[index];
+  }
+  viewportBounds();
+  const prepared=await prepareSelection(index,valid);
+  if(!valid())return false;
+  if(!prepared||prepared.some(({cache,frame})=>!cache.isReady(frame.url)))throw new Error('Forecast frame could not load.');
+  // Synchronous commit: images, contours, isobars and labels share one valid time.
+  for(const {panel,cache,frame,key,model,field}of prepared){
+   clearGridValues(panel);
+   cache.show(frame,state.opacity,fields.find(f=>f.key===field)?.bands?'nearest':'linear');
+   panel.sourceId=frame.id;panel.url=frame.url;panel.loaded=true;panel.weatherLayer=frame.layer;
+   panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
+   $('panel-label-'+key).textContent=forecastLabel(model,field,time);$('map-error-'+key).hidden=true;
+   scheduleGridValues(panel);
+  }
+  syncTimeline(index);setLegend();pressureNote();
+  for(const {panel}of prepared)warmUpcoming(panel);
+  $('animation-status').textContent=playing?'Playing · buffered native forecast frames':'Ready · upcoming frames buffering';
+  status('Click a map for a value and local charts.');return true;
+ }catch(error){
+  if(!valid())return false;
+  pauseAnimation();
+  for(const {key}of panelSelections(state)){
+   const panel=panels[key];
+   $('map-error-'+key).textContent=panel.displayedTime?'Unable to load the requested frame. Showing the forecast labelled '+stamp(panel.displayedTime)+' UTC. Retry or choose another time.':'Unable to load this forecast frame. Retry or check latest runs.';
+   $('map-error-'+key).hidden=false;
+  }
+  const shown=state.times.indexOf(panels.a?.displayedTime);
+  if(shown>=0){state.index=shown;syncTimeline(shown);}
+  $('animation-status').textContent='Frame unavailable · playback stopped';status(error.message);return false;
+ }
 }
+playback=new ForecastPlayback({
+ length:()=>state.times.length,index:()=>state.index,buffer:2,
+ prepare:async index=>{
+  const generation=timeGeneration;
+  const ready=panelSelections(state).every(({key})=>panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
+  if(!ready)$('animation-status').textContent='Buffering '+stamp(state.times[index])+' UTC…';
+  return !!await prepareSelection(index,()=>generation===timeGeneration);
+ },
+ show:async index=>{state.index=index;return setTime();},
+ onState:(phase,done,total)=>{
+  playing=['buffering','playing','next'].includes(phase);
+  $('play-map').textContent=playing?'Ⅱ Pause':'▶ Play';$('play-map').setAttribute('aria-pressed',String(playing));
+  if(phase==='buffering')$('animation-status').textContent='Preparing smooth playback · '+done+'/'+total+' frames';
+  if(phase==='ended')$('animation-status').textContent='End of available forecast';
+  if(phase==='failed')$('animation-status').textContent='Buffering failed · press Play to retry';
+  if(phase==='paused')for(const {key}of panelSelections(state))scheduleGridValues(panels[key]);
+ }
+});
+$('map-playback-speed')?.addEventListener('change',event=>{playback.interval=Number(event.target.value);});
 function setLegend(){
  for(const {key,model,field} of panelSelections(state)){
   const f=fields.find(f=>f.key===field);if(!f)continue;
   const el=name=>$(name+'-'+key),gradient=el('legend-gradient'),ticks=el('legend-ticks'),bands=el('legend-bands');
   const displayBreaks=displayStops(f),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
+  if(panels[key].legendField!==field){
+  panels[key].legendField=field;
   el('legend-title').textContent=displayUnit(f);
   gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
   gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
@@ -254,9 +309,10 @@ function setLegend(){
   if(f.bands)f.stops.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categorical?String(v):i===f.stops.length-1?v+'+':v+'–<'+f.stops[i+1];item.title=range+' '+f.unit;item.setAttribute('aria-label',range+' '+f.unit);swatch.style.background=f.colors[i];label.textContent=v+(i===f.stops.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
   bands.style.gridTemplateColumns='repeat('+f.stops.length+',minmax(0,1fr))';
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
+  }
   let note=f.note,interval='';
   if(['precipitation','rain','showers','snowfall_water_equivalent'].includes(field)){
-   const times=fieldSource(state.metas[model],field)?.valid_times??[],idx=times.indexOf(state.times[state.index]);
+   const times=fieldSource(state.metas[model],field)?.valid_times??[],idx=times.findIndex(t=>Date.parse(t)===Date.parse(state.times[state.index]));
    interval=idx>0?(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000+' h ending at valid time':'Initial model time';
    note+=' '+(idx>0?'Accumulation: '+interval+'.':'An accumulation interval is not defined at the initial model time.');
   }
@@ -302,7 +358,7 @@ async function configure(force=false){
  $('animation-status').textContent='Checking available forecast hours…';
  for(const p of Object.values(panels)){
   p.frameCache?.clear();p.frameCache=null;p.frames=new Map();p.version++;p.loaded=false;p.url=null;p.sourceId=null;p.weatherLayer=null;p.displayedTime=null;
-  if(p.map.isStyleLoaded()){clearPressure(p);clearContours(p);}
+  if(p.map.isStyleLoaded()){}
   clearGridValues(p);$('panel-label-'+p.key).textContent='Checking model run…';$('map-error-'+p.key).hidden=true;
  }
  const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;
@@ -315,7 +371,7 @@ async function configure(force=false){
   if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
   refreshTimeline();
   setLegend();setTime();
- }catch(error){if(generation===state.generation){state.times=[];for(const p of Object.values(panels)){clearPressure(p);clearContours(p);p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
+ }catch(error){if(generation===state.generation){state.times=[];for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
  finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;}}
 }
 $('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
@@ -325,7 +381,7 @@ for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB']]
  try{refreshTimeline();setTime();}
  catch(error){
   status(error.message);$('map-time-label').textContent='Forecast unavailable';$('animation-status').textContent=error.message;
-  for(const p of Object.values(panels)){p.frameCache?.clear();p.frameCache=null;p.loaded=false;p.url=null;p.sourceId=null;p.displayedTime=null;if(p.map.isStyleLoaded()){clearPressure(p);clearContours(p);}}
+  for(const p of Object.values(panels)){p.frameCache?.clear();p.frameCache=null;p.loaded=false;p.url=null;p.sourceId=null;p.displayedTime=null;if(p.map.isStyleLoaded()){}}
  }
 });
 let comparisonInitialized=false;
@@ -335,23 +391,25 @@ $('compare-maps').addEventListener('change',async e=>{
  $('panel-b').hidden=!state.compare;$('layer-notes-b').hidden=!state.compare;
  if(state.compare&&!panels.b)makeMap('b');a.map.resize();panels.b?.map.resize();await configure();
 });
-function updateContourVisibility(key){
- const {field}=panelSelection(state,key),overlay=state.overlays[key],panel=panels[key];if(!panel)return;
- for(const id of ['contour-lines','contour-labels'])if(panel.map.getLayer(id))panel.map.setLayoutProperty(id,'visibility',overlay.contours||(field==='pressure_msl'&&overlay.isobars)?'visible':'none');
-}
 for(const key of ['a','b']){
- $('map-contours-'+key).addEventListener('change',e=>{state.overlays[key].contours=e.target.checked;updateContourVisibility(key);});
- $('map-mslp-'+key).addEventListener('change',e=>{state.overlays[key].isobars=e.target.checked;const panel=panels[key],{model}=panelSelection(state,key);if(panel&&!panel.restyling&&state.metas[model]){const before=panel.map.getStyle().layers.find(layer=>layer.type==='symbol'&&!['contour-labels','mslp-labels','grid-labels'].includes(layer.id))?.id;drawPressure(panel,model,before);}updateContourVisibility(key);pressureNote();});
- $('map-grid-'+key).addEventListener('change',e=>{state.overlays[key].grid=e.target.checked;const panel=panels[key];if(panel){clearGridValues(panel);scheduleGridValues(panel);}});
+ for(const [control,setting]of [['contours','contours'],['mslp','isobars']]){
+  $('map-'+control+'-'+key).addEventListener('change',event=>{pauseAnimation();state.overlays[key][setting]=event.target.checked;setTime();});
+ }
+ $('map-grid-'+key).addEventListener('change',event=>{state.overlays[key].grid=event.target.checked;const panel=panels[key];if(panel){clearGridValues(panel);scheduleGridValues(panel);}});
 }
 $('map-terrain').addEventListener('change',e=>{terrain=e.target.checked;try{localStorage.setItem('snowline-terrain',String(terrain));}catch{}for(const panel of Object.values(panels))if(panel.map.getLayer('terrain-shading')||panel.map.isStyleLoaded())drawTerrain(panel.map);});
 $('map-roads').addEventListener('change',e=>{roads=e.target.checked;try{localStorage.setItem('snowline-roads',String(roads));}catch{}for(const panel of Object.values(panels))if(panel.map.isStyleLoaded())applyRoads(panel.map);});
 $('map-background').addEventListener('change',e=>{pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';background=e.target.value;try{localStorage.setItem('snowline-background',background);}catch{}for(const panel of Object.values(panels)){clearGridValues(panel);panel.restyling=true;panel.loaded=false;panel.version++;panel.frameCache?.clear();panel.frameCache=null;panel.frames=new Map();panel.map.setStyle('https://tiles.openfreemap.org/styles/'+backgrounds[background]);}});
-$('reload-maps').addEventListener('click',()=>configure(true));$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{if(state.times.length)$('map-time-label').textContent=stamp(state.times[Number(e.target.value)]);});
+$('reload-maps').addEventListener('click',()=>configure(true));$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{const preview=Number(e.target.value);pauseAnimation();e.target.value=String(preview);if(state.times.length)$('animation-status').textContent='Preview '+stamp(state.times[preview])+' UTC · release to load';});
 $('previous-time').addEventListener('click',()=>{pauseAnimation();state.index--;setTime();});$('next-time').addEventListener('click',()=>{pauseAnimation();state.index++;setTime();});
 $('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.weatherLayer&&p.map.getLayer(p.weatherLayer))p.map.setPaintProperty(p.weatherLayer,'raster-opacity',state.opacity);});
 $('reset-map').addEventListener('click',()=>{for(const p of Object.values(panels))p.map.fitBounds([[UK[0],UK[1]],[UK[2],UK[3]]],{padding:25,duration:400});});
-$('play-map').addEventListener('click',()=>{if(playing){pauseAnimation();return;}if(!state.times.length)return;playing=true;$('play-map').textContent='Ⅱ Pause';$('play-map').setAttribute('aria-pressed','true');if(state.index>=state.times.length-1)state.index=0;setTime();});
+$('play-map').addEventListener('click',()=>{
+ if(playing){pauseAnimation();$('animation-status').textContent='Paused';return;}
+ if(!state.times.length)return;
+ for(const {key}of panelSelections(state))clearGridValues(panels[key]);
+ playback.start();
+});
 window.addEventListener('pagehide',pauseAnimation);document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseAnimation();});
 await configure();
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'select_event_location',title:'Prepare an event analysis at a location',description:'Select latitude and longitude for the visible event analysis form. Does not calculate a hazard or fetch point forecasts; use the visible Calculate event action afterwards.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');state.location={latitude:input.latitude,longitude:input.longitude};selectEventPoint(state.location,state.times[state.index]);$('event-analysis').scrollIntoView({block:'start'});return {location:state.location,eventStartUTC:$('event-start').value+'Z',eventEndUTC:$('event-end').value+'Z',calculated:false};}},{signal:lifecycle.signal});}catch(error){console.info('Optional map tool unavailable:',error.message);}}
