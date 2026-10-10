@@ -9,7 +9,7 @@ export class ForecastPlayback{
   const active=()=>this.playing&&epoch===this.epoch;
   try{
    if(!this.length()){this.pause();return;}
-   if(this.index()>=this.length()-1){if(!await this.show(0)||!active())return;}
+   if(this.index()>=this.length()-1){if(!await this.show(0)||!active()){if(active()){this.pause();this.onState('failed');}return;}}
    const count=Math.min(this.buffer,this.length()-this.index()-1);
    for(let offset=1;offset<=count;offset++){
     if(!active())return;

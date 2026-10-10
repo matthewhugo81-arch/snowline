@@ -170,3 +170,9 @@
  #expanded-map .map-canvases:has(#panel-b:not([hidden])) .map-view{height:55svh;flex:none}
  #expanded-map .map-timeline{position:relative;flex:none}
 }
+
+/* Keep playback controls steady as loading messages and dates change. */
+#animation-status{height:1.5em;min-height:1.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.time-heading>div{min-width:180px;font-variant-numeric:tabular-nums;text-align:center}
+.map-panel-label{font-variant-numeric:tabular-nums}
+@media(max-width:370px){.time-heading{gap:5px}.time-heading>div{min-width:155px}.time-heading strong{font-size:12px}}

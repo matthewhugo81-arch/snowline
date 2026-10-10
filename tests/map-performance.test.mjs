@@ -73,3 +73,8 @@ test('a newly selected cycle invalidates the old playback without a late commit'
  let resolve;const shown=[];const clock=new ForecastPlayback({length:()=>3,index:()=>0,prepare:()=>new Promise(r=>resolve=r),show:async i=>{shown.push(i);return true;}});
  const pending=clock.start();clock.pause();resolve(true);await pending;assert.deepEqual(shown,[]);
 });
+
+test('failed restart at the final frame resets the play button',async()=>{
+ const states=[];const clock=new ForecastPlayback({length:()=>3,index:()=>2,prepare:async()=>true,show:async()=>false,onState:s=>states.push(s)});
+ await clock.start();assert.equal(clock.playing,false);assert.equal(states.at(-1),'failed');
+});
