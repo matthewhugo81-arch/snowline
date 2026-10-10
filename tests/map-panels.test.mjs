@@ -17,11 +17,11 @@ test('same-model comparison preserves two separate weather fields and loads one 
  assert.equal(panelSelection(state,'b').field,'cloud_cover');
 });
 
-test('different models retain independent fields and a shared chronological timeline',()=>{
+test('different models retain independent fields and only matching valid times',()=>{
  const state=comparison();state.modelB='icon';
  state.metas.icon={variables:['precipitation'],valid_times:[t(12),t(9),t(6)]};
  assert.deepEqual(panelModelIds(state),['ukv','icon']);
- assert.deepEqual(panelForecastTimes(state),[t(6),t(7),t(8),t(9),t(12)]);
+ assert.deepEqual(panelForecastTimes(state),[t(6)]);
  assert.equal(panelSelection(state,'a').model,'ukv');
 });
 
@@ -32,7 +32,7 @@ test('hiding panel two excludes its times without losing its selections',()=>{
  assert.deepEqual(panelModelIds(state),['ukv']);
  state.compare=true;
  assert.equal(panelSelection(state,'b').field,'precipitation');
- assert.equal(panelForecastTimes(state).at(-1),t(18));
+ assert.deepEqual(panelForecastTimes(state),[]);
 });
 
 test('split-grid model timelines follow each selected field, excluding unrelated companion times',()=>{
@@ -41,7 +41,7 @@ test('split-grid model timelines follow each selected field, excluding unrelated
  const state=comparison();state.metas.ukv=combineSources(surface,[upper]);
  assert.deepEqual(panelForecastTimes(state),surface.valid_times);
  state.fieldB='temperature_850hPa';
- assert.deepEqual(panelForecastTimes(state),[t(6),t(7),t(8),t(9),t(12)]);
+ assert.deepEqual(panelForecastTimes(state),[t(6)]);
  state.field='unknown';state.fieldB='unknown';
  assert.deepEqual(panelForecastTimes(state),[]);
 });
@@ -50,4 +50,14 @@ test('a field supplied by multiple grids keeps the valid times from either grid'
  const state=comparison();state.compare=false;
  state.metas.ukv=combineSources(ukv,[{...ukv,valid_times:[t(9),t(12)]}]);
  assert.deepEqual(panelForecastTimes(state),[t(6),t(7),t(8),t(9),t(12)]);
+});
+
+test('a selected short-range field never inherits unrelated long-range times',()=>{
+ const state=comparison();state.compare=false;
+ state.metas.ukv=combineSources(
+  {reference_time:t(6),variables:['precipitation'],valid_times:[t(6),t(7)]},
+  [{reference_time:t(6),variables:['temperature_850hPa'],valid_times:[t(6),t(7),t(8),t(12)]}]
+ );
+ state.field='precipitation';
+ assert.deepEqual(panelForecastTimes(state),[t(6),t(7)]);
 });

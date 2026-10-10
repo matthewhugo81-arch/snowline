@@ -1,8 +1,8 @@
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {ForecastFrames,frameWindow} from './map-frames.js?v=20261009-loading';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261009-overlays';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261010-valid-frames';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261009-denser-grid';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261009-white-rain';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-valid-frames';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
@@ -82,7 +82,7 @@ function makeMap(key){
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');map.fitBounds([[UK[0],UK[1]],[UK[2],UK[3]]],{padding:25,duration:0});
  const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('dataloading',viewportBounds);map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);});map.on('movestart',()=>{panel.frameCache?.suspend(panel.requestedURL);clearGridValues(panel);});new ResizeObserver(()=>map.resize()).observe($('map-'+key));
  map.on('style.load',()=>{applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
- map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||(event.sourceId&&event.sourceId!==panel.sourceId))return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
+ map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
@@ -204,12 +204,19 @@ async function drawPanel(key,model){
   for(const frame of [...(panel.frames?.values()??[])])discardFrame(panel,frame);
   $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';
   $('map-error-'+key).textContent=!sourceVariable(meta,field)?fields.find(f=>f.key===field).name+' is not supplied in this model’s map feed.':'No forecast for this layer at this time. Its data ends '+stamp(fieldSource(meta,field).valid_times.at(-1))+' UTC.';$('map-error-'+key).hidden=false;
-  drawPressure(panel,model,panel.map.getStyle().layers.find(l=>l.type==='symbol')?.id);return true;
+  return false;
  }
  const url=concreteURL(model,meta,time,field);$('map-error-'+key).hidden=true;
  const frame=prepareFrame(panel,url);const ready=await frame.ready;
  if(version!==panel.version||panel.restyling||time!==state.times[state.index]||field!==panelSelection(state,key).field||model!==panelSelection(state,key).model)return false;
- if(!ready){if(panel.frameCache.current!==frame)discardFrame(panel,frame);$('map-error-'+key).textContent='Next frame could not load. The previous forecast remains visible; try again.';$('map-error-'+key).hidden=false;if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';return false;}
+ if(!ready){
+  if(panel.frameCache.current!==frame)discardFrame(panel,frame);
+  if(panel.frameCache.current)discardFrame(panel,panel.frameCache.current);
+  clearPressure(panel);clearContours(panel);panel.loaded=false;panel.url=null;panel.sourceId=null;panel.displayedTime=null;
+  $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';
+  $('map-error-'+key).textContent='Forecast frame could not load. No earlier forecast is displayed; choose another time or check latest runs.';$('map-error-'+key).hidden=false;
+  if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';return false;
+ }
  clearPressure(panel);clearContours(panel);
  panel.sourceId=frame.id;panel.url=url;panel.loaded=true;
  panel.frameCache.show(frame,state.opacity,fields.find(f=>f.key===field)?.bands?'nearest':'linear');panel.weatherLayer=frame.layer;
@@ -219,7 +226,11 @@ async function drawPanel(key,model){
  $('panel-label-'+key).textContent=fields.find(f=>f.key===field).name+' · '+stamp(time)+' UTC';panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;scheduleGridValues(panel);return true;
 }
 async function setTime(){
- if(!state.times.length)return;const generation=++timeGeneration;state.index=Math.max(0,Math.min(state.index,state.times.length-1));const time=state.times[state.index];requestedTime=Date.parse(time);
+ if(!state.times.length)return;
+ const valid=panelForecastTimes(state);
+ if(!valid.length){pauseAnimation();status('No valid forecast hours for the selected layers.');return;}
+ if(valid.length!==state.times.length||valid.some((time,i)=>time!==state.times[i]))refreshTimeline();
+ const generation=++timeGeneration;state.index=Math.max(0,Math.min(state.index,state.times.length-1));const time=state.times[state.index];requestedTime=Date.parse(time);
  $('map-time').value=state.index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');$('map-time-label').textContent=stamp(time);$('previous-time').disabled=state.index===0;$('next-time').disabled=state.index===state.times.length-1;setLegend();pressureNote();dismissLocation();$('animation-status').textContent='Loading frame…';
  const targets=panelSelections(state);for(const {key,model,field}of targets){const panel=panels[key];panel.requestedURL=hasFieldTime(state.metas[model],field,time)?concreteURL(model,state.metas[model],time,field):null;panel.frameCache?.stop(panel.requestedURL);clearGridValues(panel);}
  const loaded=await Promise.all(targets.map(({key,model})=>drawPanel(key,model)));
@@ -264,7 +275,13 @@ function populateVariables(){
  }
 }
 function refreshTimeline(){
- state.times=panelForecastTimes(state);if(!state.times.length)throw new Error('These layers have no available forecast times.');
+ state.times=panelForecastTimes(state);
+ if(!state.times.length){
+  $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;
+  $('map-time').max=0;$('map-time').value=0;$('range-start').textContent='';$('range-end').textContent='';
+  throw new Error(state.compare?'The selected panels have no common forecast times. Choose another model or layer.':'The selected layer has no available forecast times for this model run.');
+ }
+ $('map-time').disabled=false;$('play-map').disabled=false;
  state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
  $('map-time').max=state.times.length-1;$('range-start').textContent=stamp(state.times[0]);$('range-end').textContent=stamp(state.times.at(-1));
 }
@@ -274,7 +291,16 @@ async function loadModelRun(id,force){
 }
 $('map-run-mode').addEventListener('change',()=>configure());
 async function configure(force=false){
- pauseAnimation();++timeGeneration;for(const p of Object.values(panels)){p.frameCache?.stop();p.version++;p.displayedTime=null;clearGridValues(p);}
+ pauseAnimation();++timeGeneration;
+ state.times=[];state.index=0;
+ $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;
+ $('map-time-label').textContent='Checking model run…';$('range-start').textContent='';$('range-end').textContent='';
+ $('animation-status').textContent='Checking available forecast hours…';
+ for(const p of Object.values(panels)){
+  p.frameCache?.clear();p.frameCache=null;p.frames=new Map();p.version++;p.loaded=false;p.url=null;p.sourceId=null;p.weatherLayer=null;p.displayedTime=null;
+  if(p.map.isStyleLoaded()){clearPressure(p);clearContours(p);}
+  clearGridValues(p);$('panel-label-'+p.key).textContent='Checking model run…';$('map-error-'+p.key).hidden=true;
+ }
  const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;
  status('Checking model runs…');
  try{
@@ -290,7 +316,14 @@ async function configure(force=false){
 }
 $('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
 $('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
-for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB']])$(id).addEventListener('change',e=>{pauseAnimation();state[property]=e.target.value;refreshTimeline();setTime();});
+for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB']])$(id).addEventListener('change',e=>{
+ pauseAnimation();state[property]=e.target.value;
+ try{refreshTimeline();setTime();}
+ catch(error){
+  status(error.message);$('map-time-label').textContent='Forecast unavailable';$('animation-status').textContent=error.message;
+  for(const p of Object.values(panels)){p.frameCache?.clear();p.frameCache=null;p.loaded=false;p.url=null;p.sourceId=null;p.displayedTime=null;if(p.map.isStyleLoaded()){clearPressure(p);clearContours(p);}}
+ }
+});
 let comparisonInitialized=false;
 $('compare-maps').addEventListener('change',async e=>{
  state.compare=e.target.checked;

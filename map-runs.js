@@ -1,6 +1,6 @@
 export const UKV='ukmo_uk_deterministic_2km';
-export const hasTime=(meta,time)=>!!meta?.valid_times?.includes(time);
-export const forecastTimes=metas=>[...new Set(metas.flatMap(m=>m.valid_times))].sort((a,b)=>Date.parse(a)-Date.parse(b));
+export const hasTime=(meta,time)=>!!meta?.valid_times?.some(value=>Date.parse(value)===Date.parse(time));
+export const forecastTimes=metas=>[...new Map(metas.flatMap(m=>m.valid_times??[]).filter(time=>Number.isFinite(Date.parse(time))).map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
 export async function chooseRun(latest,base,load,mode='extended'){
  if(mode==='latest')return latest;
  const newest=Date.parse(latest.reference_time),cycle=6*3600000;let best=latest;

@@ -66,6 +66,11 @@ test('longest-forecast mode matches the companion to the chosen older run',async
  assert.equal(fieldSource(meta,'pressure_msl',t1).reference_time,older.reference_time);
  assert.deepEqual(meta.sourceWarnings,[]);
 });
+test('UTC timestamp formatting differences identify the same forecast hour',()=>{
+ const meta=combineSources(surface,[{...upper,valid_times:['2026-10-09T07:00:00.000Z']}]);
+ assert.equal(hasFieldTime(meta,'pressure_msl','2026-10-09T07:00Z'),true);
+ assert.equal(fieldDataURL(meta,'pressure_msl','2026-10-09T07:00Z'),SPATIAL_BASE+'ncep_gfs025/2026/10/09/0600Z/2026-10-09T0700.om');
+});
 test('ordinary models keep their existing feed and do not request GFS data',async()=>{
  const meta=await loadSpatialModel('icon_eu',async url=>{
   assert.equal(url,SPATIAL_BASE+'dwd_icon_eu/latest.json');

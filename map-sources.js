@@ -1,4 +1,4 @@
-import {chooseRun,hasTime,forecastTimes} from './map-runs.js';
+import {chooseRun,hasTime,forecastTimes} from './map-runs.js?v=20261010-valid-frames';
 import {sourceVariable} from './map-catalogue.js?v=20261009-white-rain';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
