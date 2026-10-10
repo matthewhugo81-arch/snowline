@@ -5,14 +5,16 @@ import {overlayGroups} from './map-overlay-specs.js?v=20261010-buffered-playback
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261010-valid-frames';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-latest-cycles';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-ukv-families';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
-import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv';
+import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv-families';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
-import {MODELS,finite} from './data.js?v=20261010-ukv';
-import {cachedJSON,usageText} from './cache.js';
+import {finite} from './data.js?v=20261010-ukv';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261010-ukv-families';
+import {ukvRunFamily} from './ukv-run-selection.js?v=20261010-ukv-families';
+import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 const $=id=>document.getElementById(id);
 setupMobileMap();
@@ -322,7 +324,7 @@ function setLegend(){
   el('field-availability').textContent=modelName(model)+' · '+f.name;
   const meta=state.metas[model],source=fieldSource(meta,field);
   if(meta&&source)el('run').textContent='Initialized '+runLabel(meta)+' · layer data ends '+stamp(source.valid_times.at(-1))+' UTC';
-  if(meta&&source&&model==='ukmo_uk_deterministic_2km')el('run').textContent+=' · '+ukvCoverageText(meta);
+  if(meta&&source&&ukvRunFamily(model))el('run').textContent+=' · '+ukvCoverageText(meta,ukvRunFamily(model));
   const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds';
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
@@ -347,9 +349,9 @@ function refreshTimeline(){
  state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
  $('map-time').max=state.times.length-1;$('range-start').textContent=stamp(state.times[0]);$('range-end').textContent=stamp(state.times.at(-1));
 }
-async function loadModelRun(id,force){
- const load=url=>cachedJSON(url,{force,kind:'metadata',ttl:60000});
- return loadSpatialModel(id,load);
+function metadataLoader(force){
+ const requests=new Map();
+ return url=>{if(!requests.has(url))requests.set(url,cachedJSON(url,{force,kind:'metadata',ttl:60000}));return requests.get(url);};
 }
 
 async function configure(force=false){
@@ -366,9 +368,10 @@ async function configure(force=false){
  const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;
  status('Checking model runs…');
  try{
-  const pairs=await Promise.all(panelModelIds(state).map(async id=>[id,await loadModelRun(id,force)]));if(generation!==state.generation)return;
+  const load=metadataLoader(force);
+  const pairs=await Promise.all(panelModelIds(state).map(async id=>[id,await loadSpatialModel(id,load)]));if(generation!==state.generation)return;
   state.metas=Object.fromEntries(pairs);const metas=pairs.map(p=>p[1]);
-  $('ukv-run-note').textContent='Latest published cycles: '+pairs.map(([id,meta])=>modelName(id)+' '+runLabel(meta)).join(' · ');
+  $('ukv-run-note').textContent='Latest completed cycle in each selected group: '+pairs.map(([id,meta])=>modelName(id)+' '+runLabel(meta)+(meta.selectionWarnings?.length?' · '+meta.selectionWarnings.join(' '):'')).join(' · ');
   extendCatalogue(fields,metas,OM,settings);populateVariables();
   if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
   refreshTimeline();

@@ -36,7 +36,13 @@ try{
   await page.route('**/vendor/index.mjs',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
   await page.route('https://tiles.openfreemap.org/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
-  await page.route('https://openmeteo.s3.amazonaws.com/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({completed:true,reference_time:'2026-10-10T06:00:00Z',variables:['temperature_2m','precipitation','pressure_msl'],valid_times:Array.from({length:8},(_,i)=>'2026-10-10T'+String(i+6).padStart(2,'0')+':00Z')})}));
+  const metadata=[];
+  const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
+  await page.route('https://openmeteo.s3.amazonaws.com/**',route=>{
+   const url=route.request().url();metadata.push(url);
+   const meta=url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null;
+   return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
+  });
   await page.goto(origin+'/maps.html');
   try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
@@ -68,6 +74,24 @@ try{
    assert.equal(await page.locator('#map-time').inputValue(),'5');
    assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'false');
    await selectTime(5);
+   // Latest.json is 0800Z (nowcast), but the default must select 0600Z main.
+   const main='ukmo_uk_deterministic_2km',nowcast=main+'_nowcast';
+   assert.equal(await page.locator('#map-model').inputValue(),main);
+   assert.match(await page.locator('#panel-label-a').textContent(),/0600Z/);
+   assert.equal(metadata.some(url=>url.includes('/0300Z/')),false,'Do not fetch an older longer main cycle');
+   await page.locator('#map-model-b').selectOption(nowcast);
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('0800Z'));
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'12','Comparison uses the 13 overlapping timestamps');
+   const labels=await page.locator('.map-panel-label').allTextContents();
+   assert.match(labels[0],/0600Z/);assert.match(labels[1],/0800Z/);
+   assert.equal(labels[0].split('Valid ')[1],labels[1].split('Valid ')[1]);
+   await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.waitForFunction(()=>document.getElementById('map-time').max==='54'&&document.getElementById('panel-label-a').textContent.includes('0600Z'));
+   await page.locator('#map-model').selectOption(nowcast);
+   await page.waitForFunction(()=>document.getElementById('map-time').max==='12'&&document.getElementById('panel-label-a').textContent.includes('0800Z'));
+   assert.match(await page.locator('#run-a').textContent(),/nowcast/);
+   await page.locator('#map-model').selectOption(main);
+   await page.waitForFunction(()=>document.getElementById('map-time').max==='54'&&document.getElementById('panel-label-a').textContent.includes('0600Z'));
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));
   }catch(error){

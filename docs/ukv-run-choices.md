@@ -1,0 +1,9 @@
+# Separate UKV map choices
+
+The map model menu offers **UKV — latest main run** (default) and **UKV — latest hourly nowcast**. Both use the same UKV 2 km source grid but have independent initialization selection. Main cycles are 0000/0300/0600/0900/1200/1500/1800/2100Z; intervening hourly initializations are the nowcast family. Within each group, the newest completed published cycle wins, never the run with the latest forecast endpoint. Thus a newer 0600Z 54-hour run replaces an older 0300Z 120-hour run. No cycles or forecast fields are spliced together.
+
+Selection is anchored to the provider's latest.json, searches backwards at most 24 hours within the selected family and verifies the requested cycle's metadata. Only 404 (not yet published) or explicitly incomplete cycles allow trying an earlier cycle in that same group, with a visible explanation. Network, server and invalid-metadata errors stop selection rather than silently presenting an older run as latest. Shared metadata requests are deduplicated within each refresh; metadata HTTP caches are revalidated. Each map retains its own initialization/date and available endpoint. Comparison only offers common valid times, so switch comparison off for the full main-run horizon.
+
+These are map-only options. The location-chart UKV model remains a single forecast entry, so multi-model means are not double-counted. The API identifier remains `ukmo_uk_deterministic_2km`; the map-only `_nowcast` choice is resolved to that domain before constructing data URLs. The earlier cutoff diagnostic is a historical snapshot predating these separate choices.
+
+Run schedule: https://registry.opendata.aws/met-office-uk-deterministic/ (Met Office-managed catalogue). Feed identity: https://open-meteo.com/en/docs/ukmo-api. Supplied forecast coverage is read from each cycle's metadata; scheduled run length is not a promise of downloaded data.
