@@ -1,0 +1,37 @@
+name: Validate buffered playback upgrade
+on:
+  push:
+    branches: [perf/buffered-playback-20261010]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/buffered-playback-20261010
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply targeted integration patch on the test branch
+        run: python3 apply-upgrade.py
+      - name: Syntax and all regression tests
+        run: |
+          node --check maps.js
+          node --test tests/*.test.mjs
+      - name: Install browser test tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Test real page and renderer at desktop and phone sizes
+        run: node tests/map-browser.mjs
+      - name: Commit only the validated integration to the test branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm apply-upgrade.py engine-replacement.txt .github/workflows/playback-upgrade.yml
+          git add maps.js maps.html maps.css README.md tests/map-integration.test.mjs
+          git commit -m 'Integrate validated buffered playback and synchronized forecast frames'
+          git push origin HEAD:perf/buffered-playback-20261010
