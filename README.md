@@ -33,3 +33,6 @@ The weather-layer menu uses each selected spatial run’s catalogue. Grouped add
 
 ## Buffered map playback
 Weather rasters and enabled contour/MSLP overlays are prepared as complete, cycle-specific frames. Playback buffers two upcoming frames before starting; a bounded rolling cache retains nearby frames for backwards/forwards analysis without cancelling useful in-flight downloads. Both comparison panels commit the same valid time together. Basemap ordering and colour-legend DOM are reused rather than rebuilt each hour. Playback speeds are 1.2, 0.7 and 0.4 seconds per native forecast frame. Missing frames stop playback rather than being skipped. While waiting, an existing image retains its own valid-time label. No cross-fades or temporal interpolation are used. Grid-value labels resume when playback is paused to avoid competing with image/overlay decoding. Forecast availability and upstream network speed still constrain loading.
+
+
+The UK 2 km deterministic model is labelled **UKMO UKV 2 km**. Its latest cycle can be a 12-hour nowcast, rather than one of the longer runs. Model-run notes describe the supplied horizon; latest-only selection does not splice or substitute earlier cycles. See [UKV identity and cutoff verification](docs/ukv-verification-20261010.md).

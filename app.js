@@ -1,4 +1,4 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js?v=20261007-wind-mph';
+import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js?v=20261010-ukv';
 import {averageSeries} from './average.js';
 import {createDatasetDialog} from './dataset-dialog.js?v=20261007-wind-mph';
 import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261007-wind-mph';
