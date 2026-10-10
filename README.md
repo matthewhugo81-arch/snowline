@@ -6,7 +6,7 @@ A static website using Open-Meteo. No build step is required. GitHub Pages serve
 
 Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK maps](https://matthewhugo81-arch.github.io/snowline/maps.html). The map page includes model comparison, weather layers, MSLP isobars, forecast animation and point event analysis. Click a map location to open its charts; navigation retains the chosen location and valid time.
 
-Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Map wind layers retain their native m/s units; location charts use mph.
+Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Wind speeds and gusts display in mph on maps, legends, contours, grid-value labels and point readouts; source grids and renderer scales retain native m/s.
 
 GFS global combines Open-Meteo's `ncep_gfs013` surface grid with its `ncep_gfs025` companion grid for MSLP, gusts, visibility and upper-air fields. Each layer uses its actual source grid. Both feeds must have the same initialization time, and a field is rendered only at a valid time supplied by that feed. A missing companion run leaves surface forecasts usable and displays a retry message. MSLP labels remain in hPa, with thin black isobars every 4 hPa. Pressure lines and labels have no white outline.
 

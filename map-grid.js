@@ -1,3 +1,4 @@
+import {displayValue,displayUnit} from './map-wind-units.js';
 const wrap=(value,size)=>((value%size)+size)%size;
 const longitude=value=>wrap(value+180,360)-180;
 
@@ -42,7 +43,8 @@ export function visibleGridPoints(grid,width,height,unproject,project){
 export function gridValueLabel(value,field){
  if(!Number.isFinite(value))return null;
  if(field.key==='pressure_msl'&&value>2000)value/=100;
- const digits=field.unit==='m snow'||field.unit==='m³/m³'?3:field.unit==='m/s'||field.unit==='mm water'?1:0;
+ value=displayValue(value,field);
+ const digits=field.unit==='m snow'||field.unit==='m³/m³'?3:displayUnit(field)==='mph'?0:field.unit==='m/s'||field.unit==='mm water'?1:0;
  const rounded=Number(value.toFixed(digits));
  return Object.is(rounded,-0)?'0':String(rounded);
 }

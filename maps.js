@@ -1,7 +1,8 @@
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {ForecastFrames,frameWindow} from './map-frames.js?v=20261009-loading';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261010-valid-frames';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261009-denser-grid';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
+import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
 import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-valid-frames';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE} from './map-catalogue.js?v=20261009-white-rain';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
@@ -27,7 +28,7 @@ const fields=[
  {key:'snow_depth_water_equivalent',name:'Snow cover · water equivalent',unit:'mm water',note:'Water equivalent of existing snow cover, not its physical depth.',stops:[0,1,5,10,25,50,100,200],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
  {key:'relative_humidity_2m',name:'2 m relative humidity',unit:'%',note:'Near-surface moisture context. Humidity alone does not determine surface wetness.',stops:[0,20,40,60,75,85,95,100],colors:['#f7ecce','#edce9c','#c6d4b1','#98cdbf','#60b7ba','#359ab0','#257ca2','#225987']},
  {key:'cloud_cover',name:'Total cloud cover',unit:'%',note:'Watch for cloud clearance after rain and overnight cooling.',stops:[0,20,40,60,75,85,95,100],colors:['#eaf6ff','#dce9f1','#bdcfdf','#96b1c7','#7391ac','#56738e','#3b5573','#263c55']},
- {key:'wind_speed_10m',name:'10 m wind speed',unit:'m/s',note:'Native spatial wind speed in m/s. The location charts use mph (multiply m/s by 2.23694).',stops:[0,2,4,6,8,12,18,25],colors:['#e8f2f6','#b9dede','#80c5c0','#42a7a6','#308caa','#416cad','#7d52a4','#bf4d84']},
+ {key:'wind_speed_10m',name:'10 m wind speed',unit:'m/s',note:'Map shading and values displayed in mph; model grid retained in m/s.',stops:[0,2,4,6,8,12,18,25],colors:['#e8f2f6','#b9dede','#80c5c0','#42a7a6','#308caa','#416cad','#7d52a4','#bf4d84']},
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
@@ -86,7 +87,7 @@ function makeMap(key){
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
-locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await OM.getValueFromLatLong(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${result.value.toFixed(2)} ${field.unit} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
+locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await OM.getValueFromLatLong(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${displayValue(result.value,field).toFixed(1)} ${displayUnit(field)} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
  return panel;
 }
 const a=makeMap('a');
@@ -110,7 +111,7 @@ function drawContours(panel,before){
  if(/^wind_speed_|^ocean_current_speed$/.test(field.key))for(const [id,color,width]of [['wind-halo','#ffffff',2.6],['wind-arrows','#111111',1]])panel.map.addLayer({id,type:'line',source:'contour-source','source-layer':'wind-arrows',paint:{'line-color':color,'line-width':width}},before);
  const overlay=state.overlays[panel.key];const visibility=overlay.contours||(field.key==='pressure_msl'&&overlay.isobars)?'visible':'none';
  panel.map.addLayer({id:'contour-lines',type:'line',source:'contour-source','source-layer':'contours',layout:{visibility,'line-join':'round'},paint:{'line-color':'#000000','line-width':0.7,'line-opacity':0.8}},before);
- panel.map.addLayer({id:'contour-labels',type:'symbol',source:'contour-source','source-layer':'contours',layout:{visibility,'symbol-placement':field.key==='pressure_msl'?'point':'line','symbol-spacing':140,'text-max-angle':85,'text-font':['Noto Sans Regular'],'text-field':['to-string',['get','value']],'text-size':10,'text-padding':field.key==='pressure_msl'?24:6,'text-offset':[0,-0.5]},paint:{'text-color':'#000000','text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1}},before);
+ panel.map.addLayer({id:'contour-labels',type:'symbol',source:'contour-source','source-layer':'contours',layout:{visibility,'symbol-placement':field.key==='pressure_msl'?'point':'line','symbol-spacing':140,'text-max-angle':85,'text-font':['Noto Sans Regular'],'text-field':isWindSpeed(field.key)?['to-string',['round',['*',['to-number',['get','value']],2.2369362921]]]:['to-string',['get','value']],'text-size':10,'text-padding':field.key==='pressure_msl'?24:6,'text-offset':[0,-0.5]},paint:{'text-color':'#000000','text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1}},before);
 }
 function clearPressure(panel){
  for(const id of ['mslp-labels','mslp-lines'])if(panel.map.getLayer(id))panel.map.removeLayer(id);
@@ -177,7 +178,7 @@ async function drawGridValues(panel){
   const data={type:'FeatureCollection',features};
   if(map.getSource('grid-values'))map.getSource('grid-values').setData(data);else map.addSource('grid-values',{type:'geojson',data});
   if(!map.getLayer('grid-labels'))map.addLayer({id:'grid-labels',type:'symbol',source:'grid-values',layout:{'text-field':['get','label'],'text-font':['Noto Sans Regular'],'text-size':11,'text-padding':4,'text-allow-overlap':false},paint:{'text-color':'#101820','text-halo-color':'rgba(255,255,255,0.9)','text-halo-width':1.5}});else map.moveLayer('grid-labels');
-  note.textContent=features.length?'Grid values · '+f.unit:'No grid values in this area.';
+  note.textContent=features.length?'Grid values · '+displayUnit(f):'No grid values in this area.';
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
 function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
@@ -241,10 +242,10 @@ function setLegend(){
  for(const {key,model,field} of panelSelections(state)){
   const f=fields.find(f=>f.key===field);if(!f)continue;
   const el=name=>$(name+'-'+key),gradient=el('legend-gradient'),ticks=el('legend-ticks'),bands=el('legend-bands');
-  const min=f.temperatureBands?f.stops[1]:f.stops[0],max=f.stops.at(-1);
-  el('legend-title').textContent=f.unit;
+  const displayBreaks=displayStops(f),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
+  el('legend-title').textContent=displayUnit(f);
   gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
-  gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(f.stops[i]-min)/(max-min)+'%')).join(',')+')';
+  gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
   [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
   ticks.classList.toggle('temperature-ticks',!!f.temperatureBands);
   if(f.bands)f.stops.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categorical?String(v):i===f.stops.length-1?v+'+':v+'–<'+f.stops[i+1];item.title=range+' '+f.unit;item.setAttribute('aria-label',range+' '+f.unit);swatch.style.background=f.colors[i];label.textContent=v+(i===f.stops.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
@@ -261,7 +262,7 @@ function setLegend(){
   el('field-availability').textContent=modelName(model)+' · '+f.name;
   const meta=state.metas[model],source=fieldSource(meta,field);
   if(meta&&source)el('run').textContent=stamp(meta.reference_time)+' UTC · ends '+stamp(source.valid_times.at(-1));
-  const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'5 m/s':'the positive legend thresholds';
+  const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds';
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
  for(const {key,field}of panelSelections(state))$('map-contours-'+key).disabled=!!fields.find(f=>f.key===field)?.categorical;

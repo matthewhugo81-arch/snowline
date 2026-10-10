@@ -86,7 +86,7 @@ export function describeVariable(key,OM){
  if(!scaleKey)return null;
  if(!OM.defaultOmProtocolSettings.colorScales[scaleKey]&&!/^geopotential_height_\d+hPa$/.test(scaleKey))return null;
  const raw=OM.getColorScale(scaleKey,false);
- if(key.startsWith('wind_speed_'))note+=' Shading shows speed in m/s; arrows show flow direction.';
+ if(key.startsWith('wind_speed_'))note+=' Shading, legend and readouts display mph; underlying spatial data remains in m/s. Arrows show flow direction.';
  return {key,name,group:variableGroup(key),unit:unit??raw.unit,note,stops:raw.breakpoints,colors:raw.colors.map(hex)};
 }
 export function availableFields(fields,metas){
@@ -107,7 +107,7 @@ export function extendCatalogue(fields,metas,OM,settings){
   }
   const field=fields.find(f=>f.key===key);
   field.group=variableGroup(key);
-  if(key==='wind_speed_10m'){field.name='10 m wind speed & direction';field.note='Shading shows speed in m/s; arrows show flow direction. Location charts use mph.';}
+  if(key==='wind_speed_10m'){field.name='10 m wind speed & direction';field.note='Shading, legend and readouts display mph; underlying spatial data remains in m/s. Arrows show flow direction.';}
   for(const meta of metas){const source=sourceVariable(meta,key);if(!source)continue;
    settings.colorScales[source]={type:'breakpoint',unit:field.unit,breakpoints:field.stops,colors:field.colors.map(c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16),c.length===9?parseInt(c.slice(7,9),16)/255:1])};
   }
