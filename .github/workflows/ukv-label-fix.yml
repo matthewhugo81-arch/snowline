@@ -1,0 +1,125 @@
+name: Validate UKV naming and coverage
+on:
+  push:
+    branches: [fix/ukv-name-horizon-20261010]
+    paths: [.github/workflows/ukv-label-fix.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ukv-name-horizon-20261010
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply targeted display-name and run-note changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          def replace(path,old,new):
+              p=Path(path);text=p.read_text();assert text.count(old)==1,(path,old,text.count(old));p.write_text(text.replace(old,new))
+          replace('data.js',"'ukmo_uk_deterministic_2km','UKMO UK 2 km'","'ukmo_uk_deterministic_2km','UKMO UKV 2 km'")
+          for name in ['maps.js','app.js']:
+              p=Path(name);text=p.read_text()
+              text,n=re.subn(r"from '\./data\.js(?:\?[^']*)?'", "from './data.js?v=20261010-ukv'",text)
+              assert n==1,(name,n);p.write_text(text)
+          replace('maps.js',"import {runLabel} from './map-runs.js?v=20261010-latest-cycles';","import {runLabel} from './map-runs.js?v=20261010-latest-cycles';\nimport {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv';")
+          old="if(meta&&source)el('run').textContent='Initialized '+runLabel(meta)+' · layer data ends '+stamp(source.valid_times.at(-1))+' UTC';"
+          new=old+"\n  if(meta&&source&&model==='ukmo_uk_deterministic_2km')el('run').textContent+=' · '+ukvCoverageText(meta);"
+          replace('maps.js',old,new)
+          for path,script in [('maps.html','maps.js'),('index.html','app.js')]:
+              p=Path(path);text=p.read_text()
+              text,n=re.subn(r'(src="'+re.escape(script)+r')(?:\?[^" ]*)?(" )',r'\1?v=20261010-ukv\2',text)
+              if n==0:
+                  text,n=re.subn(r'(src="'+re.escape(script)+r')(?:\?[^" ]*)?(")',r'\1?v=20261010-ukv\2',text)
+              assert n==1,(path,n);p.write_text(text)
+          Path('ukv-run-info.js').write_text('''// Describe the data actually supplied; this module NEVER selects a model run.
+          // UKV run families: https://registry.opendata.aws/met-office-uk-deterministic/
+          export function ukvCoverageText(meta){
+           const reference=Date.parse(meta?.reference_time);
+           const times=(meta?.valid_times??[]).map(value=>Date.parse(value)).filter(Number.isFinite);
+           if(!Number.isFinite(reference)||!times.length)return 'Forecast coverage unavailable.';
+           const hours=(Math.max(...times)-reference)/3600000;
+           if(hours<0)return 'Forecast coverage unavailable.';
+           const hour=new Date(reference).getUTCHours();
+           const kind=hours===12&&![0,3,6,9,12,15,18,21].includes(hour)?'12-hour nowcast run':hours===54&&[0,6,9,12,18,21].includes(hour)?'54-hour short-range run':hours===120&&[3,15].includes(hour)?'120-hour medium-range run':'Feed currently reaches T+'+hours+' hours';
+           return kind+'. Latest published cycle only; older runs are not appended.';
+          }
+          ''')
+          Path('tests/ukv-run-info.test.mjs').write_text('''import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import {MODELS} from '../data.js';
+          import {ukvCoverageText} from '../ukv-run-info.js';
+          import {chooseRun} from '../map-runs.js';
+          const run=(reference_time,end)=>({reference_time,completed:true,variables:['precipitation'],valid_times:[reference_time,end]});
+          test('UKV is named explicitly while its API identifier stays unchanged',()=>{
+           assert.equal(MODELS.find(m=>m.id==='ukmo_uk_deterministic_2km').name,'UKMO UKV 2 km');
+          });
+          test('0200Z nowcast explains the 1400Z endpoint and does not change selected data',async()=>{
+           const meta=run('2026-10-10T02:00:00Z','2026-10-10T14:00Z');const before=structuredClone(meta);
+           assert.match(ukvCoverageText(meta),/12-hour nowcast run/);
+           assert.equal(await chooseRun(meta),meta);assert.deepEqual(meta,before);
+          });
+          test('longer UKV run families respect UTC and date rollover',()=>{
+           assert.match(ukvCoverageText(run('2026-10-10T00:00Z','2026-10-12T06:00Z')),/54-hour short-range/);
+           assert.match(ukvCoverageText(run('2026-10-10T03:00Z','2026-10-15T03:00Z')),/120-hour medium-range/);
+           assert.match(ukvCoverageText(run('2026-10-10T15:00Z','2026-10-15T15:00Z')),/120-hour medium-range/);
+          });
+          test('partial or malformed feeds never claim the scheduled full length',()=>{
+           assert.match(ukvCoverageText(run('2026-10-10T03:00Z','2026-10-10T14:00Z')),/T\\+11 hours/);
+           assert.match(ukvCoverageText(null),/unavailable/);
+           assert.match(ukvCoverageText({reference_time:'bad',valid_times:[]}),/unavailable/);
+          });
+          ''')
+          Path('docs').mkdir(exist_ok=True)
+          Path('docs/ukv-verification-20261010.md').write_text('''# UKV identity and forecast-range verification
+
+          Checked on 10 October 2026 at 07:13:49 UTC against the live Open-Meteo spatial feed. This is a historical diagnostic snapshot, not a statement that these remain the latest runs.
+
+          ## Model identity
+
+          Open-Meteo identifies its `ukmo_uk_deterministic_2km` UK 2 km feed as the Met Office UKV model. Snowline now displays **UKMO UKV 2 km**. Its API identifier, forecasts and latest-only selection are unchanged.
+
+          Sources: https://open-meteo.com/en/docs/ukmo-api (Data Sources); https://registry.opendata.aws/met-office-uk-deterministic/ (Met Office-managed dataset).
+
+          ## Live-feed inspection
+
+          Diagnostic workflow: https://github.com/matthewhugo81-arch/snowline/actions/runs/38033698010
+
+          | Cycle | Completed | Last supplied valid time | Horizon |
+          | --- | --- | --- | --- |
+          | 10 October 0200Z (latest.json) | true | 10 October 14:00 UTC | 12 h |
+          | 10 October 0100Z | true | 10 October 13:00 UTC | 12 h |
+          | 10 October 0000Z | true | 12 October 06:00 UTC | 54 h |
+          | 9 October 2300Z | true | 10 October 11:00 UTC | 12 h |
+          | 10 October 0300Z | metadata returned HTTP 404 | Not yet available in this feed when checked | Not inferred |
+
+          The latest 0200Z metadata contained 13 valid timestamps including T+0, with precipitation and MSLP both present. The T+12 file (14:00 UTC) returned HTTP 200; the 15:00 UTC file returned HTTP 404. The cutoff therefore reflects the end of that individual UKV cycle, not a Snowline animation limit. Latest metadata was last modified at 06:20:18 UTC.
+
+          ## Run lengths
+
+          The Met Office-managed AWS catalogue documents 12-hour nowcast cycles at the intervening hourly initializations, 54-hour forecasts at 0000/0600/0900/1200/1800/2100Z, and 120-hour forecasts at 0300/1500Z. Longer scheduled duration does not prove that all those hours are already available in Open-Meteo's spatial feed. Open-Meteo documents an additional open-data delay of about four hours.
+
+          Strict latest-initialization selection can shorten the available horizon when a newer nowcast supersedes an older extended cycle. Snowline continues to honour the user's latest-only policy. The run notes describe supplied coverage and never splice older cycles into a newer run.
+          ''')
+          with Path('README.md').open('a') as f:
+              f.write('\n\nThe UK 2 km deterministic model is labelled **UKMO UKV 2 km**. Its latest cycle can be a 12-hour nowcast, rather than one of the longer runs. Model-run notes describe the supplied horizon; latest-only selection does not splice or substitute earlier cycles. See [UKV identity and cutoff verification](docs/ukv-verification-20261010.md).\n')
+          PY
+      - name: Syntax and complete regression suite
+        run: |
+          node --check maps.js
+          node --check app.js
+          node --test tests/*.test.mjs
+      - name: Save validated changes on the isolated branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/ukv-feed-diagnostic.yml .github/workflows/ukv-label-fix.yml
+          git add data.js maps.js app.js maps.html index.html ukv-run-info.js tests/ukv-run-info.test.mjs docs/ukv-verification-20261010.md README.md
+          git commit -m 'Name the Met Office UKV feed explicitly and explain its actual run horizon'
+          git push origin HEAD:fix/ukv-name-horizon-20261010
