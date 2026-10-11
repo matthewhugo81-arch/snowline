@@ -52,8 +52,8 @@ test('grid label units preserve small amounts and reject missing values',()=>{
 
 test('each panel owns independent contour, pressure and grid switches',()=>{
  const overlays=createPanelOverlays();
- overlays.a.contours=false;overlays.a.isobars=false;overlays.a.grid=true;
- assert.deepEqual(overlays.b,{contours:true,isobars:true,grid:false});
+ overlays.a.contours=true;overlays.a.isobars=false;overlays.a.grid=true;
+ assert.deepEqual(overlays.b,{contours:false,isobars:true,grid:false});
  const fresh=createPanelOverlays();
  assert.deepEqual(fresh.a,overlays.b);
 });
