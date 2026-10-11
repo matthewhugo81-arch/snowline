@@ -2,6 +2,7 @@
 .briefing-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 12px}
 .briefing-heading h2{font-size:22px;margin:0 0 4px}
 .briefing-heading p{margin:0;color:var(--muted);font-size:12px}
+.briefing-heading-actions{display:flex;gap:8px;flex-shrink:0}
 .briefing-heading button,.briefing-navigation button{padding:8px 12px;white-space:nowrap}
 .briefing-controls{display:grid;grid-template-columns:1.3fr 1.5fr 1fr 1.3fr 1fr .7fr;gap:12px;background:white;padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px}
 .briefing-controls label{font-size:12px;font-weight:700;min-width:0}
@@ -27,4 +28,4 @@
 .briefing-open .map-workspace,.briefing-open .map-guide,.briefing-open #event-analysis{display:none!important}
 .map-sidebar #open-briefing{margin:0 0 12px}.mobile-map-toolbar #mobile-briefing{white-space:nowrap}
 @media(max-width:1100px){.briefing-controls{grid-template-columns:repeat(3,minmax(0,1fr))}.briefing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:650px){.briefing-heading{align-items:start;gap:8px}.briefing-heading h2{font-size:19px}.briefing-controls{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px}.briefing-grid{grid-template-columns:1fr}.briefing-legend{flex-direction:column;gap:12px}.briefing-scale,.briefing-rain-scale{width:100%;max-width:none}.briefing-navigation{flex-wrap:wrap;gap:6px}.briefing-navigation p{order:-1;flex-basis:100%;text-align:left}.briefing-navigation button{flex:1;font-size:12px}.briefing-heading button{font-size:12px;padding:7px}.mobile-map-toolbar{flex-wrap:wrap}}
+@media(max-width:650px){.briefing-heading{align-items:start;gap:8px}.briefing-heading-actions{flex-direction:column}.briefing-heading h2{font-size:19px}.briefing-controls{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px}.briefing-grid{grid-template-columns:1fr}.briefing-legend{flex-direction:column;gap:12px}.briefing-scale,.briefing-rain-scale{width:100%;max-width:none}.briefing-navigation{flex-wrap:wrap;gap:6px}.briefing-navigation p{order:-1;flex-basis:100%;text-align:left}.briefing-navigation button{flex:1;font-size:12px}.briefing-heading button{font-size:12px;padding:7px}.mobile-map-toolbar{flex-wrap:wrap}}

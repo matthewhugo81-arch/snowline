@@ -2,7 +2,7 @@ import {ForecastFrames} from './map-frames.js?v=20261011-retain-downloads';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
 import {hasFieldTime} from './map-sources.js?v=20261011-vorticity-smooth';
-import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-smooth';
+import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261011-briefing-overlays';
 
 const aborted=()=>new DOMException('Aborted','AbortError');

@@ -2,7 +2,7 @@ import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDewPoint} from './map-dew-point.js';
-import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-smooth';
+import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-retain-downloads';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
@@ -16,7 +16,7 @@ import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-unit
 import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-vorticity-smooth';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261011-live-runs';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-jet-wind';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-vorticity-purple';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-render-jobs';
 import {finite} from './data.js?v=20261010-ukv';
@@ -208,7 +208,7 @@ async function drawGridValues(panel){
   note.textContent=features.length?'Grid values · '+displayUnit(f):'No grid values in this area.';
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
-function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km'}:{}),...(field==='wind_speed_300hPa'?{wind_style:'20261011-jet-wind'}:{}),variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
+function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(field==='wind_speed_300hPa'?{wind_style:'20261011-jet-wind'}:{}),variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null;
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
@@ -545,7 +545,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261011-retain-downloads');
+   const {createBriefing}=await import('./map-briefing.js?v=20261011-hide-controls');
    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
     onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}

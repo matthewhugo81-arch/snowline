@@ -1,16 +1,16 @@
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-briefing-overlays';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-retain-downloads';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-vorticity-purple';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-vorticity-purple';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-vorticity-smooth';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-vorticity-purple';
 
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
 
 export function createBriefing({host,models,loadModel,fields,onClose,...renderOptions}){
- host.innerHTML=`<div class="briefing-heading"><div><h2>Forecast briefing</h2><p id="briefing-run">Choose a model and chart.</p></div><button type="button" id="briefing-close" class="secondary">Back to maps</button></div>
- <div class="briefing-controls">
+ host.innerHTML=`<div class="briefing-heading"><div><h2>Forecast briefing</h2><p id="briefing-run">Choose a model and chart.</p></div><div class="briefing-heading-actions"><button type="button" id="briefing-toggle-controls" class="secondary" aria-expanded="true" aria-controls="briefing-control-section">Hide controls</button><button type="button" id="briefing-close" class="secondary">Back to maps</button></div></div>
+ <div id="briefing-control-section"><div class="briefing-controls">
  <label>Forecast model<select id="briefing-model"></select></label>
  <label>Chart<select id="briefing-preset"></select></label>
  <label>Area<select id="briefing-area"></select></label>
@@ -18,7 +18,7 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
  <label>Forecast interval<select id="briefing-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
  <label>Layout<select id="briefing-count"><option value="6">6 panels</option><option value="9">9 panels</option></select></label></div>
  <div class="briefing-overlays" role="group" aria-label="Briefing chart overlays"><label class="check-row"><input id="briefing-contours" type="checkbox" autocomplete="off"> Contours</label><label class="check-row"><input id="briefing-grid-values" type="checkbox" autocomplete="off"> Grid values</label><span id="briefing-overlay-note" class="small-note"></span></div>
- <p id="briefing-note" class="small-note"></p><div id="briefing-legend" class="briefing-legend"></div>
+ <p id="briefing-note" class="small-note"></p><div id="briefing-legend" class="briefing-legend"></div></div>
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
  <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html">Data and map credits</a>.</p>
@@ -182,6 +182,12 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   renderer?.destroy();renderer=null;host.hidden=true;onClose();
  }
  $('close').addEventListener('click',close);
+ $('toggle-controls').addEventListener('click',()=>{
+  const hidden=!$('control-section').hidden;
+  $('control-section').hidden=hidden;
+  $('toggle-controls').textContent=hidden?'Show controls':'Hide controls';
+  $('toggle-controls').setAttribute('aria-expanded',String(!hidden));
+ });
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden)cancel();else if(meta){renderPage();refreshRun();}else configure();});
  window.addEventListener('pagehide',()=>{clearInterval(refreshTimer);cancel();images.clear();renderer?.destroy();renderer=null;});
  return {open(selection){

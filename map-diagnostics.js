@@ -20,7 +20,7 @@ export function diagnosticField(key){
   stops:[-20,-10,-5,0,4,8,12,16,20,24,28,32],colors:['#53318b','#355db0','#269ed0','#78d7da','#4bb958','#7ed33b','#d8e52b','#ffdf33','#ffac32','#ec662a','#c52438','#87144e'],
   contourLabel:'2°C',note:'Derived 850 hPa wet-bulb potential temperature (theta-w), expressed in °C at 1000 hPa. Bolton / Davies-Jones approximation from same-time temperature and relative humidity over liquid water. Not 850 hPa air temperature. This pressure surface can lie below high terrain.'};
  if(/^relative_vorticity_(300|400)hPa$/.test(key))return {key,name:key.match(/\d+/)[0]+' hPa relative vorticity',group:'Derived diagnostics',unit:'10⁻⁵ s⁻¹',
-  stops:[-40,-20,-10,-5,0,5,10,20,40],colors:['#279ecd','#51ccdf','#86e4db','#a4dfb5','#c8df65','#fbe075','#f7a439','#df5429','#9b1839'],contourValues:Array.from({length:41},(_,i)=>(i-20)*5),
+  stops:[-40,-20,-10,-5,0,5,10,20,30,35,40],colors:['#279ecd','#51ccdf','#86e4db','#a4dfb5','#c8df65','#fbe075','#f7a439','#df5429','#bd2344','#b324bd','#7622ba'],contourValues:Array.from({length:41},(_,i)=>(i-20)*5),
   contourLabel:'5 × 10⁻⁵ s⁻¹',note:'Derived vertical relative vorticity from same-time horizontal winds on the stated pressure surface, with spherical geometry and projection correction. Positive = anticlockwise; negative = clockwise. Gaussian smoothing (20 km standard deviation) reduces grid-scale striping; small features and peak values are softened. Shading, contours and point values use the same smoothed field. Missing neighbours, outer domain edges and poles remain blank. End colours extend beyond the scale.'};
  return null;
 }

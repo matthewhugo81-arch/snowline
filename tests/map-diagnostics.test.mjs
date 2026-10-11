@@ -156,11 +156,11 @@ test('smoothing retains missing-data masks and leaves unsupported domain edges b
  const shared=new Float32Array(new SharedArrayBuffer((rows.end-rows.start)*(columns.end-columns.start)*4)).fill(3);
  assert.ok(smoothVorticity(shared,smoothing).buffer instanceof SharedArrayBuffer);
 });
-test('vorticity palette keeps positive thresholds and colours, with matching processing notes',()=>{
+test('vorticity palette highlights 35–40 in purple while retaining lower colours and processing notes',()=>{
  for(const level of [300,400]){
   const field=diagnosticField('relative_vorticity_'+level+'hPa');
-  assert.deepEqual(field.stops,[-40,-20,-10,-5,0,5,10,20,40]);
-  assert.deepEqual(field.colors.slice(5),['#fbe075','#f7a439','#df5429','#9b1839']);
+  assert.deepEqual(field.stops,[-40,-20,-10,-5,0,5,10,20,30,35,40]);
+  assert.deepEqual(field.colors.slice(5),['#fbe075','#f7a439','#df5429','#bd2344','#b324bd','#7622ba']);
   assert.equal(field.colors[0],'#279ecd');assert.equal(field.colors[4],'#c8df65');
   assert.match(field.note,/Gaussian smoothing \(20 km/);
  }

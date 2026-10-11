@@ -1,6 +1,6 @@
 import {ensembleField} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
-import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-smooth';
+import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {MPH_PER_MS} from './map-wind-units.js';
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
