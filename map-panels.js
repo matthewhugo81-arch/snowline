@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261011-live-runs';
+import {hasFieldTime} from './map-sources.js?v=20261011-diagnostics';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

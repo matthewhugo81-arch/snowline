@@ -69,7 +69,7 @@ try{
   await page.route('https://openmeteo.s3.amazonaws.com/**',route=>{
    const url=route.request().url();metadata.push(url);
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
-   let gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','geopotential_height_500hPa']}:null;
+   let gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','relative_humidity_850hPa','geopotential_height_500hPa',...['300','400'].flatMap(level=>['wind_u_component_'+level+'hPa','wind_v_component_'+level+'hPa'])]}:null;
    if(gfs&&livePhase&& !url.endsWith('/latest.json'))gfs={...gfs,...fixture(12,livePhase===1?6:livePhase===2?12:18),variables:gfs.variables,completed:false};
    const meta=gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
@@ -390,6 +390,12 @@ try{
    await page.locator('#briefing-preset').selectOption('airmass');
    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
    assert.match(await page.locator('#briefing-note').textContent(),/not theta-w/);
+   for(const [preset,variable] of [['theta-w','wet_bulb_potential_temperature_850hPa'],['vorticity-300','relative_vorticity_300hPa'],['vorticity-400','relative_vorticity_400hPa']]){
+    await page.locator('#briefing-preset').selectOption(preset);
+    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+    assert.ok(await page.evaluate(variable=>window.fixtureRequests.some(request=>request.url.includes('variable='+variable+'_derived')),variable),'Briefing requests calculated '+variable+' grids');
+    assert.equal(await page.locator('.briefing-card[data-failed="true"]').count(),0);
+   }
    await page.locator('#briefing-preset').selectOption('upper');
    await page.locator('#briefing-count').selectOption('9');
    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});

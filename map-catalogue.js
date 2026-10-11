@@ -1,10 +1,11 @@
 import {ensembleField} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
+import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js';
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
 export const PRESSURE_LEVELS = [1000,925,850,700,500,300,250,200,100,50,10];
 const HEIGHT_LEVELS = [50,100,200,300];
-const GROUPS = ['Ensemble mean','Ensemble spread','Temperature','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+const GROUPS = ['Ensemble mean','Ensemble spread','Temperature','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
 export const PRECIPITATION_SCALE = {
@@ -24,6 +25,7 @@ export const PRECIPITATION_PROBABILITY_SCALE = {
 export function sourceVariable(meta,key){
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
+ if(DIAGNOSTIC_KEYS.includes(key))return diagnosticVariable(meta,key);
  if(key==='dew_point_2m'&&!vars.includes(key)&&canDeriveDewPoint(meta))return DERIVED_DEW_POINT;
  // These scales describe our verified unit conversions, not similarly named
  // arrays from another provider whose spread units have not been checked.
@@ -43,6 +45,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
+ if(DIAGNOSTIC_KEYS.includes(key))return 'Derived diagnostics';
  const ensemble=ensembleField(key);if(ensemble)return ensemble.group;
  if(/^temperature_\d+hPa$/.test(key))return 'Upper-air temperature';
  if(/^wind_speed_\d+hPa$/.test(key))return 'Upper-air wind';
@@ -81,6 +84,7 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ const diagnostic=diagnosticField(key);if(diagnostic)return diagnostic;
  const ensemble=ensembleField(key);if(ensemble)return ensemble;
  let [name,scaleKey,note]=extras[key]??[];
  if(key==='precipitation_probability')return {
@@ -122,6 +126,7 @@ export function availableFields(fields,metas){
 }
 export function extendCatalogue(fields,metas,OM,settings){
  const keys=[...new Set(metas.flatMap(m=>m.variables??[]).map(canonicalVariable))];
+ for(const key of DIAGNOSTIC_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  if(metas.some(meta=>sourceVariable(meta,'dew_point_2m'))&&!keys.includes('dew_point_2m'))keys.push('dew_point_2m');
  const omitted=[];
  for(const key of keys){
