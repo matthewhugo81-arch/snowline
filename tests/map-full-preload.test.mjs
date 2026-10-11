@@ -68,7 +68,7 @@ test('a timed-out background frame is retried after the rest and can complete th
 test('automatic background retry limits survive queue restarts; a manual retry resets them',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});
  const map=new FakeMap(),cache=new ForecastFrames(map,'a',{maxAttempts:2});
- const work={keep:new Set(),upcoming:[],all:['bad'],delay:0};
+ const work={keep:new Set(['bad']),upcoming:['bad'],all:['bad'],delay:0};
  cache.warm(work);t.mock.timers.tick(0);let frame=cache.frames.get('bad');map.emit('error',{sourceId:frame.id});await frame.ready;
  cache.warm(work);t.mock.timers.tick(0);await flush();frame=cache.frames.get('bad');map.emit('error',{sourceId:frame.id});await frame.ready;await flush();
  cache.warm(work);t.mock.timers.tick(0);await flush();assert.equal(cache.frames.size,0);assert.equal(cache.failureAttempts.get('bad'),2);
