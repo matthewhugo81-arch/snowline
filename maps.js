@@ -8,6 +8,7 @@ import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-parallel-preload';
+import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
 import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-parallel-preload';
@@ -91,7 +92,7 @@ function viewportBounds(){
   updatePreloadStatus();
  }
 }
-let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
+let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',interval:'3',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(MODELS.some(m=>m.id===params.get('model')))state.model=params.get('model');
@@ -404,7 +405,14 @@ function populateVariables(){
  }
 }
 function refreshTimeline(){
- state.times=panelForecastTimes(state);
+ const models=panelModelIds(state).map(id=>MODELS.find(model=>model.id===id));
+ const {shortRange,hours}=forecastInterval(models,state.interval);
+ state.times=intervalForecastTimes(panelForecastTimes(state),hours);
+ $('map-forecast-interval').value=shortRange?'native':state.interval;
+ $('map-forecast-interval').disabled=shortRange||!state.times.length;
+ $('forecast-interval-note').textContent=shortRange
+  ?'Short-term models keep every available hour. Comparison uses matching times.'
+  :hours?'Only the selected forecast hours load. Coarser model steps are retained.':'Every available forecast hour loads; longer forecasts take more time.';
  if(!state.times.length){
   $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;
   $('map-time').max=0;$('map-time').value=0;$('range-start').textContent='';$('range-end').textContent='';
@@ -423,7 +431,7 @@ async function configure(force=false){
  failedSelection=null;
  pauseAnimation();++timeGeneration;
  state.times=[];state.index=0;
- $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;
+ $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;$('map-forecast-interval').disabled=true;
  $('map-time-label').textContent='Checking model run…';$('range-start').textContent='';$('range-end').textContent='';
  $('animation-status').textContent='Checking available forecast hours…';
  for(const p of Object.values(panels)){
@@ -447,7 +455,7 @@ async function configure(force=false){
 }
 $('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
 $('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
-for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB']])$(id).addEventListener('change',e=>{
+for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
  pauseAnimation();failedSelection=null;state[property]=e.target.value;
  try{refreshTimeline();setTime();}
  catch(error){

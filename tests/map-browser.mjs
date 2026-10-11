@@ -65,6 +65,8 @@ try{
   await page.goto(origin+'/maps.html');
   try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
+   assert.equal(await page.locator('#map-forecast-interval').isDisabled(),true,'UKV always retains every supplied hour');
    const bitmapRoundTrip=await page.evaluate(async()=>{
     const {ForecastTileCache}=await import('./map-tile-cache.js');
     let calls=0;
@@ -257,6 +259,48 @@ try{
    await page.locator('#map-variable').selectOption('snowfall_water_equivalent');
    await page.locator('#map-variable-b').selectOption('freezing_level_height');
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Freezing level')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'3');
+   assert.equal(await page.locator('#map-forecast-interval').isDisabled(),false);
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'15','Default loads 16 three-hour steps instead of 48 hourly steps');
+   assert.equal(await page.locator('#legend-interval-a').textContent(),'1 h ending at valid time','Viewing interval must not alter snow accumulation');
+   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
+   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'32');
+   const defaultGFSHours=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&/\/ncep_gfs0(13|25)\//.test(r.url)).map(r=>Number(r.url.match(/T(\d{2})00\.om/)?.[1])));
+   assert.ok(defaultGFSHours.length>0);
+   assert.ok(defaultGFSHours.every(hour=>Number.isInteger(hour)&&hour%3===0),'Hourly gaps are not downloaded in the background');
+   await page.locator('#map-time').evaluate(el=>{el.value='14';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await bothAt('Sun 11 Oct, 21:00 UTC');
+   await page.locator('#play-map').click();
+   await bothAt('Mon 12 Oct, 00:00 UTC');
+   await bothAt('Sat 10 Oct, 03:00 UTC');
+   assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true');
+   // Changing the interval during playback cancels the old sequence. The same
+   // setting controls steps, slider, loop and the complete background queue.
+   const setInterval=async value=>{
+    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
+    await page.locator('#map-forecast-interval').selectOption(value);
+    if(viewport.width<=650)await page.locator('#mobile-return-map').click();
+    await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
+   };
+   await setInterval('6');
+   assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'false');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'7');
+   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
+   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'16');
+   assert.equal(await page.locator('#legend-interval-a').textContent(),'1 h ending at valid time');
+   // Adding a regional panel restores all common native hours; returning to
+   // globals remembers the chosen six-hour setting.
+   await page.locator('#map-model-b').selectOption(main);
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('UKV — latest main run')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
+   assert.equal(await page.locator('#map-forecast-interval').isDisabled(),true);
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'42','Mixed comparison preserves every common hourly step');
+   await page.locator('#map-model-b').selectOption('gfs_global');
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('GFS global')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'6');
+   await page.locator('#map-variable-b').selectOption('freezing_level_height');
+   await setInterval('native');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'47');
    await page.locator('#map-a .maplibregl-ctrl-zoom-out').click();
    await page.locator('#map-b .maplibregl-ctrl-zoom-in').click();
    await page.evaluate(()=>window.fixtureDelay=180);
