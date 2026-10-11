@@ -49,23 +49,40 @@ export class ForecastFrames{
   }
   frame.pending=true;frame.loaded=false;
   frame.ready=new Promise(resolve=>{
-   let done=false,rendered=false;
+   let done=false,rendered=false,timer;
    const finish=ok=>{
     if(done)return;done=true;clearTimeout(timer);
     this.map.off('render',render);this.map.off('sourcedata',check);this.map.off('error',failed);
     frame.pending=false;frame.loaded=ok;frame.failed=!ok;
     if(ok){frame.suspended=false;this.preloaded.add(url);this.failures.delete(url);}
-    else if(!frame.cancelled)this.failures.add(url);
+    else if(!frame.cancelled){this.preloaded.delete(url);this.failures.add(url);}
     this.onProgress();
     resolve(ok);
    };
    const check=()=>{if(rendered&&this.sourcesReady(frame))finish(true);};
    const render=()=>{rendered=true;check();};
-   const failed=event=>{if(frame.resources.includes(event.sourceId))finish(false);};
-   const timer=setTimeout(()=>finish(false),this.timeout);frame.cancel=()=>{frame.cancelled=true;finish(false);};
+   const failed=event=>{if(event.error?.name!=='AbortError'&&frame.resources.includes(event.sourceId))finish(false);};
+   frame.renewTimeout=()=>{if(!done){clearTimeout(timer);timer=setTimeout(()=>finish(false),this.timeout);}};
+   frame.renewTimeout();frame.cancel=()=>{frame.cancelled=true;finish(false);};
    this.map.on('render',render);this.map.on('sourcedata',check);this.map.on('error',failed);this.map.triggerRepaint();
   });
   return frame;
+ }
+ async acquire(url,valid=()=>true){
+  if(!valid())return null;
+  // A selected frame takes priority over unfinished speculative frames. Keep
+  // its downloads, but give it a fresh deadline when promoted from background.
+  if(!this.isReady(url))this.stop(url);
+  for(let attempt=0;attempt<2&&valid();attempt++){
+   const frame=this.prepare(url);frame.renewTimeout?.();
+   const ready=await frame.ready;
+   if(!valid()||frame.cancelled)return null;
+   if(ready)return frame;
+   if(attempt===0){
+    this.discard(frame);this.failures.delete(url);this.onProgress();
+   }
+  }
+  return null;
  }
  firstLayer(){return this.map.getStyle().layers[0]?.id;}
  sourcesReady(frame){return frame.resources.every(id=>this.map.getSource(id)&&this.map.isSourceLoaded(id));}

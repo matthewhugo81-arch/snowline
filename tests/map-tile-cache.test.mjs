@@ -39,15 +39,59 @@ test('abandoned work aborts, failed requests retry, and changed views cannot reu
  let calls=0,finish,signal;const cache=new ForecastTileCache((p,c)=>{calls++;signal=c.signal;return calls===1?new Promise(resolve=>finish=resolve):Promise.resolve(bytes());},{storage:storage()});cache.setContext('view-one');
  const controller=new AbortController(),pending=cache.protocol(params('rain'),controller);
  const rejected=assert.rejects(pending,{name:'AbortError'});await Promise.resolve();await Promise.resolve();controller.abort();await rejected;
- finish?.(bytes());assert.equal(signal?.aborted??true,true);
+ await new Promise(resolve=>setTimeout(resolve,140));finish?.(bytes());assert.equal(signal?.aborted??true,true);
  assert.deepEqual(new Uint8Array((await read(cache,'rain')).data),new Uint8Array([10,20,30,40]));
  const before=calls;cache.setContext('view-two');await read(cache,'rain');assert.equal(calls,before+1);cache.release();
 });
 
 test('renderer errors are not cached; storage denial still allows forecasts and reports capacity',async()=>{
- let calls=0,limited=0;const cache=new ForecastTileCache(async()=>{if(++calls===1)throw Error('Temporary outage');return bytes();},{storage:{keys:async()=>[],open:async()=>{throw Error('Denied');}},memoryBytes:4,onLimit:()=>limited++});cache.setContext('view');
+ let calls=0,limited=0;const cache=new ForecastTileCache(async()=>{if(++calls===1)throw Error('Temporary outage');return bytes();},{retries:0,storage:{keys:async()=>[],open:async()=>{throw Error('Denied');}},memoryBytes:4,onLimit:()=>limited++});cache.setContext('view');
  await assert.rejects(read(cache,'rain'),/Temporary outage/);await read(cache,'rain');await read(cache,'snow');
  assert.equal(calls,3);assert.equal(cache.limited,true);assert.equal(limited,1);cache.release();
+});
+
+test('a foreground replacement rejoins abandoned background work without restarting the renderer',async()=>{
+ let finish,calls=0,signal;
+ const cache=new ForecastTileCache((p,c)=>{calls++;signal=c.signal;return new Promise(resolve=>finish=resolve);},{storage:null});cache.setContext('view');
+ const controller=new AbortController(),first=cache.protocol(params('rain'),controller),cancelled=assert.rejects(first,{name:'AbortError'});
+ await new Promise(resolve=>setImmediate(resolve));controller.abort();await cancelled;
+ const replacement=read(cache,'rain');assert.equal(signal.aborted,false);finish(bytes());await replacement;
+ assert.equal(calls,1);cache.release();
+});
+
+test('temporary tile failures retry once per shared job and successful bytes are cached',async()=>{
+ let calls=0;const cache=new ForecastTileCache(async()=>{if(++calls<3)throw new DOMException('Interrupted renderer','AbortError');return bytes();},{storage:null,retryDelay:1});cache.setContext('view');
+ const results=await Promise.all([read(cache,'rain'),read(cache,'rain')]);
+ assert.equal(calls,3);assert.notEqual(results[0].data,results[1].data);
+ await read(cache,'rain');assert.equal(calls,3);cache.release();
+});
+
+test('persistent failures have bounded retries and missing files fail promptly',async()=>{
+ for(const [message,expected]of [['Network failed',3],['Failed to fetch file size: 404 Not Found',1]]){
+  let calls=0;const cache=new ForecastTileCache(async()=>{calls++;throw Error(message);},{storage:null,retryDelay:1});cache.setContext('view');
+  await assert.rejects(read(cache,'rain'),new RegExp(message));assert.equal(calls,expected);assert.equal(cache.memory.size,0);cache.release();
+ }
+});
+
+test('a view change cancels retry backoff without making another request',async()=>{
+ let calls=0;const cache=new ForecastTileCache(async()=>{calls++;throw Error('Network failed');},{storage:null,retryDelay:200});cache.setContext('view');
+ const pending=read(cache,'rain'),rejected=assert.rejects(pending,{name:'AbortError'});
+ await new Promise(resolve=>setImmediate(resolve));cache.setContext('new view');await rejected;assert.equal(calls,1);cache.release();
+});
+
+test('slow storage does not delay display or duplicate a just-evicted tile',async()=>{
+ let finish,calls=0;const entries=new Map();
+ const cache=new ForecastTileCache(async()=>{calls++;return bytes();},{memoryBytes:4,storage:{keys:async()=>[],delete:async()=>{},open:async()=>({match:async key=>entries.get(key)?.clone(),put:async(key,response)=>{if(key.includes('rain'))await new Promise(resolve=>finish=resolve);entries.set(key,response.clone());}})}});cache.setContext('view');
+ await read(cache,'rain');assert.equal(typeof finish,'function','Image resolves before its storage write');
+ await read(cache,'snow');assert.equal(cache.limited,false,'An in-progress save is not a storage failure');
+ const again=read(cache,'rain');finish();await again;
+ assert.equal(calls,2,'Wait for the existing write instead of rendering the tile again');cache.release();
+});
+
+test('a delayed failed write reports limited storage only when its tile was evicted',async()=>{
+ let fail;const cache=new ForecastTileCache(async()=>bytes(),{memoryBytes:4,storage:{keys:async()=>[],delete:async()=>{},open:async()=>({match:async()=>null,put:(key)=>key.includes('rain')?new Promise((resolve,reject)=>fail=reject):Promise.resolve()})}});cache.setContext('view');
+ await read(cache,'rain');await read(cache,'snow');assert.equal(cache.limited,false);
+ fail(Error('Quota'));await new Promise(resolve=>setImmediate(resolve));assert.equal(cache.limited,true);cache.release();
 });
 
 test('a context change cancels in-flight work and prevents late writes into the new view',async()=>{

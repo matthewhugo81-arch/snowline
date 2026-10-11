@@ -6,6 +6,42 @@ import {overlayGroups} from '../map-overlay-specs.js';
 import {FakeMap,loaded} from './frame-fake.mjs';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
+test('selecting an old background request renews its deadline and prioritises it',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a',{timeout:100});
+ cache.show(await loaded(cache,map,'current'),.8,'linear');
+ const chosen=cache.prepare('chosen'),other=cache.prepare('other');t.mock.timers.tick(90);
+ const result=cache.acquire('chosen');assert.equal(await other.ready,false);assert.equal(cache.failures.size,0);
+ t.mock.timers.tick(20);assert.equal(chosen.pending,true,'Background age must not exhaust the selected frame deadline');
+ map.load(chosen);assert.equal(await result,chosen);assert.equal(cache.current.url,'current');cache.clear();
+});
+
+test('a selected frame retries an incomplete overlay while preserving the displayed forecast',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a',{decorate:()=>[{id:'mslp',source:{type:'vector'},layers:[{id:'line',type:'line'}]}]});
+ cache.show(await loaded(cache,map,'current'),.8,'linear');
+ const result=cache.acquire('next'),failed=cache.frames.get('next');
+ map.emit('error',{sourceId:failed.resources[1],error:Error('Temporary overlay failure')});await flush();
+ const retry=cache.frames.get('next');assert.notEqual(retry,failed);assert.equal(cache.current.url,'current');
+ assert.equal(cache.failures.has('next'),false);map.load(retry);assert.equal(await result,retry);cache.clear();
+});
+
+test('cancelled or superseded selections cannot restart themselves or poison progress',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');
+ const pending=cache.acquire('old');cache.stop('new');
+ assert.equal(await pending,null);assert.equal(cache.frames.has('old'),false);assert.equal(cache.failures.size,0);
+ let valid=true;const superseded=cache.acquire('stale',()=>valid),frame=cache.frames.get('stale');valid=false;
+ map.emit('error',{sourceId:frame.id});assert.equal(await superseded,null);assert.equal(map.sourceAdds,2);cache.clear();
+});
+
+test('cancel events are not frame failures and persistent errors stop after one frame retry',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');
+ const result=cache.acquire('next'),frame=cache.frames.get('next');
+ map.emit('error',{sourceId:frame.id,error:new DOMException('Aborted','AbortError')});assert.equal(frame.pending,true);
+ map.emit('error',{sourceId:frame.id,error:Error('Unavailable')});await flush();
+ const retry=cache.frames.get('next');map.emit('error',{sourceId:retry.id,error:Error('Unavailable')});
+ assert.equal(await result,null);assert.equal(map.sourceAdds,2);assert.equal(cache.failures.has('next'),true);cache.clear();
+});
+
 test('advancing the buffer retains useful in-flight requests rather than restarting them',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});
  const map=new FakeMap(),cache=new ForecastFrames(map,'a');

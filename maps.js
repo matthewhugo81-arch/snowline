@@ -2,8 +2,8 @@ import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-ensemble-statistics';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261011-full-preload';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-frame-recovery';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261011-frame-recovery';
 import {ForecastPlayback} from './map-playback.js?v=20261011-continuous-loop';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-ensemble-statistics';
@@ -268,14 +268,14 @@ async function prepareSelection(index,valid=()=>true){
  if(!time)return null;
  await Promise.all(choices.map(({key})=>panels[key].ready));
  if(!valid()||metas!==state.metas||choices.some(({key,model,field})=>panels[key].restyling||model!==panelSelection(state,key).model||field!==panelSelection(state,key).field))return null;
- const prepared=choices.map(({key,model,field})=>{
+ const prepared=await Promise.all(choices.map(async({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
   if(!url)return null;
-  return {panel,cache,frame:cache.prepare(url),key,model,field,time};
- });
+  const frame=await cache.acquire(url,valid);
+  return frame?{panel,cache,frame,key,model,field,time}:null;
+ }));
  if(prepared.some(item=>!item))return null;
- const ready=await Promise.all(prepared.map(item=>item.frame.ready));
- return ready.every(Boolean)&&valid()?prepared:null;
+ return valid()?prepared:null;
 }
 async function setTime(){
  if(!state.times.length)return false;

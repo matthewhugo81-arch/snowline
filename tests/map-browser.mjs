@@ -23,6 +23,11 @@ const fakeOM=`
   await new Promise(r=>setTimeout(r,80));
   if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
   if(!params.url.startsWith('om://fixture/'))return {data:{tilejson:'2.2.0',minzoom:0,maxzoom:10,tiles:['om://fixture/'+encodeURIComponent(params.url)+'/{z}/{x}/{y}']}};
+  const fault=window.fixtureFault;
+  if(fault&&params.type==='image'&&decodeURIComponent(params.url).includes(fault.match)){
+   fault.url??=params.url;
+   if(fault.url===params.url&&fault.remaining-->0)throw Error('Temporary test transport failure');
+  }
   return {data:params.type==='image'?png.slice().buffer:new Uint8Array(0).buffer};
  }
 `;
@@ -38,7 +43,7 @@ try{
   await page.route('https://tiles.openfreemap.org/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
   const metadata=[];
-  const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
+  const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','cloud_cover','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
   const ensembleFixture=(hours,step)=>({...fixture(0,hours),variables:['precipitation_probability'],valid_times:fixture(0,hours).valid_times.filter((_,i)=>i%step===0)});
   const ensembleFixtures={ncep_gefs025:ensembleFixture(24,3),ncep_gefs05:ensembleFixture(48,6),ecmwf_ifs025_ensemble:ensembleFixture(30,3)};
   const statisticVariables=['geopotential_height_500hPa','temperature_850hPa','pressure_msl'].flatMap(f=>[f+'_mean',f+'_spread']);
@@ -78,6 +83,22 @@ try{
     const labels=await page.locator('.map-panel-label').allTextContents();
     assert.equal(labels[0].split('Valid ')[1],labels[1].split('Valid ')[1],'Comparison panels commit together');
    }
+   // The reported cloud/rain comparison must recover a failed selected tile,
+   // including exhaustion of tile retries, without a manual click or wrong time.
+   await page.evaluate(()=>window.fixtureFault={match:'variable=cloud_cover',remaining:3});
+   await page.locator('#map-variable').selectOption('cloud_cover');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Total cloud cover')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.ok(await page.evaluate(()=>window.fixtureFault.remaining<=0));
+   assert.equal(await page.locator('.map-error:visible').count(),0,'A recovered frame has no stale error banner');
+   const recovered=await page.locator('.map-panel-label').allTextContents();
+   assert.equal(recovered[0].split('Valid ')[1],recovered[1].split('Valid ')[1]);
+   await page.evaluate(()=>window.fixtureFault=null);
+   // Rapid jumps while background warming is unfinished cannot commit an old request.
+   await page.locator('#map-time').evaluate(el=>{for(const value of ['20','40','6']){el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));}});
+   await bothAt('Sat 10 Oct, 13:00 UTC');
+   assert.equal(await page.locator('.map-error:visible').count(),0);
+   await page.locator('#map-variable').selectOption('precipitation');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Precipitation'));
    // Dragging during playback preserves the requested slider position and pauses.
    await page.locator('#play-map').click();
    await page.locator('#map-time').evaluate(el=>{el.value='5';el.dispatchEvent(new Event('input',{bubbles:true}));});
