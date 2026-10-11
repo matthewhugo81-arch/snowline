@@ -9,13 +9,16 @@ export function frameWindow(urls,index,{ahead=2,behind=2,loop=false}={}){
  }
  return {keep:new Set(urls.slice(Math.max(0,index-behind),index+ahead+1).filter(Boolean)),upcoming:urls.slice(index+1,index+ahead+1).filter(Boolean)};
 }
+// Begin just after the selected frame, then wrap to all earlier valid times.
+export function fullSequence(urls,index){return [...new Set([...urls.slice(index+1),...urls.slice(0,index+1)].filter(Boolean))];}
 
 // A frame owns its raster AND enabled vector overlays. They are prepared behind
 // the opaque basemap, then promoted together; we never blend forecast times.
 export class ForecastFrames{
- constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore}={}){
-  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore});
+ constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true}={}){
+  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload});
   this.frames=new Map();this.sequence=0;this.current=null;this.epoch=0;this.queue=[];this.keep=new Set();
+  this.preloaded=new Set();this.failures=new Set();
  }
  prepare(url){
   let frame=this.frames.get(url);
@@ -42,7 +45,7 @@ export class ForecastFrames{
   }else{
    for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','visible');
    if(frame!==this.current)this.cover(frame);
-   if(frame.loaded&&!frame.suspended&&this.sourcesReady(frame)){frame.ready=Promise.resolve(true);return frame;}
+   if(frame.loaded&&!frame.suspended&&this.sourcesReady(frame)){this.preloaded.add(url);this.failures.delete(url);this.onProgress();frame.ready=Promise.resolve(true);return frame;}
   }
   frame.pending=true;frame.loaded=false;
   frame.ready=new Promise(resolve=>{
@@ -51,13 +54,15 @@ export class ForecastFrames{
     if(done)return;done=true;clearTimeout(timer);
     this.map.off('render',render);this.map.off('sourcedata',check);this.map.off('error',failed);
     frame.pending=false;frame.loaded=ok;frame.failed=!ok;
-    if(ok)frame.suspended=false;
+    if(ok){frame.suspended=false;this.preloaded.add(url);this.failures.delete(url);}
+    else if(!frame.cancelled)this.failures.add(url);
+    this.onProgress();
     resolve(ok);
    };
    const check=()=>{if(rendered&&this.sourcesReady(frame))finish(true);};
    const render=()=>{rendered=true;check();};
    const failed=event=>{if(frame.resources.includes(event.sourceId))finish(false);};
-   const timer=setTimeout(()=>finish(false),this.timeout);frame.cancel=()=>finish(false);
+   const timer=setTimeout(()=>finish(false),this.timeout);frame.cancel=()=>{frame.cancelled=true;finish(false);};
    this.map.on('render',render);this.map.on('sourcedata',check);this.map.on('error',failed);this.map.triggerRepaint();
   });
   return frame;
@@ -82,6 +87,7 @@ export class ForecastFrames{
  }
  suspend(exceptURL){
   this.stop(exceptURL);
+  this.preloaded.clear();this.failures.clear();this.onProgress();
   for(const frame of this.frames.values()){
    frame.suspended=true;
    if(frame!==this.current&&frame.url!==exceptURL)for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','none');
@@ -98,23 +104,24 @@ export class ForecastFrames{
   clearTimeout(this.timer);this.epoch++;this.queue=[];
   for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.pending&&frame.url!==exceptURL)this.discard(frame);
  }
- warm({keep,upcoming,delay=this.delay}){
+ warm({keep,upcoming,all=[],delay=this.delay}){
   clearTimeout(this.timer);const epoch=++this.epoch;
-  this.keep=keep;this.queue=[...new Set(upcoming)];
+  this.keep=keep;this.queue=[...new Set([...upcoming,...all.filter(url=>!this.preloaded.has(url)&&!this.failures.has(url))])];
   // Crucially, do NOT stop/cancel pending frames that are still in the window.
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
   if(!this.queue.length)return;
   this.timer=setTimeout(async()=>{
    for(const url of this.queue){
     if(epoch!==this.epoch)break;
+    if(!this.keep.has(url)&&(!this.canPreload()||this.preloaded.has(url)))continue;
     let frame;
     try{frame=this.prepare(url);const ready=await frame.ready;
      if(epoch!==this.epoch)break;
      if(!ready){this.discard(frame);continue;}
-     if(frame!==this.current)this.cover(frame);
+     if(frame!==this.current){if(!this.keep.has(url))this.discard(frame);else this.cover(frame);}
     }catch{if(frame)this.discard(frame);}
    }
   },delay);
  }
- clear(){this.stop();for(const frame of [...this.frames.values()])this.discard(frame);this.keep.clear();}
+ clear(){this.stop();for(const frame of [...this.frames.values()])this.discard(frame);this.keep.clear();this.preloaded.clear();this.failures.clear();this.onProgress();}
 }

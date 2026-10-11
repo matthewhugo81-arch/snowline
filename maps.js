@@ -1,5 +1,6 @@
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow} from './map-frames.js?v=20261011-continuous-loop';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-full-preload';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261011-full-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-continuous-loop';
 import {overlayGroups} from './map-overlay-specs.js?v=20261010-buffered-playback';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-ensemble-maps';
@@ -40,7 +41,11 @@ const fields=[
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
 const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
 OM.updateCurrentBounds(UK);
-maplibregl.addProtocol('om',(params,controller)=>OM.omProtocol(params,controller,settings));
+const imageryCache=new ForecastTileCache((params,controller)=>OM.omProtocol(params,controller,settings),{onLimit:()=>updatePreloadStatus()});
+imageryCache.setContext(JSON.stringify(UK));
+maplibregl.addProtocol('om',(params,controller)=>imageryCache.protocol(params,controller));
+window.addEventListener('pagehide',()=>imageryCache.release());
+window.addEventListener('pageshow',event=>{if(event.persisted){imageryCache.context=null;viewportBounds();for(const panel of Object.values(panels))panel.frameCache?.suspend();setTime();}});
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=t=>date.format(new Date(t));
 let roads=false;try{roads=localStorage.getItem('snowline-roads')==='true';}catch{}
@@ -62,7 +67,17 @@ document.addEventListener('click',event=>{if(!event.target.closest('.maplibregl-
 document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissLocation();});
 let viewportRefreshTimer;
 function queueViewportRefresh(){clearTimeout(viewportRefreshTimer);viewportRefreshTimer=setTimeout(()=>{if(state.times.length&&!playing)setTime();},120);}
-function viewportBounds(){const visible=Object.entries(panels).filter(([key])=>key==='a'||state.compare).map(([,p])=>p.map.getBounds());if(!visible.length)return;OM.updateCurrentBounds([Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))]);}
+function viewportBounds(){
+ const visible=Object.entries(panels).filter(([key])=>key==='a'||state.compare).map(([,p])=>p.map.getBounds());if(!visible.length)return;
+ const bounds=[Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))];
+ OM.updateCurrentBounds(bounds);
+ // Renderer clipping depends on the view as well as the URL/zoom. Never reuse a
+ // partially clipped tile in a different view, even if its tile coordinates match.
+ if(imageryCache.setContext(JSON.stringify(bounds.map(value=>Number(value.toFixed(5)))))){
+  for(const panel of Object.values(panels)){panel.frameCache?.preloaded.clear();panel.frameCache?.failures.clear();}
+  updatePreloadStatus();
+ }
+}
 let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
@@ -191,6 +206,19 @@ function pauseAnimation(){
 function frameBudget(){
  return {loop:true,...(state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2})};
 }
+function updatePreloadStatus(){
+ const choices=panelSelections(state),total=state.times.length*choices.length;
+ let loaded=0,failed=0;
+ for(const {key}of choices){const panel=panels[key];for(const url of panel?.frameURLs??[]){if(panel.frameCache?.preloaded.has(url))loaded++;else if(panel.frameCache?.failures.has(url))failed++;}}
+ const complete=total>0&&loaded===total&&!imageryCache.limited;
+ let message='Checking imagery…';
+ if(total)message='Loading imagery · '+loaded+'/'+total+' frames'+(failed?' · '+failed+' unavailable':'');
+ if(complete)message='All '+total+' frames loaded';
+ if(imageryCache.limited)message='Storage limited · nearby frames cached';
+ const progress=$('preload-status');progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.total=String(total);
+ $('retry-preload').hidden=!failed||imageryCache.limited;
+ if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(complete?'all frames loaded':loaded+'/'+total+' frames loaded');
+}
 function orderForecastBasemap(panel){
  if(panel.styleOrdered)return;
  const map=panel.map;
@@ -214,12 +242,12 @@ function panelCache(panel,model,field){
   return url;
  });
  panel.cacheKey=signature;
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate:url=>overlayGroups(descriptors.get(url))});
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate:url=>overlayGroups(descriptors.get(url)),onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited});
  panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
  if(panel.restyling||!panel.frameCache)return;
- panel.frameCache.warm({...frameWindow(panel.frameURLs,state.index,frameBudget()),delay:0});
+ panel.frameCache.warm({...frameWindow(panel.frameURLs,state.index,frameBudget()),all:fullSequence(panel.frameURLs,state.index),delay:0});
 }
 async function prepareSelection(index,valid=()=>true){
  const choices=panelSelections(state),time=state.times[index],metas=state.metas;
@@ -266,7 +294,7 @@ async function setTime(){
   }
   syncTimeline(index);setLegend();pressureNote();
   for(const {panel}of prepared)warmUpcoming(panel);
-  $('animation-status').textContent=playing?'Playing · buffered native forecast frames':'Ready · upcoming frames buffering';
+  $('animation-status').textContent=playing?'Playing · buffered native forecast frames':'Ready';updatePreloadStatus();
   status('Click a map for a value and local charts.');return true;
  }catch(error){
   if(!valid())return false;
@@ -300,6 +328,7 @@ playback=new ForecastPlayback({
  }
 });
 $('map-playback-speed')?.addEventListener('change',event=>{playback.interval=Number(event.target.value);});
+$('retry-preload').addEventListener('click',()=>{for(const {key}of panelSelections(state)){panels[key].frameCache?.failures.clear();warmUpcoming(panels[key]);}updatePreloadStatus();});
 function setLegend(){
  for(const {key,model,field} of panelSelections(state)){
   const f=fields.find(f=>f.key===field);if(!f)continue;

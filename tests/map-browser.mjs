@@ -118,12 +118,11 @@ try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature'));
    await selectTime(0);
    const initialTemperatureRequests=()=>page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('/2026-10-10T0600.om?variable=temperature_2m&')).length);
-   const beforeInitial=await initialTemperatureRequests();
    await page.locator('#map-variable-b').selectOption('temperature_2m');
    await page.waitForFunction(()=>document.getElementById('map-time').max==='54');
    firstHour=6;await selectTime(0);
    await bothAt('Sat 10 Oct, 06:00 UTC');
-   assert.ok(await initialTemperatureRequests()>=beforeInitial+2,'Both panels request the newly available initial image');
+   assert.ok(await initialTemperatureRequests()>=1,'The initialization image is available; cached data is shared across panels');
    const invalidIntervals=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('variable=precipitation&')&&/\/(\d{4})Z\/2026-10-10T\1\.om/.test(r.url)));
    assert.deepEqual(invalidIntervals,[],'Do not request precipitation at initialization');
    // Ensembles auto-select only their supplied layer, then compare and loop together.
@@ -139,12 +138,22 @@ try{
    await page.locator('#map-model-b').selectOption('ecmwf_ifs025_ensemble');
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('ECMWF ENS'));
    assert.equal(await page.locator('#map-time').getAttribute('max'),'7');
+   // Entire comparison loads without playing or moving the slider, not just the
+   // rolling window. Distant jumps and a loop must need no new renderer requests.
+   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
+   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'16');
+   const fullSequenceRequests=await page.evaluate(()=>window.fixtureRequests.length);
+   for(const [index,time]of [[0,'Sat 10 Oct, 03:00 UTC'],[4,'Sat 10 Oct, 15:00 UTC'],[2,'Sat 10 Oct, 09:00 UTC']]){
+    await page.locator('#map-time').evaluate((el,index)=>{el.value=index;el.dispatchEvent(new Event('change',{bubbles:true}));},String(index));
+    await bothAt(time);
+   }
    await page.locator('#map-time').evaluate(el=>{el.value=el.max;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await bothAt('Sun 11 Oct, 00:00 UTC');
    await page.locator('#play-map').click();
    await bothAt('Sat 10 Oct, 03:00 UTC');
    assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true');
    await page.locator('#play-map').click();
+   assert.equal(await page.evaluate(()=>window.fixtureRequests.length),fullSequenceRequests,'Prepared raster and overlay tiles are reused for distant frames and loop restart');
    await page.locator('#map-model').selectOption('ncep_gefs05');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('GEFS 0.5°'));
    assert.equal(await page.locator('#map-time').getAttribute('max'),'4','Comparison intersects 3-hour and 6-hour native steps');
