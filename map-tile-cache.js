@@ -3,6 +3,23 @@
 const PREFIX='snowline-forecast-tiles-v1-';
 const abort=()=>new DOMException('Aborted','AbortError');
 const copy=value=>({...value,data:structuredClone(value.data)});
+// The native renderer returns ImageBitmap, not encoded PNG bytes. Response(bitmap)
+// stores the literal text "[object ImageBitmap]", and JSON sizing counts it as {}.
+// Encode once so memory limits, disk restoration and worker transfers all use
+// owned, valid bytes. Release the renderer's graphics allocation after encoding.
+async function cacheable(result){
+ const bitmap=result.data;
+ if(typeof ImageBitmap!=='undefined'&&bitmap instanceof ImageBitmap){
+  try{
+   const canvas=new OffscreenCanvas(bitmap.width,bitmap.height);
+   const context=canvas.getContext('2d');
+   if(!context)throw Error('Cannot prepare forecast image');
+   context.drawImage(bitmap,0,0);
+   return {...result,data:await (await canvas.convertToBlob({type:'image/png'})).arrayBuffer()};
+  }finally{bitmap.close();}
+ }
+ return result;
+}
 const retryable=error=>!(/\b(?:400|401|403|404|410)\b/.test(error?.message??'')||[400,401,403,404,410].includes(error?.status));
 const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  if(signal.aborted){reject(abort());return;}
@@ -76,7 +93,7 @@ export class ForecastTileCache{
   let result;
   for(let attempt=0;;attempt++){
    if(controller.signal.aborted||generation!==this.generation)throw abort();
-   try{result=await this.load(params,controller);break;}
+   try{result=await cacheable(await this.load(params,controller));break;}
    catch(error){
     if(controller.signal.aborted||generation!==this.generation)throw abort();
     if(attempt>=this.retries||!retryable(error))throw error;

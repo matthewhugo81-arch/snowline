@@ -97,3 +97,35 @@ test('panning suspends old images so they cannot compete for tiles in the new vi
  assert.equal(map.getLayer(first.layer).layout.visibility,'none');assert.equal(first.suspended,true);
  assert.equal(map.getLayer(current.layer).layout.visibility,'visible');cache.clear();
 });
+
+test('source readiness before the next render cannot prematurely complete a frame',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');
+ const frame=cache.prepare('forecast');await Promise.resolve();
+ // Metadata can report loaded before the next render requests the new tiles.
+ map.getSource(frame.id).loaded=true;map.emit('sourcedata',{sourceId:frame.id});
+ assert.equal(frame.pending,true,'A source event is not a completed map render');
+ map.getSource(frame.id).loaded=false;await Promise.resolve();assert.equal(frame.pending,true);
+ map.load(frame);assert.equal(await frame.ready,true);cache.clear();
+});
+
+test('a new area rebuilds all resources while keeping the labelled old image until commit',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');
+ const old=await loaded(cache,map,'same-hour');cache.show(old,.8,'linear');
+ const pending=cache.prepare('future');cache.invalidateView();
+ assert.equal(await pending.ready,false);assert.equal(cache.failures.size,0);
+ assert.equal(cache.preloaded.size,0);assert.equal(cache.current,old);
+ assert.ok(map.getLayer(old.layer));assert.equal(cache.isReady(old.url),false);
+ const replacement=cache.prepare(old.url);assert.notEqual(replacement.id,old.id);
+ assert.ok(map.getLayer(old.layer),'Keep the image visible while the new area loads');
+ map.load(replacement);await replacement.ready;cache.show(replacement,.8,'linear');
+ assert.equal(map.getSource(old.id),undefined);assert.equal(cache.frames.get(old.url),replacement);
+ assert.equal(cache.retired.size,0);cache.clear();assert.equal(map.sources.size,0);
+});
+
+test('repeated map moves and model changes release retained fallback resources',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');
+ cache.show(await loaded(cache,map,'current'),.8,'linear');cache.invalidateView();
+ const replacement=cache.prepare('current');cache.invalidateView();
+ assert.equal(await replacement.ready,false);assert.equal(cache.retired.size,1);
+ cache.clear();assert.equal(map.sources.size,0);assert.equal(cache.retired.size,0);
+});

@@ -18,7 +18,7 @@ export class ForecastFrames{
  constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true,isActive=()=>true,maxAttempts=3}={}){
   Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload,isActive,maxAttempts});
   this.frames=new Map();this.sequence=0;this.current=null;this.epoch=0;this.queue=[];this.keep=new Set();
-  this.preloaded=new Set();this.failures=new Set();this.failureAttempts=new Map();
+  this.preloaded=new Set();this.failures=new Set();this.failureAttempts=new Map();this.retired=new Set();
  }
  prepare(url){
   let frame=this.frames.get(url);
@@ -49,7 +49,7 @@ export class ForecastFrames{
   }
   frame.pending=true;frame.loaded=false;
   frame.ready=new Promise(resolve=>{
-   let done=false,rendered=false,timer;
+   let done=false,timer;
    const finish=ok=>{
     if(done)return;done=true;clearTimeout(timer);
     this.map.off('render',render);this.map.off('sourcedata',check);this.map.off('error',failed);
@@ -59,8 +59,10 @@ export class ForecastFrames{
     this.onProgress();
     resolve(ok);
    };
-   const check=()=>{if(this.isActive()&&rendered&&this.sourcesReady(frame))finish(true);};
-   const render=()=>{rendered=true;check();};
+   // Source notifications can precede the renderer's tile/visibility update.
+   // Only a completed render of the current view can confirm readiness.
+   const check=()=>this.map.triggerRepaint();
+   const render=()=>{if(this.isActive()&&this.sourcesReady(frame))finish(true);};
    const failed=event=>{if(event.error?.name!=='AbortError'&&frame.resources.includes(event.sourceId))finish(false);};
    frame.pauseTimeout=()=>clearTimeout(timer);
    // Browsers suspend map rendering in hidden tabs. That is not a failed file.
@@ -91,13 +93,15 @@ export class ForecastFrames{
  isReady(url){const frame=this.frames.get(url);return !!(frame?.loaded&&!frame.suspended&&!frame.pending&&this.sourcesReady(frame));}
  show(frame,opacity,resampling){
   if(!frame.loaded||frame.pending||frame.failed)return false;
-  if(this.current&&this.current!==frame)this.cover(this.current);
+  const previous=this.current;
+  if(previous&&previous!==frame)this.cover(previous);
   this.current=frame;
   for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','visible');
   this.map.setPaintProperty(frame.layer,'raster-opacity',opacity);
   this.map.setPaintProperty(frame.layer,'raster-resampling',resampling);
   this.map.moveLayer(frame.layer,this.rasterBefore);
   for(const id of frame.layers.slice(1))this.map.moveLayer(id,this.overlayBefore);
+  if(this.retired.has(previous))this.discard(previous);
   return true;
  }
  cover(frame){
@@ -122,12 +126,23 @@ export class ForecastFrames{
    if(frame!==this.current&&frame.url!==exceptURL)for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','none');
   }
  }
+ invalidateView(){
+  this.stop();
+  // Keep the labelled image until its replacement is rendered, but recreate
+  // its sources: a pan may have started tiles using the previous clip bounds.
+  for(const frame of [...this.frames.values()]){
+   if(frame===this.current){this.frames.delete(frame.url);this.retired.add(frame);frame.suspended=true;}
+   else this.discard(frame);
+  }
+  this.preloaded.clear();this.retryFailures();this.onProgress();
+ }
  discard(frame){
-  if(!frame||this.frames.get(frame.url)!==frame)return;
+  if(!frame||(this.frames.get(frame.url)!==frame&&!this.retired.has(frame)))return;
   frame.cancel?.();
   for(const id of [...frame.layers].reverse())if(this.map.getLayer(id))this.map.removeLayer(id);
   for(const id of [...frame.resources].reverse())if(this.map.getSource(id))this.map.removeSource(id);
-  this.frames.delete(frame.url);if(this.current===frame)this.current=null;
+  if(this.frames.get(frame.url)===frame)this.frames.delete(frame.url);
+  this.retired.delete(frame);if(this.current===frame)this.current=null;
  }
  stop(exceptURL){
   clearTimeout(this.timer);this.epoch++;this.queue=[];
@@ -159,5 +174,5 @@ export class ForecastFrames{
    }
   },delay);
  }
- clear(){this.stop();for(const frame of [...this.frames.values()])this.discard(frame);this.keep.clear();this.preloaded.clear();this.retryFailures();this.onProgress();}
+ clear(){this.stop();for(const frame of [...this.frames.values(),...this.retired])this.discard(frame);this.keep.clear();this.preloaded.clear();this.retryFailures();this.onProgress();}
 }

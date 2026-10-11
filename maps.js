@@ -2,8 +2,8 @@ import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-background-recovery-2';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261011-frame-recovery';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-render-jobs';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261011-render-jobs';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-ensemble-statistics';
@@ -14,7 +14,7 @@ import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv-families';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-ensemble-statistics';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
-import * as OM from './vendor/index.mjs';
+import * as OM from './vendor/index.mjs?v=20261011-render-jobs';
 import {finite} from './data.js?v=20261010-ukv';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261011-ensemble-statistics';
 import {ukvRunFamily} from './ukv-run-selection.js?v=20261010-ukv-families';
@@ -86,7 +86,7 @@ function viewportBounds(){
  // Renderer clipping depends on the view as well as the URL/zoom. Never reuse a
  // partially clipped tile in a different view, even if its tile coordinates match.
  if(imageryCache.setContext(JSON.stringify(bounds.map(value=>Number(value.toFixed(5)))))){
-  for(const panel of Object.values(panels)){panel.frameCache?.preloaded.clear();panel.frameCache?.retryFailures();}
+  for(const panel of Object.values(panels))panel.frameCache?.invalidateView();
   updatePreloadStatus();
  }
 }
@@ -119,7 +119,7 @@ function makeMap(key){
  map.touchZoomRotate.disableRotation();
  map.once('load',()=>{const credits=map.getContainer().querySelector('.maplibregl-compact-show .maplibregl-ctrl-attrib-button');credits?.click();});
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');map.fitBounds([[UK[0],UK[1]],[UK[2],UK[3]]],{padding:25,duration:0});
- const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',()=>{pauseAnimation();panel.frameCache?.suspend(panel.requestedURL);clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
+ const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{panel.frameCache?.invalidateView();viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',()=>{pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
  map.on('style.load',()=>{panel.styleOrdered=false;applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});

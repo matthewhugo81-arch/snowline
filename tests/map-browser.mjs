@@ -28,7 +28,9 @@ const fakeOM=`
    fault.url??=params.url;
    if(fault.url===params.url&&fault.remaining-->0)throw Error('Temporary test transport failure');
   }
-  return {data:params.type==='image'?png.slice().buffer:new Uint8Array(0).buffer};
+  // Match the real OM worker's return type. Byte-only fixtures missed corrupt
+  // bitmap persistence and the grossly underestimated in-memory cache size.
+  return {data:params.type==='image'?await createImageBitmap(new Blob([png],{type:'image/png'})):new Uint8Array(0).buffer};
  }
 `;
 const geo={type:'FeatureCollection',features:[]};
@@ -39,7 +41,12 @@ try{
   page.on('pageerror',e=>errors.push(e.message));
   page.on('console',m=>{if(m.type()==='warning'||m.type()==='error')console.log('BROWSER',m.text());});
   await page.addInitScript(()=>localStorage.setItem('snowline-terrain','false'));
-  await page.route('**/vendor/index.mjs',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
+  await page.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
+  await page.route('**/map-tile-cache.js*',async route=>{
+   const code=await readFile(resolve(root,'map-tile-cache.js'),'utf8');
+   // Exercise restoration from disk, not only the hot memory cache.
+   return route.fulfill({contentType:'text/javascript',body:code.replace('memoryBytes=32*1024*1024','memoryBytes=1024')});
+  });
   await page.route('https://tiles.openfreemap.org/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
   const metadata=[];
@@ -51,12 +58,30 @@ try{
   await page.route('https://openmeteo.s3.amazonaws.com/**',route=>{
    const url=route.request().url();metadata.push(url);
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
-   const meta=ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null;
+   const gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height']}:null;
+   const meta=gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
   await page.goto(origin+'/maps.html');
   try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   const bitmapRoundTrip=await page.evaluate(async()=>{
+    const {ForecastTileCache}=await import('./map-tile-cache.js');
+    let calls=0;
+    const cache=new ForecastTileCache(async()=>{
+     calls++;const canvas=new OffscreenCanvas(512,512),context=canvas.getContext('2d');
+     context.fillStyle='rgb(12,80,180)';context.fillRect(0,0,512,512);
+     return {data:canvas.transferToImageBitmap()};
+    },{memoryBytes:1});cache.setContext('bitmap-regression');
+    try{
+     const read=()=>cache.protocol({url:'om://fixture/bitmap-round-trip',type:'image'},new AbortController());
+     await read();const restored=await read();
+     const bitmap=await createImageBitmap(new Blob([restored.data],{type:'image/png'}));
+     const canvas=new OffscreenCanvas(1,1),context=canvas.getContext('2d');context.drawImage(bitmap,0,0);bitmap.close();
+     return {calls,rgba:[...context.getImageData(0,0,1,1).data]};
+    }finally{cache.release();}
+   });
+   assert.deepEqual(bitmapRoundTrip,{calls:1,rgba:[12,80,180,255]},'Native bitmaps survive disk eviction with exact pixels and no rerender');
    let firstHour=6;
    const selectTime=async value=>{
     await page.locator('#map-time').evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},String(value));
@@ -223,6 +248,30 @@ try{
    await page.locator('#play-map').click();
    await bothAt('Sat 10 Oct, 00:00 UTC');
    await page.locator('#play-map').click();
+   // Independent regions/zooms, GFS surface + companion grids and a pending
+   // selection during a move must all use the new view, without false failures.
+   await page.locator('#map-model').selectOption('gfs_global');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('GFS global'));
+   await page.locator('#map-model-b').selectOption('gfs_global');
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('GFS global'));
+   await page.locator('#map-variable').selectOption('snowfall_water_equivalent');
+   await page.locator('#map-variable-b').selectOption('freezing_level_height');
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Freezing level')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   await page.locator('#map-a .maplibregl-ctrl-zoom-out').click();
+   await page.locator('#map-b .maplibregl-ctrl-zoom-in').click();
+   await page.locator('#map-time').evaluate(el=>{el.value='30';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.locator('#map-a canvas.maplibregl-canvas').press('ArrowRight');
+   await bothAt('Sun 11 Oct, 07:00 UTC');
+   await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('.map-error:visible').count(),0);
+   assert.notEqual(await page.locator('#zoom-a').textContent(),await page.locator('#zoom-b').textContent());
+   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
+   const cachedGFSRequests=await page.evaluate(()=>window.fixtureRequests.length);
+   for(const [index,time]of [[0,'Sat 10 Oct, 01:00 UTC'],[47,'Mon 12 Oct, 00:00 UTC'],[16,'Sat 10 Oct, 17:00 UTC']]){
+    await page.locator('#map-time').evaluate((el,index)=>{el.value=index;el.dispatchEvent(new Event('change',{bubbles:true}));},String(index));
+    await bothAt(time);assert.equal(await page.locator('.map-error:visible').count(),0);
+   }
+   assert.equal(await page.evaluate(()=>window.fixtureRequests.length),cachedGFSRequests,'GFS bitmap images and overlays restore from disk for either area');
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));
   }catch(error){
