@@ -14,7 +14,7 @@ test('new layers use physical units and appropriate renderer scales',()=>{
  assert.notDeepEqual(describeVariable('geopotential_height_850hPa',OM).stops,describeVariable('geopotential_height_500hPa',OM).stops);
 });
 test('unsupported, ambiguous and spread fields cannot inherit an unrelated scale',()=>{
- for(const key of ['unknown_field','precipitation_type','weather_code','vertical_velocity_500hPa','temperature_2m_spread','wind_u_component_10m_spread','geopotential_height_500hPa_spread','temperature_2m_max','sea_ice_thickness'])assert.equal(describeVariable(key,OM),null,key);
+ for(const key of ['unknown_field','precipitation_type','weather_code','vertical_velocity_500hPa','temperature_2m_spread','wind_u_component_10m_spread','geopotential_height_300hPa_spread','temperature_2m_max','sea_ice_thickness'])assert.equal(describeVariable(key,OM),null,key);
 });
 test('wind fields require both components from the same model',()=>{
  assert.equal(sourceVariable({variables:['wind_u_component_300hPa']},'wind_speed_300hPa'),null);

@@ -1,0 +1,65 @@
+name: Publish Snowline and ensemble maps
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: snowline-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/ensemble-requirements.txt
+      - name: Install ensemble conversion tools
+        run: pip install -r scripts/ensemble-requirements.txt
+      - name: Verify forecast handling and units
+        run: |
+          node --test tests/*.test.mjs
+          python -m unittest discover -s tests -p 'test_ensemble*.py'
+      - uses: actions/cache@v4
+        with:
+          path: ensemble-data
+          key: ensemble-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ensemble-grids-v1-
+      - name: Prepare complete latest ensemble runs
+        run: python scripts/build_ensembles.py --workers 4
+      - name: Assemble site without source-control or test files
+        run: |
+          mkdir _site
+          git archive HEAD | tar -x -C _site
+          rm -rf _site/.github _site/tests _site/scripts
+          cp -a ensemble-data _site/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish complete site atomically
+        id: deployment
+        uses: actions/deploy-pages@v4

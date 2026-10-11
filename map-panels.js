@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261011-ensemble-maps';
+import {hasFieldTime} from './map-sources.js?v=20261011-ensemble-statistics';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:true,isobars:true,grid:false}]));

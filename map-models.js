@@ -7,5 +7,7 @@ export const MAP_MODELS = [...MODELS.flatMap(model => model.id !== UKV ? [model]
 ]),
  {id:'ncep_gefs025',name:'GEFS 0.25°',ensemble:true},
  {id:'ncep_gefs05',name:'GEFS 0.5° — extended range',ensemble:true},
- {id:'ecmwf_ifs025_ensemble',name:'ECMWF ENS 0.25°',ensemble:true}
+ {id:'ecmwf_ifs025_ensemble',name:'ECMWF ENS 0.25° · precipitation probability',ensemble:true},
+ {id:'snowline_gefs_ensemble',name:'GEFS 0.5° · mean & spread',ensemble:true},
+ {id:'snowline_ecmwf_ensemble',name:'ECMWF ENS 0.25° · mean & spread',ensemble:true}
 ];

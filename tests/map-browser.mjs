@@ -40,6 +40,8 @@ try{
   const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
   const ensembleFixture=(hours,step)=>({...fixture(0,hours),variables:['precipitation_probability'],valid_times:fixture(0,hours).valid_times.filter((_,i)=>i%step===0)});
   const ensembleFixtures={ncep_gefs025:ensembleFixture(24,3),ncep_gefs05:ensembleFixture(48,6),ecmwf_ifs025_ensemble:ensembleFixture(30,3)};
+  const statisticVariables=['geopotential_height_500hPa','temperature_850hPa','pressure_msl'].flatMap(f=>[f+'_mean',f+'_spread']);
+  await page.route('**/ensemble-data/*/latest.json',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({...ensembleFixture(24,3),variables:statisticVariables})}));
   await page.route('https://openmeteo.s3.amazonaws.com/**',route=>{
    const url=route.request().url();metadata.push(url);
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
@@ -168,6 +170,25 @@ try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('UKV — latest main run'));
    assert.equal(await page.locator('#map-variable').inputValue(),'temperature_2m');
    assert.equal(await page.locator('#map-mslp-a').isDisabled(),false,'Returning to UKV restores pressure availability');
+   await page.locator('#map-model').selectOption('snowline_gefs_ensemble');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('500 hPa height'));
+   assert.equal(await page.locator('#map-variable option').count(),6);
+   assert.equal(await page.locator('#map-mslp-a').isDisabled(),false);
+   await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.locator('#map-model-b').selectOption('snowline_ecmwf_ensemble');
+   await page.waitForFunction(()=>document.getElementById('map-variable-b').options.length===6&&!document.getElementById('map-variable-b').disabled);
+   for(const field of statisticVariables){
+    await page.locator('#map-variable-b').selectOption(field);
+    await page.waitForFunction(field=>document.getElementById('panel-label-b').textContent.includes(field.endsWith('_spread')?'spread (SD)':'ensemble mean')&&document.getElementById('map-variable-b').value===field,field);
+    assert.equal(await page.locator('#legend-title-b').textContent(),field.startsWith('temperature')?'\u00b0C':field.startsWith('pressure')?'hPa':'m');
+   }
+   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
+   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'18');
+   await page.locator('#map-time').evaluate(el=>{el.value=el.max;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await bothAt('Sun 11 Oct, 00:00 UTC');
+   await page.locator('#play-map').click();
+   await bothAt('Sat 10 Oct, 00:00 UTC');
+   await page.locator('#play-map').click();
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));
   }catch(error){

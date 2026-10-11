@@ -1,19 +1,21 @@
+import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
+import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-full-preload';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-ensemble-statistics';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-full-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-continuous-loop';
-import {overlayGroups} from './map-overlay-specs.js?v=20261010-buffered-playback';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-ensemble-maps';
+import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-ensemble-statistics';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-ensemble-maps';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-ensemble-statistics';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv-families';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-ensemble-maps';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-ensemble-statistics';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_MODELS as MODELS} from './map-models.js?v=20261011-ensemble-maps';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261011-ensemble-statistics';
 import {ukvRunFamily} from './ukv-run-selection.js?v=20261010-ukv-families';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
@@ -39,9 +41,17 @@ const fields=[
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
-const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+const readMapValue=createValueReader(OM,settings);
 OM.updateCurrentBounds(UK);
-const imageryCache=new ForecastTileCache((params,controller)=>OM.omProtocol(params,controller,settings),{onLimit:()=>updatePreloadStatus()});
+const imageryCache=new ForecastTileCache(async(params,controller)=>{
+ const result=await OM.omProtocol(params,controller,settings);
+ if(params.type==='json'&&params.url.includes('/ensemble-data/')){
+  const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
+  result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html">Open-Meteo</a>';
+ }
+ return result;
+},{onLimit:()=>updatePreloadStatus()});
 imageryCache.setContext(JSON.stringify(UK));
 maplibregl.addProtocol('om',(params,controller)=>imageryCache.protocol(params,controller));
 window.addEventListener('pagehide',()=>imageryCache.release());
@@ -113,7 +123,7 @@ function makeMap(key){
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
-locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await OM.getValueFromLatLong(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${displayValue(result.value,field).toFixed(1)} ${displayUnit(field)} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
+locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await readMapValue(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${displayValue(result.value,field).toFixed(1)} ${displayUnit(field)} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
  return panel;
 }
 const a=makeMap('a');
@@ -134,6 +144,7 @@ function pressureNote(){
  for(const {key,model}of panelSelections(state)){
   const missing=!hasFieldTime(state.metas[model],'pressure_msl',state.times[state.index]),warnings=state.metas[model]?.sourceWarnings??[];
   $('mslp-note-'+key).textContent=warnings.length?warnings.join(' '):missing?'MSLP is unavailable at this time.':'MSLP isobars every 4 hPa.';
+  if(model.startsWith('snowline_')&&!missing&&!warnings.length)$('mslp-note-'+key).textContent='Ensemble-mean MSLP isobars every 4 hPa.';
   if(model==='gfs_global'&&!missing)$('mslp-note-'+key).textContent+=' Uses the GFS 0.25° grid from the same run.';
   $('map-mslp-'+key).disabled=missing;
  }
@@ -167,13 +178,14 @@ async function drawGridValues(panel){
  const {key,map}=panel,version=panel.gridVersion=(panel.gridVersion??0)+1;
  const {model,field}=panelSelection(state,key),time=panel.displayedTime;
  if(field!==panel.displayedField||model!==panel.displayedModel)return;
- const source=fieldSource(state.metas[model],field,time),domain=OM.domainOptions.find(item=>item.value===source?.domain);
+ const source=fieldSource(state.metas[model],field,time),domain=settings.domainOptions.find(item=>item.value===source?.domain);
  const note=$('grid-note-'+key);note.hidden=false;
  if(!domain){note.textContent='Grid values unavailable for this model.';return;}
  try{
   const grid=OM.GridFactory.create(domain.grid),canvas=map.getCanvas(),f=fields.find(item=>item.key===field);
   const points=visibleGridPoints(grid,canvas.clientWidth,canvas.clientHeight,p=>map.unproject(p),p=>map.project(p));
   const valueURL=panel.url.replace(/interpolation=[^&]+/,'interpolation=nearest');
+  if(points.length)await readMapValue(points[0].lat,points[0].lon,valueURL,map.getZoom());
   const features=(await Promise.all(points.map(async point=>{
    const result=await OM.getValueFromLatLong(point.lat,point.lon,valueURL,map.getZoom());
    const label=gridValueLabel(result?.value,f);if(label===null)return null;
@@ -352,13 +364,13 @@ function setLegend(){
    if(field==='precipitation_probability'&&hours)interval='≥'+Number((hours*.1).toFixed(2))+' mm / '+interval;
    note+=' '+(hours?(field==='precipitation_probability'?'Probability threshold: ':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
   }
-  el('legend-interval').textContent=interval;
+  el('legend-interval').textContent=f.ensembleStatistic==='spread'?'Standard deviation · higher = more disagreement':f.ensembleStatistic==='mean'?'Ensemble mean':interval;
   el('variable-note').textContent=note;
   el('field-availability').textContent=modelName(model)+' · '+f.name;
   const meta=state.metas[model],source=fieldSource(meta,field);
   if(meta&&source)el('run').textContent='Initialized '+runLabel(meta)+' · layer data ends '+stamp(source.valid_times.at(-1))+' UTC';
   if(meta&&source&&ukvRunFamily(model))el('run').textContent+=' · '+ukvCoverageText(meta,ukvRunFamily(model));
-  const step=field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds';
+  const step=f.contourLabel??(field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds');
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
  for(const {key,field}of panelSelections(state))$('map-contours-'+key).disabled=!!fields.find(f=>f.key===field)?.categorical;
