@@ -71,6 +71,7 @@ $('map-background').value=background;
 let terrain=true;try{terrain=localStorage.getItem('snowline-terrain')!=='false';}catch{}
 $('map-terrain').checked=terrain;
 const panels={};
+let briefingActive=false,briefingView,briefingScroll=0;
 let locationPopup=null,locationMarker=null;
 function dismissLocation(){
  const popup=locationPopup;locationPopup=null;
@@ -80,8 +81,9 @@ function dismissLocation(){
 document.addEventListener('click',event=>{if(!event.target.closest('.maplibregl-map'))dismissLocation();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissLocation();});
 let viewportRefreshTimer;
-function queueViewportRefresh(){clearTimeout(viewportRefreshTimer);viewportRefreshTimer=setTimeout(()=>{if(state.times.length&&!playing)setTime();},120);}
+function queueViewportRefresh(){clearTimeout(viewportRefreshTimer);viewportRefreshTimer=setTimeout(()=>{if(!briefingActive&&state.times.length&&!playing)setTime();},120);}
 function viewportBounds(){
+ if(briefingActive)return;
  const visible=Object.entries(panels).filter(([key])=>key==='a'||state.compare).map(([,p])=>p.map.getBounds());if(!visible.length)return;
  const bounds=[Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))];
  OM.updateCurrentBounds(bounds);
@@ -121,7 +123,7 @@ function makeMap(key){
  map.touchZoomRotate.disableRotation();
  map.once('load',()=>{const credits=map.getContainer().querySelector('.maplibregl-compact-show .maplibregl-ctrl-attrib-button');credits?.click();});
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');map.fitBounds([[UK[0],UK[1]],[UK[2],UK[3]]],{padding:25,duration:0});
- const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',()=>{pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
+ const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{if(briefingActive)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',()=>{if(briefingActive)return;pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{if(briefingActive)return;const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
  map.on('style.load',()=>{panel.styleOrdered=false;applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
@@ -174,11 +176,11 @@ function clearGridValues(panel){
  if(!note.hidden)note.textContent=playing?'Grid values resume when playback is paused.':'Grid values loading…';
 }
 function scheduleGridValues(panel){
- if(!panel||playing||!state.overlays[panel.key].grid||panel.restyling)return;
+ if(briefingActive||!panel||playing||!state.overlays[panel.key].grid||panel.restyling)return;
  clearTimeout(panel.gridTimer);panel.gridTimer=setTimeout(()=>drawGridValues(panel),150);
 }
 async function drawGridValues(panel){
- if(playing||!state.overlays[panel.key].grid||!panel.loaded||panel.restyling||panel.displayedTime!==state.times[state.index])return;
+ if(briefingActive||playing||!state.overlays[panel.key].grid||!panel.loaded||panel.restyling||panel.displayedTime!==state.times[state.index])return;
  const {key,map}=panel,version=panel.gridVersion=(panel.gridVersion??0)+1;
  const {model,field}=panelSelection(state,key),time=panel.displayedTime;
  if(field!==panel.displayedField||model!==panel.displayedModel)return;
@@ -283,6 +285,7 @@ async function prepareSelection(index,valid=()=>true){
 }
 function setTime(){return timePending=loadTime();}
 async function loadTime(){
+ if(briefingActive)return false;
  failedSelection=null;
  if(!state.times.length)return false;
  const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;
@@ -490,11 +493,30 @@ $('play-map').addEventListener('click',()=>{
  playback.start();
 });
 window.addEventListener('pagehide',pauseAnimation);document.addEventListener('visibilitychange',()=>{
+ if(briefingActive)return;
  if(document.hidden){pauseAnimation();for(const panel of Object.values(panels))panel.frameCache?.pause();}
  else{
   for(const panel of Object.values(panels))panel.frameCache?.resume();
   if(state.times.length)setTime();
  }
 });
+async function openBriefing(){
+ if(briefingActive)return;
+ const bounds=a.map.getBounds(),selection={model:state.model,time:state.times[state.index],interval:state.interval,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
+ briefingScroll=window.scrollY;briefingActive=true;pauseAnimation();++timeGeneration;clearTimeout(viewportRefreshTimer);
+ if($('expanded-map').open)$('expanded-map').close();
+ for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
+ try{
+  if(!briefingView){
+   const {createBriefing}=await import('./map-briefing.js?v=20261011-briefing');
+   briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,maplibre:maplibregl,OM,settings,createURL:concreteURL,
+    loadModel:async model=>{const meta=await loadSpatialModel(model,metadataLoader(false));extendCatalogue(fields,[meta],OM,settings);return meta;},
+    onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}
+   });
+  }
+  document.body.classList.add('briefing-open');briefingView.open(selection);window.scrollTo(0,0);
+ }catch(error){briefingActive=false;document.body.classList.remove('briefing-open');status('Briefing could not open. '+error.message);setTime();}
+}
+$('open-briefing').addEventListener('click',openBriefing);$('mobile-briefing').addEventListener('click',openBriefing);
 await configure();
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'select_event_location',title:'Prepare an event analysis at a location',description:'Select latitude and longitude for the visible event analysis form. Does not calculate a hazard or fetch point forecasts; use the visible Calculate event action afterwards.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');state.location={latitude:input.latitude,longitude:input.longitude};selectEventPoint(state.location,state.times[state.index]);$('event-analysis').scrollIntoView({block:'start'});return {location:state.location,eventStartUTC:$('event-start').value+'Z',eventEndUTC:$('event-end').value+'Z',calculated:false};}},{signal:lifecycle.signal});}catch(error){console.info('Optional map tool unavailable:',error.message);}}

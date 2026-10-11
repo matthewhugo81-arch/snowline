@@ -30,7 +30,13 @@ const fakeOM=`
   }
   // Match the real OM worker's return type. Byte-only fixtures missed corrupt
   // bitmap persistence and the grossly underestimated in-memory cache size.
-  return {data:params.type==='image'?await createImageBitmap(new Blob([png],{type:'image/png'})):new Uint8Array(0).buffer};
+  if(params.type==='image'){
+   const hour=Number(decodeURIComponent(params.url).match(/T(\\d{2})00\\.om/)?.[1]??0);
+   const canvas=new OffscreenCanvas(32,32),context=canvas.getContext('2d');
+   context.fillStyle='rgb('+hour*7+',100,180)';context.fillRect(0,0,32,32);
+   return {data:canvas.transferToImageBitmap()};
+  }
+  return {data:new Uint8Array(0).buffer};
  }
 `;
 const geo={type:'FeatureCollection',features:[]};
@@ -58,7 +64,7 @@ try{
   await page.route('https://openmeteo.s3.amazonaws.com/**',route=>{
    const url=route.request().url();metadata.push(url);
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
-   const gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height']}:null;
+   const gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','geopotential_height_500hPa']}:null;
    const meta=gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
@@ -318,6 +324,71 @@ try{
     await bothAt(time);assert.equal(await page.locator('.map-error:visible').count(),0);
    }
    assert.equal(await page.evaluate(()=>window.fixtureRequests.length),cachedGFSRequests,'GFS bitmap images and overlays restore from disk for either area');
+   // Briefing uses six static, complete composite images and one renderer.
+   // Returning must retain the exact interactive comparison selection.
+   const originalSelection=await page.evaluate(()=>['map-model','map-variable','map-model-b','map-variable-b','map-time'].map(id=>document.getElementById(id).value));
+   await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
+   await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6,{},{timeout:60000});
+   assert.equal(await page.locator('#briefing-model').inputValue(),'gfs_global');
+   assert.equal(await page.locator('#briefing-grid canvas').count(),0);
+   assert.equal(await page.locator('.briefing-renderer canvas').count(),1);
+   const pixels=await page.locator('#briefing-grid img').first().evaluate(async image=>{
+    await image.decode();const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+    const context=canvas.getContext('2d');context.drawImage(image,0,0,1,1);return {width:image.naturalWidth,pixel:[...context.getImageData(0,0,1,1).data]};
+   });
+   assert.ok(pixels.width>=960);assert.equal(pixels.pixel[3],255);assert.ok(pixels.pixel.slice(0,3).some(value=>value<240),'Snapshot includes rendered weather, not a blank canvas');
+   await page.locator('#briefing-interval').selectOption('3');
+   await page.locator('#briefing-time').selectOption('0');
+   await page.waitForFunction(()=>document.getElementById('briefing-status').textContent==='6/6 charts ready · 6/6 next charts prepared',{},{timeout:60000});
+   const firstBriefingTimes=await page.locator('.briefing-card').evaluateAll(cards=>cards.map(card=>card.dataset.time));
+   assert.deepEqual(firstBriefingTimes,[3,6,9,12,15,18].map(hour=>new Date(Date.UTC(2026,9,10,hour)).toISOString()));
+   const chartPixels=await page.locator('.briefing-card').evaluateAll(async cards=>Promise.all(cards.map(async card=>{
+    const image=card.querySelector('img');await image.decode();const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+    const context=canvas.getContext('2d');context.drawImage(image,0,0,1,1);return {hour:new Date(card.dataset.time).getUTCHours(),red:context.getImageData(0,0,1,1).data[0]};
+   })));
+   for(const {hour,red}of chartPixels)assert.ok(Math.abs(red-hour*7)<3,'Each snapshot contains the pixels for its labelled valid time');
+   assert.match(await page.locator('.briefing-card>p').first().textContent(),/1 h precipitation/);
+   await page.locator('.briefing-chart').first().click();
+   assert.equal(await page.locator('#briefing-enlarged').evaluate(dialog=>dialog.open),true);
+   await page.locator('#briefing-enlarged-close').click();
+   await page.locator('#briefing-next').click();
+   assert.equal(await page.locator('.briefing-card[data-ready="true"]').count(),6,'Next prepared page is displayed immediately from image cache');
+   await page.locator('#briefing-previous').click();
+   assert.deepEqual(await page.locator('.briefing-card').evaluateAll(cards=>cards.map(card=>card.dataset.time)),firstBriefingTimes);
+   await page.evaluate(()=>window.fixtureFault={match:'variable=cloud_cover',remaining:100});
+   await page.locator('#briefing-area').selectOption('uk');
+   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-failed="true"]').length>0,{},{timeout:60000});
+   await page.evaluate(()=>window.fixtureFault=null);
+   await page.locator('#briefing-retry').click();
+   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+   assert.equal(await page.locator('.briefing-card[data-failed="true"]').count(),0,'Retry recovers missing charts without stale error labels');
+   await page.locator('#briefing-preset').selectOption('airmass');
+   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+   assert.match(await page.locator('#briefing-note').textContent(),/not theta-w/);
+   await page.locator('#briefing-preset').selectOption('upper');
+   await page.locator('#briefing-count').selectOption('9');
+   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
+   await page.locator('#briefing-area').selectOption('atlantic');
+   await page.locator('#briefing-model').selectOption(main);
+   await page.waitForFunction(()=>document.getElementById('briefing-run').textContent.includes('UKV')&&document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
+   assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
+   assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
+   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather'],'Unsupported diagnostics are not advertised');
+   await page.locator('#briefing-close').click();
+   await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.deepEqual(await page.evaluate(()=>['map-model','map-variable','map-model-b','map-variable-b','map-time'].map(id=>document.getElementById(id).value)),originalSelection);
+   assert.equal(await page.locator('.briefing-renderer').count(),0,'Briefing renderer is released on return');
+   if(viewport.width<=650){
+    await page.locator('#mobile-expand-map').click();
+    assert.equal(await page.locator('#expanded-map').evaluate(dialog=>dialog.open),true);
+   }
+   // Close during preparation, then reopen: old jobs must not commit or hang.
+   await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
+   assert.equal(await page.locator('#expanded-map').evaluate(dialog=>dialog.open),false,'Briefing leaves the expanded-map dialog');
+   await page.locator('#briefing-close').click();
+   await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
+   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length>0,{},{timeout:60000});
+   await page.locator('#briefing-close').click();
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));
   }catch(error){
