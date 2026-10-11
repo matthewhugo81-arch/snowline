@@ -3,6 +3,7 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
 import {hasFieldTime} from './map-sources.js?v=20261011-vorticity-smooth';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-smooth';
+import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261011-briefing-overlays';
 
 const aborted=()=>new DOMException('Aborted','AbortError');
 export function briefingSettings(settings){
@@ -59,7 +60,7 @@ export class BriefingRenderer{
   this.ready.catch(()=>{});
  }
  cancel(){this.frames?.clear();}
- async render({model,meta,preset,bounds,size=[960,660],time,signal}){
+ async render({model,meta,preset,bounds,size=[960,660],time,signal,overlays={}}){
   await this.ready;if(signal.aborted)throw aborted();
   // A newly selected model may add a pressure-level scale to the catalogue.
   this.settings.colorScales=briefingSettings(this.baseSettings).colorScales;
@@ -81,7 +82,7 @@ export class BriefingRenderer{
   const decorate=()=>{
    const groups=[];
    if(preset.id==='weather')groups.push({id:'rain',source:{type:'raster',url:url('precipitation'),tileSize:512,maxzoom:10},layers:[{id:'rain-image',type:'raster',paint:{'raster-opacity':1,'raster-resampling':'nearest','raster-fade-duration':0}}]});
-   const pressure=overlayGroups({field,url:main,pressureURL,contours:false,isobars:true});
+   const pressure=overlayGroups({field,url:main,pressureURL,contours:!!overlays.contours,isobars:true});
    for(const group of pressure)for(const layer of group.layers){
     if(layer.type==='line')layer.paint={...layer.paint,'line-width':1.3};
     if(layer.type==='symbol'){layer.layout={...layer.layout,'text-size':18,'text-padding':30};layer.paint={...layer.paint,'text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1};}
@@ -99,7 +100,14 @@ export class BriefingRenderer{
    // All raster fills belong below coast/place labels; pressure lines above.
    if(preset.id==='weather')this.map.moveLayer(frame.id+'-rain-image',this.rasterBefore);
    await rendered(this.map,signal);
-   const blob=await new Promise(resolve=>this.map.getCanvas().toBlob(resolve,'image/png'));
+   let canvas=this.map.getCanvas();
+   if(overlays.grid){
+    const labels=await briefingValueLabels({OM:this.OM,settings:this.settings,meta,field,time,bounds:clip,width:size[0],height:size[1],unproject:point=>this.map.unproject(point),project:point=>this.map.project(point),signal});
+    if(signal.aborted)throw aborted();
+    const output=document.createElement('canvas');output.width=canvas.width;output.height=canvas.height;
+    output.getContext('2d').drawImage(canvas,0,0);drawBriefingValues(output,labels,...size);canvas=output;
+   }
+   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
    if(signal.aborted)throw aborted();
    if(!blob)throw Error('Chart image could not be prepared.');
    return URL.createObjectURL(blob);

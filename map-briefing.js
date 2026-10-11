@@ -1,5 +1,5 @@
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-vorticity-smooth';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-vorticity-smooth';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-briefing-overlays';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-briefing-overlays';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-vorticity-smooth';
@@ -17,6 +17,7 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
  <label>Starting time<select id="briefing-time"></select></label>
  <label>Forecast interval<select id="briefing-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
  <label>Layout<select id="briefing-count"><option value="6">6 panels</option><option value="9">9 panels</option></select></label></div>
+ <div class="briefing-overlays" role="group" aria-label="Briefing chart overlays"><label class="check-row"><input id="briefing-contours" type="checkbox" autocomplete="off"> Contours</label><label class="check-row"><input id="briefing-grid-values" type="checkbox" autocomplete="off"> Grid values</label><span id="briefing-overlay-note" class="small-note"></span></div>
  <p id="briefing-note" class="small-note"></p><div id="briefing-legend" class="briefing-legend"></div>
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
@@ -33,8 +34,10 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
  const count=()=>Number($('count').value);
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
+ const overlays=()=>({contours:$('contours').checked,grid:$('grid-values').checked});
+ function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('overlay-note').textContent=field?'Contours and grid values: '+field.name+' · '+field.unit:'';}
  function cancel(){controller?.abort();renderer?.cancel();generation++;}
- function controlsDisabled(disabled){for(const id of ['preset','time','interval','previous','next'])$(id).disabled=disabled;}
+ function controlsDisabled(disabled){for(const id of ['preset','time','interval','previous','next','contours','grid-values'])$(id).disabled=disabled;}
  function navigation(){
   $('previous').disabled=!times.length||start===0;
   $('next').disabled=!times.length||start+count()>=times.length;
@@ -71,7 +74,7 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   $('note').textContent=preset.note+(regional?' Short-term models retain every available hour.':' Only the selected forecast intervals are prepared.');
   $('time').replaceChildren(...times.map((time,index)=>option(String(index),stamp(time))));
   start=times.reduce((best,time,index)=>Math.abs(Date.parse(time)-requestedTime)<Math.abs(Date.parse(times[best])-requestedTime)?index:best,0);
-  $('time').disabled=!times.length;legend();navigation();
+  $('time').disabled=!times.length;legend();navigation();overlayNote();
  }
  function enlarge(src,time){
   const title=model.name+' · '+preset.name+' · '+stamp(time);
@@ -85,10 +88,10 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   if(!active||!meta||!preset)return;cancel();
   if(!times.length){$('grid').replaceChildren();$('status').textContent='No common forecast times for this chart.';navigation();return;}
   const token=generation;controller=new AbortController();const signal=controller.signal;
-  const selection={model:model.id,meta,preset,bounds:[...bounds()],size:[...chartSize()]};
+  const selection={model:model.id,meta,preset,bounds:[...bounds()],size:[...chartSize()],overlays:overlays()};
   $('grid').style.setProperty('--briefing-aspect',selection.size[0]+'/'+selection.size[1]);
   const visible=briefingPage(times,start,count()),upcoming=briefingPage(times,start+count(),count());
-  const key=time=>briefingKey(selection.model,selection.meta,selection.preset,selection.bounds,time,selection.size);
+  const key=time=>briefingKey(selection.model,selection.meta,selection.preset,selection.bounds,time,selection.size,selection.overlays);
   const cards=new Map();let loaded=0,failed=0,prepared=0;
   $('grid').replaceChildren();$('retry').hidden=true;
   const progress=()=>{if(token===generation)$('status').textContent=loaded+'/'+visible.length+' charts ready'+(failed?' · '+failed+' unavailable':loaded===visible.length&&upcoming.length?' · '+prepared+'/'+upcoming.length+' next charts prepared':'');};
@@ -167,7 +170,7 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   if(id==='interval')interval=$('interval').value;
   timeline();renderPage();
  });
- for(const id of ['area','count'])$(id).addEventListener('change',()=>renderPage());
+ for(const id of ['area','count','contours','grid-values'])$(id).addEventListener('change',()=>renderPage());
  $('time').addEventListener('change',()=>{start=Number($('time').value);requestedTime=Date.parse(times[start]);renderPage();});
  $('previous').addEventListener('click',()=>{start=Math.max(0,start-count());renderPage();});
  $('next').addEventListener('click',()=>{start=Math.min(times.length-1,start+count());renderPage();});

@@ -11,8 +11,11 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.
 const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
 const fakeOM=`
  export const defaultOmProtocolSettings={colorScales:{}};
- export const domainOptions=[];
- export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{}}});
+ export const domainOptions=['ncep_gfs013','ncep_gfs025','ukmo_uk_deterministic_2km'].map(value=>({value,grid:{type:'regular',nx:360,ny:181,latMin:-90,lonMin:-180,dx:1,dy:1}}));
+ export const GridFactory={create:config=>({...config,originLat:config.latMin,originLon:config.lonMin,longitudeWrap:true,getInterpolatedValue:values=>values[0]})};
+ export const getRanges=()=>[{start:0,end:181},{start:0,end:360}];
+ window.fixtureGridReads=[];
+ export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{},readVariable:async(url,variable,ranges,signal)=>{signal?.throwIfAborted();window.fixtureGridReads.push({url,variable});return {values:new Float32Array(360*181).fill(10)};}}});
  export const updateCurrentBounds=()=>{};
  export const getValueFromLatLong=async()=>({value:10});
  export const getColorScale=()=>({unit:'m/s',breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
@@ -372,6 +375,24 @@ try{
    const decodedBox=await page.locator('#briefing-enlarged-image').boundingBox();
    assert.ok(Math.abs(decodedBox.width-decodedBox.height)<1,'Enlarged UK chart stays square after decoding');
    await page.locator('#briefing-enlarged-close').click();
+   assert.equal(await page.locator('#briefing-contours').isChecked(),false);
+   assert.equal(await page.locator('#briefing-grid-values').isChecked(),false);
+   const plainImage=await page.locator('#briefing-grid img').first().getAttribute('src');
+   await page.locator('#briefing-contours').check();
+   await page.locator('#briefing-grid-values').check();
+   await page.waitForFunction(()=>document.getElementById('briefing-status').textContent==='6/6 charts ready · 6/6 next charts prepared',{},{timeout:60000});
+   assert.notEqual(await page.locator('#briefing-grid img').first().getAttribute('src'),plainImage,'Enabling overlays renders a distinct image');
+   assert.match(await page.locator('#briefing-overlay-note').textContent(),/cloud cover.*%/i);
+   const gridReads=await page.evaluate(()=>window.fixtureGridReads);
+   assert.ok(gridReads.length>=12);assert.ok(gridReads.every(r=>r.variable==='cloud_cover'));
+   assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=cloud_cover'))),'Cloud contours need the correct vector field');
+   await page.locator('.briefing-chart').first().click();
+   assert.equal(await page.locator('#briefing-enlarged-image').getAttribute('src'),await page.locator('#briefing-grid img').first().getAttribute('src'),'Enlargement retains both overlays');
+   await page.locator('#briefing-enlarged-close').click();
+   await page.locator('#briefing-contours').uncheck();
+   await page.locator('#briefing-grid-values').uncheck();
+   await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6);
+   assert.equal(await page.locator('#briefing-grid img').first().getAttribute('src'),plainImage,'Turning overlays off restores the correct cached plain charts');
    await page.locator('#briefing-next').click();
    assert.equal(await page.locator('.briefing-card[data-ready="true"]').count(),6,'Next prepared page is displayed immediately from image cache');
    await page.locator('#briefing-previous').click();

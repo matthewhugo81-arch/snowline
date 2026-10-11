@@ -25,7 +25,7 @@ export function briefingCaption(meta,preset,time){
  const period=preset.id==='weather'?fieldIntervalHours(meta,'precipitation',time):null;
  return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h precipitation ending at this time':'');
 }
-export function briefingKey(model,meta,preset,area,time,size=[960,660]){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size]);}
+export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid]);}
 
 // Bound retained chart images; a visit to another model must not accumulate
 // hundreds of decoded images or unreleased blob URLs.

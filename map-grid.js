@@ -28,8 +28,8 @@ export function nearestGridPoint(grid,latitude,lon){
  return {id:y*grid.nx+x,lat,lon:longitude(lon)};
 }
 
-export function visibleGridPoints(grid,width,height,unproject,project){
- const spacing=Math.max(42,Math.sqrt(width*height/540)),seen=new Set(),points=[];
+export function visibleGridPoints(grid,width,height,unproject,project,{minSpacing=42,maxPoints=540}={}){
+ const spacing=Math.max(minSpacing,Math.sqrt(width*height/maxPoints)),seen=new Set(),points=[];
  for(let y=48;y<height-24;y+=spacing)for(let x=28;x<width-20;x+=spacing){
   const position=unproject([x,y]),point=nearestGridPoint(grid,position.lat,position.lng);
   if(!point||seen.has(point.id))continue;
