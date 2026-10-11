@@ -8,6 +8,10 @@ Local fixes to the bundled Open-Meteo weather map renderer (11 October 2026):
 - Legitimately empty image tiles (outside a model domain) are transparent PNG
   bytes, rather than ImageBitmap objects. This preserves them through the
   prepared tile cache's disk round trip and worker transfer.
+- `arrow_profile=jet` selects the readable `jetArrows` vector generator in
+  `worker.js`. It uses 18 lattice intervals, scales shaft and head together
+  from 2 to 100 m/s, and omits calm/missing vectors. Other arrow/barb styles
+  retain their upstream geometry. The worker URL is versioned with this change.
 
 Preserve these changes when updating the bundled renderer. The upstream licence
 remains in `weather-map-layer-LICENSE.txt`. Worker dispatch regression coverage

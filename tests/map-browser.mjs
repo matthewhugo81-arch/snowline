@@ -437,6 +437,13 @@ try{
     assert.ok(await page.evaluate(variable=>window.fixtureRequests.some(request=>request.url.includes('variable='+variable+'_derived')),variable),'Briefing requests calculated '+variable+' grids');
     assert.equal(await page.locator('.briefing-card[data-failed="true"]').count(),0);
    }
+   await page.locator('#briefing-preset').selectOption('jet');
+   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+   assert.match(await page.locator('#briefing-legend').textContent(),/mph/);
+   assert.match(await page.locator('#briefing-legend').textContent(),/180\+/);
+   assert.match(await page.locator('#briefing-overlay-note').textContent(),/mph/);
+   assert.equal(await page.locator('#briefing-legend .briefing-band-labels span').count(),13);
+   assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=wind_u_component_300hPa')&&decodeURIComponent(r.url).includes('arrow_profile=jet'))),'Briefing uses the wind component pair and jet arrow profile');
    await page.locator('#briefing-preset').selectOption('upper');
    await page.locator('#briefing-count').selectOption('9');
    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});

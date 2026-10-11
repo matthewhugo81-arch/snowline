@@ -30,6 +30,17 @@ test('briefing sequences use common native times, honour cadence and retain regi
  split.sources[0]={...meta,variables:['pressure_msl']};
  assert.deepEqual(briefingTimes(split,BRIEFING_PRESETS[1],{}),[time(3),time(9)]);
 });
+
+test('jet briefing requires paired winds and MSLP from the selected run',()=>{
+ const jet=BRIEFING_PRESETS.find(p=>p.id==='jet');
+ for(const pair of [['wind_u_component_300hPa','wind_v_component_300hPa'],['wind_speed_300hPa','wind_direction_300hPa']]){
+  const complete={...meta,variables:['pressure_msl',...pair]};
+  assert.ok(briefingPresets(complete).includes(jet));
+  assert.ok(!briefingPresets({...complete,variables:['pressure_msl',pair[0]]}).includes(jet));
+  assert.ok(!briefingPresets({...complete,variables:pair}).includes(jet));
+  assert.equal(briefingTimes(complete,jet,{regional:true}).length,49);
+ }
+});
 test('rain captions retain the source accumulation period rather than the display interval',()=>{
  assert.equal(briefingCaption(meta,BRIEFING_PRESETS[0],time(6)),'T+006 · 1 h precipitation ending at this time');
  assert.equal(briefingCaption({...meta,valid_times:[time(0),time(3),time(6)]},BRIEFING_PRESETS[0],time(6)),'T+006 · 3 h precipitation ending at this time');

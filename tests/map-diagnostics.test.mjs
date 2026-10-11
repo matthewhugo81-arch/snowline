@@ -86,7 +86,7 @@ test('only complete supported sources expose diagnostics and briefing presets; G
  assert.equal(fieldSource(combined,THETA_W).domain,'ncep_gfs025');assert.equal(hasFieldTime(combined,THETA_W,combined.valid_times[1]),false);
  const fields=[],settings={colorScales:{}};extendCatalogue(fields,[combined],OM,settings);
  for(const key of DIAGNOSTIC_KEYS){assert.ok(availableFields(fields,[combined]).some(f=>f.key===key));assert.ok(settings.colorScales[key+'_derived']);}
- assert.deepEqual(briefingPresets(base).map(p=>p.id),['airmass','theta-w','vorticity-300','vorticity-400']);
+ assert.deepEqual(briefingPresets(base).map(p=>p.id),['airmass','jet','theta-w','vorticity-300','vorticity-400']);
  assert.ok(!briefingPresets(missing).some(p=>p.id==='vorticity-400'));
 });
 test('bundled reader reads raw wind components with halos, prefetches both inputs and honours cancellation',async()=>{

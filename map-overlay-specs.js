@@ -6,8 +6,9 @@ export function overlayGroups({field,url,pressureURL,contours,isobars}){
  const groups=[],layers=[];
  if(!field.categorical){
   if(/^wind_speed_|^ocean_current_speed$/.test(field.key)){
-   for(const [id,color,width]of [['wind-halo','#ffffff',2.6],['wind-arrows','#111111',1]]){
-    layers.push({id,type:'line','source-layer':'wind-arrows',paint:{'line-color':color,'line-width':width}});
+   const jet=field.key==='wind_speed_300hPa';
+   for(const [id,color,width]of [['wind-halo','#ffffff',jet?1.4:2.6],['wind-arrows','#111111',jet?.65:1]]){
+    layers.push({id,type:'line','source-layer':'wind-arrows',paint:{'line-color':color,'line-width':width,'line-opacity':jet?.75:1}});
    }
   }
   if(contours||((field.key==='pressure_msl'||field.isPressure)&&isobars)){

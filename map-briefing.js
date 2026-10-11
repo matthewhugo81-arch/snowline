@@ -1,8 +1,9 @@
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-vorticity-purple';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-vorticity-purple';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-jet-arrows';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-jet-arrows';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-vorticity-purple';
+import {displayStops,displayUnit} from './map-wind-units.js';
 
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
@@ -35,7 +36,7 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
  const overlays=()=>({contours:$('contours').checked,grid:$('grid-values').checked});
- function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('overlay-note').textContent=field?'Contours and grid values: '+field.name+' · '+field.unit:'';}
+ function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('overlay-note').textContent=field?'Contours and grid values: '+field.name+' · '+displayUnit(field):'';}
  function cancel(){controller?.abort();renderer?.cancel();generation++;}
  function controlsDisabled(disabled){for(const id of ['preset','time','interval','previous','next','contours','grid-values'])$(id).disabled=disabled;}
  function navigation(){
@@ -51,11 +52,16 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   if(preset.id==='weather'){
    title.textContent='Cloud cover';gradient.style.background='linear-gradient(to right,#414141,#ffffff)';labels.innerHTML='<span>Clear · 0%</span><span>Overcast · 100%</span>';
   }else{
-   const min=field.temperatureBands?field.stops[1]:field.stops[0],max=field.stops.at(-1);
-   title.textContent=field.name+' · '+field.unit;
-   const stops=field.temperatureBands?field.colors.flatMap((color,index)=>[color+' '+100*index/field.colors.length+'%',color+' '+100*(index+1)/field.colors.length+'%']):field.colors.map((color,index)=>color+' '+100*(field.stops[index]-min)/(max-min)+'%');
+   const scale=displayStops(field),unit=displayUnit(field),min=field.temperatureBands?scale[1]:scale[0],max=scale.at(-1);
+   title.textContent=field.name+' · '+unit;
+   const stops=field.temperatureBands||field.bands?field.colors.flatMap((color,index)=>[color+' '+100*index/field.colors.length+'%',color+' '+100*(index+1)/field.colors.length+'%']):field.colors.map((color,index)=>color+' '+100*(scale[index]-min)/(max-min)+'%');
    gradient.style.background='linear-gradient(to right,'+stops.join(',')+')';
-   const low=document.createElement('span'),high=document.createElement('span');low.textContent=min+' '+field.unit;high.textContent=max+' '+field.unit;labels.append(low,high);
+   if(field.bands){
+    labels.classList.add('briefing-band-labels');
+    for(const [index,value]of scale.entries()){const label=document.createElement('span');label.textContent=value+(index===scale.length-1?'+':'');labels.append(label);}
+   }else{
+    const low=document.createElement('span'),high=document.createElement('span');low.textContent=min+' '+unit;high.textContent=max+' '+unit;labels.append(low,high);
+   }
   }
   item.append(title,gradient,labels);$('legend').append(item);
   if(preset.id==='weather'){
