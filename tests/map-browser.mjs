@@ -56,7 +56,7 @@ try{
   await page.route('https://tiles.openfreemap.org/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
   const metadata=[];
-  const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','cloud_cover','cloud_cover_high','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
+  const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','relative_humidity_2m','cloud_cover','cloud_cover_high','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
   const ensembleFixture=(hours,step)=>({...fixture(0,hours),variables:['precipitation_probability'],valid_times:fixture(0,hours).valid_times.filter((_,i)=>i%step===0)});
   const ensembleFixtures={ncep_gefs025:ensembleFixture(24,3),ncep_gefs05:ensembleFixture(48,6),ecmwf_ifs025_ensemble:ensembleFixture(30,3)};
   const statisticVariables=['geopotential_height_500hPa','temperature_850hPa','pressure_msl'].flatMap(f=>[f+'_mean',f+'_spread']);
@@ -73,6 +73,12 @@ try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
    assert.equal(await page.locator('#map-forecast-interval').isDisabled(),true,'UKV always retains every supplied hour');
+   await page.locator('#map-variable').selectOption('dew_point_2m');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m dew point'));
+   assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.url.includes('variable=dew_point_2m_derived'))),'UKV dew point uses calculated imagery');
+   assert.equal(await page.locator('#map-error-a').isVisible(),false);
+   await page.locator('#map-variable').selectOption('temperature_2m');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature'));
    const bitmapRoundTrip=await page.evaluate(async()=>{
     const {ForecastTileCache}=await import('./map-tile-cache.js');
     let calls=0;

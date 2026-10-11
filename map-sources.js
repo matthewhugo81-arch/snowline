@@ -1,6 +1,6 @@
 import {chooseRun,hasTime,forecastTimes} from './map-runs.js?v=20261010-latest-cycles';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261010-ukv-families';
-import {sourceVariable} from './map-catalogue.js?v=20261011-ensemble-statistics';
+import {sourceVariable} from './map-catalogue.js?v=20261011-dew-point';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';

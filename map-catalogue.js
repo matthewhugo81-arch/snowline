@@ -1,4 +1,5 @@
 import {ensembleField} from './map-ensemble.js?v=20261011-ensemble-statistics';
+import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
 export const PRESSURE_LEVELS = [1000,925,850,700,500,300,250,200,100,50,10];
@@ -23,6 +24,7 @@ export const PRECIPITATION_PROBABILITY_SCALE = {
 export function sourceVariable(meta,key){
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
+ if(key==='dew_point_2m'&&!vars.includes(key)&&canDeriveDewPoint(meta))return DERIVED_DEW_POINT;
  // These scales describe our verified unit conversions, not similarly named
  // arrays from another provider whose spread units have not been checked.
  if(ensembleField(key)&&!['snowline_gefs_ensemble','snowline_ecmwf_ensemble'].includes(meta?.domain))return null;
@@ -120,6 +122,7 @@ export function availableFields(fields,metas){
 }
 export function extendCatalogue(fields,metas,OM,settings){
  const keys=[...new Set(metas.flatMap(m=>m.variables??[]).map(canonicalVariable))];
+ if(metas.some(meta=>sourceVariable(meta,'dew_point_2m'))&&!keys.includes('dew_point_2m'))keys.push('dew_point_2m');
  const omitted=[];
  for(const key of keys){
   if(!metas.some(meta=>sourceVariable(meta,key)))continue;

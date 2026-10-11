@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261011-parallel-preload';
+import {hasFieldTime} from './map-sources.js?v=20261011-dew-point';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

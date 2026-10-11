@@ -8,6 +8,8 @@ Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK ma
 
 Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Wind speeds and gusts display in mph on maps, legends, contours, grid-value labels and point readouts; source grids and renderer scales retain native m/s.
 
+**2 m dew point** is available for UKV main runs, UKV nowcasts and UKMO Global when both 2 m temperature and relative humidity are present in the same spatial source. It uses Open-Meteo's Magnus calculation (17.625 / 243.04) at each native grid cell before map interpolation. Native dew-point fields take precedence. Missing/zero humidity stays missing, and humidity above saturation is capped at 100%. The calculated grid shares normal map playback, imagery caching, contours and point/grid readouts; no separate point-forecast API requests are needed.
+
 ## Forecast briefing
 
 **Briefing view · 6 charts** opens a separate sequence of six (optionally nine) static chart images. Choose one model, preset, area, starting time and interval. Presets are cloud/precipitation/MSLP, 850 hPa temperature/MSLP, and 500 hPa geopotential height/MSLP, offered only when the run supplies all required fields. The air-mass preset is ordinary 850 hPa temperature, not derived theta-w. Derived theta-w and 400 hPa vorticity are not part of this release.

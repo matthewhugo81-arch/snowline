@@ -1,8 +1,8 @@
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-briefing';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-briefing';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-dew-point';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-dew-point';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-ensemble-statistics';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-dew-point';
 
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
