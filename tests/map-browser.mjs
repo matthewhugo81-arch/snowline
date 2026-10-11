@@ -51,6 +51,8 @@ try{
     await page.locator('#map-time').evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},String(value));
     await page.waitForFunction(hour=>document.getElementById('panel-label-a').textContent.split('Valid ')[1]?.includes(String(hour).padStart(2,'0')+':00'),value+firstHour);
    };
+   // ICU versions differ on the comma after the weekday; the time must match.
+   const bothAt=time=>page.waitForFunction(time=>[...document.querySelectorAll('.map-panel-label')].every(el=>el.textContent.split('Valid ')[1]?.replaceAll(',','')===time.replaceAll(',','')),time);
    await selectTime(0);
    await page.locator('#play-map').click();
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.split('Valid ')[1]?.includes('07:00'));
@@ -99,12 +101,12 @@ try{
    await page.locator('#map-model-b').selectOption(main);
    await page.waitForFunction(()=>document.getElementById('map-time').max==='53'&&document.getElementById('panel-label-b').textContent.includes('0600Z'));
    await page.locator('#map-time').evaluate(el=>{el.value='52';el.dispatchEvent(new Event('change',{bubbles:true}));});
-   await page.waitForFunction(()=>[...document.querySelectorAll('.map-panel-label')].every(el=>el.textContent.includes('Valid Mon 12 Oct, 11:00 UTC')));
+   await bothAt('Mon 12 Oct, 11:00 UTC');
    await page.locator('#play-map').click();
-   await page.waitForFunction(()=>[...document.querySelectorAll('.map-panel-label')].every(el=>el.textContent.includes('Valid Mon 12 Oct, 12:00 UTC')));
-   await page.waitForFunction(()=>[...document.querySelectorAll('.map-panel-label')].every(el=>el.textContent.includes('Valid Sat 10 Oct, 07:00 UTC')));
+   await bothAt('Mon 12 Oct, 12:00 UTC');
+   await bothAt('Sat 10 Oct, 07:00 UTC');
    assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true','Loop restart must not reset Play');
-   await page.waitForFunction(()=>[...document.querySelectorAll('.map-panel-label')].every(el=>el.textContent.includes('Valid Sat 10 Oct, 08:00 UTC')));
+   await bothAt('Sat 10 Oct, 08:00 UTC');
    await page.locator('#play-map').click();
    const loopPaused=await page.locator('.map-panel-label').allTextContents();await page.waitForTimeout(1000);
    assert.deepEqual(await page.locator('.map-panel-label').allTextContents(),loopPaused,'Pause still stops after wrapping');
@@ -117,7 +119,7 @@ try{
    await page.locator('#map-variable-b').selectOption('temperature_2m');
    await page.waitForFunction(()=>document.getElementById('map-time').max==='54');
    firstHour=6;await selectTime(0);
-   await page.waitForFunction(()=>[...document.querySelectorAll('.map-panel-label')].every(el=>el.textContent.includes('Valid Sat 10 Oct, 06:00 UTC')));
+   await bothAt('Sat 10 Oct, 06:00 UTC');
    assert.ok(await initialTemperatureRequests()>=beforeInitial+2,'Both panels request the newly available initial image');
    const invalidIntervals=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('variable=precipitation&')&&/\/(\d{4})Z\/2026-10-10T\1\.om/.test(r.url)));
    assert.deepEqual(invalidIntervals,[],'Do not request precipitation at initialization');
