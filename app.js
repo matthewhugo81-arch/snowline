@@ -60,7 +60,8 @@ function finishStatus(){
 }
 function pathFrom(values,x,y){let drawing=false,d='';for(let i=0;i<values.length;i++){if(!finite(values[i])){drawing=false;continue;}d+=`${drawing?'L':'M'}${x(i).toFixed(1)},${y(values[i]).toFixed(1)} `;drawing=true;}return d;}
 function plot(container,series,config,times){
- const width=Math.max(280,container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,right=12,top=15,bottom=33,inner=width-left-right,n=times.length;
+ const shortView=state.hours<120;
+ const width=Math.max(280,container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,right=12,top=15,bottom=shortView?46:33,inner=width-left-right,n=times.length;
  const valid=series.flatMap(s=>s.values).filter(finite);
  if(!valid.length){container.innerHTML=`<div class="plot-empty">${state.loading?'Loading available forecasts…':state.selected.size?'No data available for the selected models.':'Select a model to see its forecast.'}</div>`;chartLayouts.delete(container.id);return;}
  let min=config.floor??Math.min(...valid),max=config.ceiling??Math.max(...valid);
@@ -73,12 +74,15 @@ function plot(container,series,config,times){
  if(min<0&&max>0)html+=`<line class="zero-line" x1="${left}" x2="${width-right}" y1="${y(0)}" y2="${y(0)}"/>`;
  // The forecast begins at the current hour; day boundaries must follow UTC midnight.
  const dayStarts=times.flatMap((time,i)=>new Date(time).getUTCHours()===0?[i]:[]);
- for(const i of dayStarts)html+=`<line class="day-boundary" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${height-bottom}" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
- const ticks=Math.max(2,Math.min(6,Math.floor(inner/95)));
+ for(const i of dayStarts)html+=`<line class="day-boundary" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${height-bottom}" stroke="#000" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`;
+ if(shortView){
+  // Use a fixed cadence aligned to UTC, independent of the forecast's first hour.
+  const tickHours=[3,6,12,24].find(hours=>inner*hours/Math.max(1,n-1)>=38)??24;
+  for(let i=0;i<n;i++){const time=new Date(times[i]);if(time.getUTCHours()%tickHours!==0)continue;html+=`<text class="time-tick" x="${x(i)}" y="${height-23}" text-anchor="middle">${clock.format(time).replace(':','')}</text>`;}
+ }
  const dayTicks=dayStarts.length&&x(dayStarts[0])-left<74?dayStarts:[0,...dayStarts];
- const tickIndices=state.hours<=72?Array.from({length:ticks},(_,j)=>Math.round(j*(n-1)/(ticks-1))):[...new Set(dayTicks)];
  let labelEnd=-Infinity;
- for(const i of tickIndices){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=state.hours<=72?90:44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))} ${state.hours<=72?clock.format(new Date(times[i])):''}</text>`;labelEnd=labelStart+labelWidth;}
+ for(const i of new Set(dayTicks)){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text class="date-tick" x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))}</text>`;labelEnd=labelStart+labelWidth;}
  for(const s of series){if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="white" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${s.color}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
  html+=`<line class="cursor-line" x1="${x(state.index)}" x2="${x(state.index)}" y1="${top}" y2="${height-bottom}"/>`;
  for(const s of series){const v=s.values[state.index];if(finite(v))html+=`<circle cx="${x(state.index)}" cy="${y(v)}" r="3" fill="${s.color}"/>`;}
