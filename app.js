@@ -71,8 +71,14 @@ function plot(container,series,config,times){
  let html=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(config.title)}. Values for the inspected hour appear below and in the data table.">`;
  for(let j=0;j<=4;j++){const v=min+(max-min)*j/4,yy=y(v);html+=`<line class="gridline" x1="${left}" x2="${width-right}" y1="${yy}" y2="${yy}"/><text x="${left-8}" y="${yy+4}" text-anchor="end">${Math.abs(v)<.0001?'0':v.toFixed(max-min<=2?2:max-min<=8?1:0)}</text>`;}
  if(min<0&&max>0)html+=`<line class="zero-line" x1="${left}" x2="${width-right}" y1="${y(0)}" y2="${y(0)}"/>`;
+ // The forecast begins at the current hour; day boundaries must follow UTC midnight.
+ const dayStarts=times.flatMap((time,i)=>new Date(time).getUTCHours()===0?[i]:[]);
+ for(const i of dayStarts)html+=`<line class="day-boundary" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${height-bottom}" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
  const ticks=Math.max(2,Math.min(6,Math.floor(inner/95)));
- for(let j=0;j<ticks;j++){const i=Math.round(j*(n-1)/(ticks-1));html+=`<text x="${x(i)}" y="${height-8}" text-anchor="${j===0?'start':j===ticks-1?'end':'middle'}">${shortDate.format(new Date(times[i]))} ${state.hours<=72?clock.format(new Date(times[i])):''}</text>`;}
+ const dayTicks=dayStarts.length&&x(dayStarts[0])-left<74?dayStarts:[0,...dayStarts];
+ const tickIndices=state.hours<=72?Array.from({length:ticks},(_,j)=>Math.round(j*(n-1)/(ticks-1))):[...new Set(dayTicks)];
+ let labelEnd=-Infinity;
+ for(const i of tickIndices){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=state.hours<=72?90:44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))} ${state.hours<=72?clock.format(new Date(times[i])):''}</text>`;labelEnd=labelStart+labelWidth;}
  for(const s of series){if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="white" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${s.color}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
  html+=`<line class="cursor-line" x1="${x(state.index)}" x2="${x(state.index)}" y1="${top}" y2="${height-bottom}"/>`;
  for(const s of series){const v=s.values[state.index];if(finite(v))html+=`<circle cx="${x(state.index)}" cy="${y(v)}" r="3" fill="${s.color}"/>`;}
