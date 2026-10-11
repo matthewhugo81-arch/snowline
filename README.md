@@ -12,6 +12,8 @@ Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the 
 
 ## Forecast briefing
 
+Briefing opens on **UK & Ireland**, using square 960 × 960 charts with a closer view of the British Isles and nearby European coastline. The same view is used for every model and preset. Europe, North Atlantic and Current map area retain their wider format; each cached image is specific to its area and shape.
+
 **Briefing view · 6 charts** opens a separate sequence of six (optionally nine) static chart images. Choose one model, preset, area, starting time and interval. Presets are cloud/precipitation/MSLP, 850 hPa temperature/MSLP, and 500 hPa geopotential height/MSLP, offered only when the run supplies all required fields. The air-mass preset is ordinary 850 hPa temperature, not derived theta-w. Derived theta-w and 400 hPa vorticity are not part of this release.
 
 The cloud composite uses dark clear skies, white overcast, transparent precipitation below 0.5 mm, coloured precipitation above that threshold, and black MSLP isobars at 4 hPa intervals. Each panel states its original precipitation accumulation period; selecting three-hourly viewing does not turn one-hour amounts into three-hour totals. Short-range regional models retain all supplied hours. One offscreen map produces the visible images first, then the next group only, retaining at most 36 image URLs. The interactive map's background work pauses while Briefing is open. Closing Briefing releases its renderer and restores the previous map selections; enlarged charts use the same prepared image.

@@ -57,13 +57,16 @@ export class BriefingRenderer{
   this.ready.catch(()=>{});
  }
  cancel(){this.frames?.clear();}
- async render({model,meta,preset,bounds,time,signal}){
+ async render({model,meta,preset,bounds,size=[960,660],time,signal}){
   await this.ready;if(signal.aborted)throw aborted();
   // A newly selected model may add a pressure-level scale to the catalogue.
   this.settings.colorScales=briefingSettings(this.baseSettings).colorScales;
   this.frames?.clear();
-  if(this.area!==JSON.stringify(bounds)){
-   this.area=JSON.stringify(bounds);this.map.fitBounds([[bounds[0],bounds[1]],[bounds[2],bounds[3]]],{padding:18,duration:0});
+  const view=JSON.stringify([bounds,size]);
+  if(this.area!==view){
+   this.area=view;
+   this.container.style.width=size[0]+'px';this.container.style.height=size[1]+'px';this.map.resize();
+   this.map.fitBounds([[bounds[0],bounds[1]],[bounds[2],bounds[3]]],{padding:18,duration:0});
   }
   const extent=this.map.getBounds(),clip=[extent.getWest(),extent.getSouth(),extent.getEast(),extent.getNorth()];
   this.OM.updateCurrentBounds(clip);this.cache.setContext(JSON.stringify(clip));

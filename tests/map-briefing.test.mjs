@@ -35,6 +35,7 @@ test('rain captions retain the source accumulation period rather than the displa
 });
 test('chart cache separates model, run, area, preset and time and releases old images',()=>{
  const a=briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3));
+ assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,960]),'Different chart shapes cannot reuse the same image');
  for(const key of [briefingKey('icon',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3)),briefingKey('gfs',{...meta,reference_time:time(6)},BRIEFING_PRESETS[0],[0,0,1,1],time(3)),briefingKey('gfs',meta,BRIEFING_PRESETS[1],[0,0,1,1],time(3)),briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,2,2],time(3)),briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(6))])assert.notEqual(a,key);
  const released=[],cache=new BriefingImages(2,url=>released.push(url));
  cache.set('a','blob:a');cache.set('b','blob:b');assert.equal(cache.get('a'),'blob:a');cache.set('c','blob:c');

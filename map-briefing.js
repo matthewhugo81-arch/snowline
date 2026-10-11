@@ -1,5 +1,5 @@
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-dew-point';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-dew-point';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-square-uk';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-square-uk';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-dew-point';
@@ -32,6 +32,7 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
  let renderer,active=false,generation=0,controller,work=Promise.resolve(),model,meta,preset,times=[],start=0,interval='3',currentBounds,requestedTime;
  const count=()=>Number($('count').value);
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
+ const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
  function cancel(){controller?.abort();renderer?.cancel();generation++;}
  function controlsDisabled(disabled){for(const id of ['preset','time','interval','previous','next'])$(id).disabled=disabled;}
  function navigation(){
@@ -76,15 +77,17 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   const title=model.name+' · '+preset.name+' · '+stamp(time);
   $('enlarged-title').textContent=title;$('enlarged-image').src=src;$('enlarged-image').alt=title;
   $('enlarged-note').textContent=briefingCaption(meta,preset,time)+'. '+preset.note;
+  $('enlarged').classList.toggle('briefing-square',chartSize()[0]===chartSize()[1]);
   $('enlarged').showModal();$('enlarged-close').focus();
  }
  function renderPage(){
   if(!active||!meta||!preset)return;cancel();
   if(!times.length){$('grid').replaceChildren();$('status').textContent='No common forecast times for this chart.';navigation();return;}
   const token=generation;controller=new AbortController();const signal=controller.signal;
-  const selection={model:model.id,meta,preset,bounds:[...bounds()]};
+  const selection={model:model.id,meta,preset,bounds:[...bounds()],size:[...chartSize()]};
+  $('grid').style.setProperty('--briefing-aspect',selection.size[0]+'/'+selection.size[1]);
   const visible=briefingPage(times,start,count()),upcoming=briefingPage(times,start+count(),count());
-  const key=time=>briefingKey(selection.model,selection.meta,selection.preset,selection.bounds,time);
+  const key=time=>briefingKey(selection.model,selection.meta,selection.preset,selection.bounds,time,selection.size);
   const cards=new Map();let loaded=0,failed=0,prepared=0;
   $('grid').replaceChildren();$('retry').hidden=true;
   const progress=()=>{if(token===generation)$('status').textContent=loaded+'/'+visible.length+' charts ready'+(failed?' · '+failed+' unavailable':loaded===visible.length&&upcoming.length?' · '+prepared+'/'+upcoming.length+' next charts prepared':'');};
@@ -157,6 +160,6 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
  return {open(selection){
   active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';
   $('model').value=choices.some(item=>item.id===selection.model)?selection.model:choices[0].id;
-  $('area').value='current';$('close').focus({preventScroll:true});configure();
+  $('area').value='uk';$('close').focus({preventScroll:true});configure();
  },close};
 }

@@ -8,7 +8,7 @@ export const BRIEFING_PRESETS=[
  {id:'upper',name:'500 hPa height & pressure',field:'geopotential_height_500hPa',required:['geopotential_height_500hPa','pressure_msl'],note:'500 hPa geopotential height with MSLP isobars every 4 hPa.'}
 ];
 export const BRIEFING_AREAS=[
- {id:'uk',name:'UK & Ireland',bounds:[-12,48,5,62]},
+ {id:'uk',name:'UK & Ireland',bounds:[-12,48,5,61.5],size:[960,960]},
  {id:'europe',name:'Europe',bounds:[-25,32,35,72]},
  {id:'atlantic',name:'North Atlantic',bounds:[-80,20,30,78]}
 ];
@@ -23,7 +23,7 @@ export function briefingCaption(meta,preset,time){
  const period=preset.id==='weather'?fieldIntervalHours(meta,'precipitation',time):null;
  return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h precipitation ending at this time':'');
 }
-export function briefingKey(model,meta,preset,area,time){return JSON.stringify([model,meta.reference_time,preset.id,area,time]);}
+export function briefingKey(model,meta,preset,area,time,size=[960,660]){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size]);}
 
 // Bound retained chart images; a visit to another model must not accumulate
 // hundreds of decoded images or unreleased blob URLs.
