@@ -277,6 +277,12 @@ try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('GFS global'));
    await page.locator('#map-model-b').selectOption('gfs_global');
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('GFS global'));
+   await page.locator('#map-variable').selectOption('wind_speed_300hPa');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('300 hPa wind'));
+   assert.equal(await page.locator('#legend-title-a').textContent(),'mph');
+   assert.deepEqual(await page.locator('#legend-bands-a span').allTextContents(),['0','15','30','45','60','75','90','105','120','135','150','165','180+']);
+   assert.equal(await page.locator('#legend-bands-a > div').first().getAttribute('aria-label'),'0–<15 mph');
+   assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.url.includes('variable=wind_u_component_300hPa')&&r.url.includes('color_blend=false'))),'Jet shading requests discrete bands on the companion wind grid');
    await page.locator('#map-variable').selectOption('snowfall_water_equivalent');
    await page.locator('#map-variable-b').selectOption('freezing_level_height');
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Freezing level')&&document.getElementById('animation-status').textContent.startsWith('Ready'));

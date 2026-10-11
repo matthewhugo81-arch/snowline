@@ -1,6 +1,7 @@
 import {ensembleField} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-smooth';
+import {MPH_PER_MS} from './map-wind-units.js';
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
 export const PRESSURE_LEVELS = [1000,925,850,700,500,300,250,200,100,50,10];
@@ -17,6 +18,12 @@ export const PRECIPITATION_SCALE = {
 export const CLOUD_COVER_SCALE = {
  stops:[0,20,40,60,75,85,95,100],
  colors:['#263c55','#3b5573','#56738e','#7391ac','#96b1c7','#bdcfdf','#dce9f1','#ffffff']
+};
+// A jet-level range with broad, opaque bands; renderer thresholds stay in m/s.
+export const JET_WIND_SCALE = {
+ stops:Array.from({length:13},(_,i)=>i*15/MPH_PER_MS),
+ colors:['#5000ff','#003cff','#008cff','#00cfea','#00dc36','#a8ee00','#fff000','#ffb000','#f47700','#d93600','#ac0038','#ec008c','#ff00c8'],
+ bands:true
 };
 export const PRECIPITATION_PROBABILITY_SCALE = {
  stops:[0,10,25,50,75,90,100],
@@ -86,6 +93,11 @@ const extras={
 export function describeVariable(key,OM){
  const diagnostic=diagnosticField(key);if(diagnostic)return diagnostic;
  const ensemble=ensembleField(key);if(ensemble)return ensemble;
+ if(key==='wind_speed_300hPa')return {
+  key,name:'300 hPa wind speed & direction',group:variableGroup(key),unit:'m/s',...JET_WIND_SCALE,
+  contourValues:JET_WIND_SCALE.stops,contourLabel:'15 mph',
+  note:'300 hPa jet-stream winds. Colour bands every 15 mph, from blue and cyan through green, yellow and orange to red and magenta at the strongest speeds. The final band is 180 mph and above. Arrows show flow direction.'
+ };
  let [name,scaleKey,note]=extras[key]??[];
  if(key==='precipitation_probability')return {
   key,name:'Precipitation probability',group:variableGroup(key),unit:'%',...PRECIPITATION_PROBABILITY_SCALE,

@@ -2,6 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as OM from '../vendor/index.mjs';
 import {sourceVariable,canonicalVariable,describeVariable,extendCatalogue,availableFields,PRECIPITATION_SCALE} from '../map-catalogue.js';
+import {displayStops,MPH_PER_MS} from '../map-wind-units.js';
+
+test('300 hPa jet bands and contour thresholds agree in mph for both wind representations',()=>{
+ const fields=[],settings={colorScales:{}};
+ extendCatalogue(fields,[{variables:['wind_speed_300hPa','wind_direction_300hPa']},{variables:['wind_u_component_300hPa','wind_v_component_300hPa']}],OM,settings);
+ const field=fields[0],scale=settings.colorScales.wind_speed_300hPa;
+ assert.deepEqual(displayStops(field),Array.from({length:13},(_,i)=>i*15));
+ assert.deepEqual(field.contourValues,field.stops);assert.equal(field.bands,true);
+ assert.deepEqual(scale,settings.colorScales.wind_u_component_300hPa);
+ for(let i=0;i<scale.breakpoints.length;i++){
+  assert.deepEqual(OM.getColor(scale,scale.breakpoints[i],false),scale.colors[i]);
+  if(i)assert.deepEqual(OM.getColor(scale,scale.breakpoints[i]-.00001,false),scale.colors[i-1]);
+ }
+ assert.deepEqual(OM.getColor(scale,220/MPH_PER_MS,false),scale.colors.at(-1));
+ assert.ok(scale.colors.every(color=>color[3]===1));
+ assert.deepEqual(describeVariable('wind_speed_250hPa',OM).stops,OM.getColorScale('wind',false).breakpoints);
+});
 
 test('new layers use physical units and appropriate renderer scales',()=>{
  const expected={wind_gusts_10m:'m/s',visibility:'m',cloud_cover_low:'%',cape:'J/kg',convective_inhibition:'J/kg',surface_temperature:'°C',soil_moisture_0_to_7cm:'m³/m³',geopotential_height_500hPa:'m',temperature_500hPa:'°C',relative_humidity_700hPa:'%',wind_speed_300hPa:'m/s',shortwave_radiation:'W/m²',total_column_integrated_water_vapour:'kg/m²'};
