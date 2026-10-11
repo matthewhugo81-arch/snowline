@@ -10,6 +10,11 @@ export const PRECIPITATION_SCALE = {
  colors:['#ffffff','#231496','#1538c7','#125c13','#807e10','#a1a13b','#b08131','#a35a35','#993232','#c43650','#ba2388','#dec4c4','#c9bcbc','#f0e7e7'],
  bands:true
 };
+// All cloud fractions use dark clear skies and white complete cloud cover.
+export const CLOUD_COVER_SCALE = {
+ stops:[0,20,40,60,75,85,95,100],
+ colors:['#263c55','#3b5573','#56738e','#7391ac','#96b1c7','#bdcfdf','#dce9f1','#ffffff']
+};
 export function sourceVariable(meta,key){
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
@@ -66,6 +71,7 @@ const extras={
 export function describeVariable(key,OM){
  let [name,scaleKey,note]=extras[key]??[];
  if(key==='rain'||key==='showers')return {key,name,note,group:variableGroup(key),unit:'mm water',...PRECIPITATION_SCALE};
+ if(scaleKey==='cloud_cover')return {key,name,note,group:variableGroup(key),unit:'%',...CLOUD_COVER_SCALE};
  let unit;
  const pressure=key.match(/^(temperature|relative_humidity|wind_speed|geopotential_height)_(\d+)hPa$/);
  const height=key.match(/^(temperature|wind_speed)_(\d+)m$/);
