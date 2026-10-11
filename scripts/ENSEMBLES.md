@@ -39,7 +39,14 @@ python scripts/build_ensembles.py
 node --test tests/*.test.mjs
 ```
 
-The preview server must support HEAD with Content-Length and HTTP byte ranges.
+GitHub Pages applies HTTP gzip to `.om` and returns ranges of compressed bytes,
+which breaks binary random access in browsers. During artifact assembly only,
+files receive an `.om.png` transport suffix to select a non-compressed MIME type.
+They remain OM binary data, not pictures. `map-ensemble-transport.js` adapts the
+public renderer reader's `withReader` entry point for our own data URLs only;
+the bundled renderer stays unmodified. Logical URLs and cache keys retain `.om`.
+The preview server must support HEAD with Content-Length and HTTP byte ranges,
+and serve `.om.png` paths from their matching `.om` files with `image/png` MIME.
 `--hours` is only for a scratch validation output and must not be used for the
 production deployment. The browser renderer, comparison, contours, grid values
 and full-forecast tile cache all use the same OM paths as other model layers.

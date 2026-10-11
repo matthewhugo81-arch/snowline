@@ -1,5 +1,6 @@
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-ensemble-statistics';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-full-preload';
@@ -42,6 +43,7 @@ const fields=[
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
 const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+installEnsembleTransport(OM,settings);
 const readMapValue=createValueReader(OM,settings);
 OM.updateCurrentBounds(UK);
 const imageryCache=new ForecastTileCache(async(params,controller)=>{

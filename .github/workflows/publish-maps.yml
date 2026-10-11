@@ -48,6 +48,7 @@ jobs:
           git archive HEAD | tar -x -C _site
           rm -rf _site/.github _site/tests _site/scripts
           cp -a ensemble-data _site/
+          python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

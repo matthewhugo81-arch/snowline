@@ -12,6 +12,7 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enabl
 const fakeOM=`
  export const defaultOmProtocolSettings={colorScales:{}};
  export const domainOptions=[];
+ export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{}}});
  export const updateCurrentBounds=()=>{};
  export const getValueFromLatLong=async()=>({value:10});
  export const getColorScale=()=>({unit:'m/s',breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
