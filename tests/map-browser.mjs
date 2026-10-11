@@ -127,9 +127,8 @@ try{
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.locator('#map-model-b').selectOption(main);
    await page.waitForFunction(()=>document.getElementById('map-time').max==='53'&&document.getElementById('panel-label-b').textContent.includes('0600Z'));
-   await page.locator('#map-time').evaluate(el=>{el.value='52';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.locator('#map-time').evaluate(el=>{el.value='52';el.dispatchEvent(new Event('change',{bubbles:true}));document.getElementById('play-map').click();});
    await bothAt('Mon 12 Oct, 11:00 UTC');
-   await page.locator('#play-map').click();
    await bothAt('Mon 12 Oct, 12:00 UTC');
    await bothAt('Sat 10 Oct, 07:00 UTC');
    assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true','Loop restart must not reset Play');

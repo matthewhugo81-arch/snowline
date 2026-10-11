@@ -4,7 +4,7 @@ import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-e
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-frame-recovery';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-frame-recovery';
-import {ForecastPlayback} from './map-playback.js?v=20261011-continuous-loop';
+import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-ensemble-statistics';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
@@ -201,7 +201,7 @@ async function drawGridValues(panel){
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
 function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
-let playing=false,timeGeneration=0,playback;
+let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true);
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
  $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');
@@ -277,7 +277,8 @@ async function prepareSelection(index,valid=()=>true){
  if(prepared.some(item=>!item))return null;
  return valid()?prepared:null;
 }
-async function setTime(){
+function setTime(){return timePending=loadTime();}
+async function loadTime(){
  if(!state.times.length)return false;
  const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;
  const time=state.times[index],generation=++timeGeneration;
@@ -324,7 +325,7 @@ async function setTime(){
  }
 }
 playback=new ForecastPlayback({
- length:()=>state.times.length,index:()=>state.index,buffer:2,
+ length:()=>state.times.length,index:()=>state.index,buffer:2,settle:()=>timePending,
  prepare:async index=>{
   const generation=timeGeneration;
   const ready=panelSelections(state).every(({key})=>panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));

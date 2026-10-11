@@ -97,7 +97,7 @@ test('playback buffers first, repeats every native time across loops, and keeps 
 test('pausing while buffering cannot advance or change the displayed time',async()=>{
  let finish;const shown=[];
  const clock=new ForecastPlayback({length:()=>3,index:()=>0,prepare:()=>new Promise(r=>finish=r),show:async i=>{shown.push(i);return true;}});
- const work=clock.start();clock.pause();finish(true);await work;assert.deepEqual(shown,[]);assert.equal(clock.playing,false);
+ const work=clock.start();await flush();clock.pause();finish(true);await work;assert.deepEqual(shown,[]);assert.equal(clock.playing,false);
 });
 
 test('a failed buffered frame stops playback rather than skipping a forecast hour',async()=>{
@@ -107,7 +107,23 @@ test('a failed buffered frame stops playback rather than skipping a forecast hou
 
 test('a newly selected cycle invalidates the old playback without a late commit',async()=>{
  let resolve;const shown=[];const clock=new ForecastPlayback({length:()=>3,index:()=>0,prepare:()=>new Promise(r=>resolve=r),show:async i=>{shown.push(i);return true;}});
- const pending=clock.start();clock.pause();resolve(true);await pending;assert.deepEqual(shown,[]);
+ const pending=clock.start();await flush();clock.pause();resolve(true);await pending;assert.deepEqual(shown,[]);
+});
+
+test('Play waits for a pending timeline selection before buffering and starts from its committed time',async()=>{
+ let complete,index=0;const prepared=[],shown=[];
+ const clock=new ForecastPlayback({length:()=>5,index:()=>index,settle:()=>new Promise(resolve=>complete=resolve),prepare:async i=>{prepared.push(i);return true;},show:async i=>{shown.push(i);index=i;clock.pause();return true;},sleep:async()=>{}});
+ const work=clock.start();await flush();assert.deepEqual(prepared,[]);
+ index=4;complete(true);await work;assert.deepEqual(prepared.slice(0,3),[0,1,2]);assert.deepEqual(shown,[0]);
+});
+
+test('Pause or a failed selection during the handover cannot start late playback',async()=>{
+ for(const pause of [true,false]){
+  let complete;const phases=[];
+  const clock=new ForecastPlayback({length:()=>5,index:()=>0,settle:()=>new Promise(resolve=>complete=resolve),prepare:()=>assert.fail('No stale buffering'),show:()=>assert.fail('No stale commit'),onState:phase=>phases.push(phase)});
+  const work=clock.start();if(pause)clock.pause();complete(!pause?false:true);await work;
+  assert.equal(clock.playing,false);assert.equal(phases.at(-1),pause?'paused':'failed');
+ }
 });
 
 test('failed restart at the final frame resets the play button',async()=>{
