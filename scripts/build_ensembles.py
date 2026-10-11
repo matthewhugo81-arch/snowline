@@ -237,7 +237,7 @@ def frame_path(root, domain, run, hour):
     return root / domain / run.strftime('%Y/%m/%d/%H00Z') / ((run + timedelta(hours=hour)).strftime('%Y-%m-%dT%H%M') + '.om')
 
 
-def build_model(model, root, now, workers, hours=None, max_new_frames=24):
+def build_model(model, root, now, workers, hours=None, max_new_frames=128):
     config = MODELS[model]
     latest_path = root / config['domain'] / 'latest.json'
     previous = json.loads(latest_path.read_text()) if latest_path.exists() else None
@@ -272,7 +272,9 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=24):
         raise ValueError('Requested forecast hours are not published yet')
     paths[0][1].parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
-    # A small batch goes live promptly; later scheduled passes append the rest.
+    # Process the currently published batch without waiting for future hours.
+    # The default covers either model's full native horizon, avoiding an
+    # artificial backlog when many source hours are already available.
     # An individual frame still requires all six verified fields.
     pending = [(h, path) for h, path in paths if not path.exists()][:max_new_frames]
     failures = []
@@ -330,7 +332,7 @@ def main():
     parser.add_argument('--model', choices=list(MODELS), action='append')
     parser.add_argument('--now', help='UTC time override for reproducible validation')
     parser.add_argument('--workers', type=int, default=4)
-    parser.add_argument('--max-new-frames', type=int, default=24, help='Publish this many new frames per model per pass')
+    parser.add_argument('--max-new-frames', type=int, default=128, help='Maximum new frames per model per pass')
     parser.add_argument('--hours', help='Validation only: comma-separated hours; use a scratch output directory')
     args = parser.parse_args()
     now = datetime.fromisoformat(args.now).replace(tzinfo=timezone.utc) if args.now else datetime.now(timezone.utc)

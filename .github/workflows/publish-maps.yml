@@ -41,7 +41,7 @@ jobs:
           key: ensemble-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ensemble-grids-v1-
       - name: Prepare newly available ensemble hours
-        run: python scripts/build_ensembles.py --workers 4 --max-new-frames 24
+        run: python scripts/build_ensembles.py --workers 4 --max-new-frames 128
       - name: Assemble site without source-control or test files
         run: |
           mkdir _site
