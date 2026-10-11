@@ -11,7 +11,7 @@ test('same-model comparison preserves two separate weather fields and loads one 
  const state=comparison();
  assert.deepEqual(panelSelections(state),[{key:'a',model:'ukv',field:'temperature_2m'},{key:'b',model:'ukv',field:'precipitation'}]);
  assert.deepEqual(panelModelIds(state),['ukv']);
- assert.deepEqual(panelForecastTimes(state),ukv.valid_times);
+ assert.deepEqual(panelForecastTimes(state),[t(7),t(8)]);
  state.fieldB='cloud_cover';
  assert.equal(panelSelection(state,'a').field,'temperature_2m');
  assert.equal(panelSelection(state,'b').field,'cloud_cover');
@@ -39,7 +39,7 @@ test('split-grid model timelines follow each selected field, excluding unrelated
  const surface={reference_time:t(6),variables:['temperature_2m','precipitation'],valid_times:[t(6),t(7),t(8)]};
  const upper={reference_time:t(6),variables:['temperature_850hPa','pressure_msl'],valid_times:[t(6),t(9),t(12)]};
  const state=comparison();state.metas.ukv=combineSources(surface,[upper]);
- assert.deepEqual(panelForecastTimes(state),surface.valid_times);
+ assert.deepEqual(panelForecastTimes(state),[t(7),t(8)]);
  state.fieldB='temperature_850hPa';
  assert.deepEqual(panelForecastTimes(state),[t(6)]);
  state.field='unknown';state.fieldB='unknown';
@@ -59,5 +59,5 @@ test('a selected short-range field never inherits unrelated long-range times',()
   [{reference_time:t(6),variables:['temperature_850hPa'],valid_times:[t(6),t(7),t(8),t(12)]}]
  );
  state.field='precipitation';
- assert.deepEqual(panelForecastTimes(state),[t(6),t(7)]);
+ assert.deepEqual(panelForecastTimes(state),[t(7)]);
 });

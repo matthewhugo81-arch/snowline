@@ -1,5 +1,12 @@
 // Retain a bounded window. The browser selects a smaller budget in comparison mode.
-export function frameWindow(urls,index,{ahead=2,behind=2}={}){
+export function frameWindow(urls,index,{ahead=2,behind=2,loop=false}={}){
+ if(loop&&urls.length){
+  const at=offset=>urls[(index+offset+urls.length)%urls.length];
+  const keep=new Set(),upcoming=[];
+  for(let offset=-Math.min(behind,urls.length-1);offset<=Math.min(ahead,urls.length-1);offset++)if(at(offset))keep.add(at(offset));
+  for(let offset=1;offset<=Math.min(ahead,urls.length-1);offset++)if(at(offset))upcoming.push(at(offset));
+  return {keep,upcoming:[...new Set(upcoming)]};
+ }
  return {keep:new Set(urls.slice(Math.max(0,index-behind),index+ahead+1).filter(Boolean)),upcoming:urls.slice(index+1,index+ahead+1).filter(Boolean)};
 }
 
@@ -91,11 +98,12 @@ export class ForecastFrames{
   clearTimeout(this.timer);this.epoch++;this.queue=[];
   for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.pending&&frame.url!==exceptURL)this.discard(frame);
  }
- warm({keep,upcoming}){
+ warm({keep,upcoming,delay=this.delay}){
   clearTimeout(this.timer);const epoch=++this.epoch;
   this.keep=keep;this.queue=[...new Set(upcoming)];
   // Crucially, do NOT stop/cancel pending frames that are still in the window.
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
+  if(!this.queue.length)return;
   this.timer=setTimeout(async()=>{
    for(const url of this.queue){
     if(epoch!==this.epoch)break;
@@ -106,7 +114,7 @@ export class ForecastFrames{
      if(frame!==this.current)this.cover(frame);
     }catch{if(frame)this.discard(frame);}
    }
-  },this.delay);
+  },delay);
  }
  clear(){this.stop();for(const frame of [...this.frames.values()])this.discard(frame);this.keep.clear();}
 }

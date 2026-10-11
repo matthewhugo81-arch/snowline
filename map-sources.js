@@ -7,6 +7,9 @@ const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_s
 // Open-Meteo splits GFS surface and pressure/upper-air fields into two grids.
 // Companion data must come from the selected primary run, never a different cycle.
 const companions={gfs_global:['ncep_gfs025']};
+// Backward sums/averages have no interval at initialization, even when that
+// timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
+const intervalFields=new Set(['precipitation','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
 export function runPath(referenceTime){
  const iso=new Date(referenceTime).toISOString();
  return iso.slice(0,10).replaceAll('-','/')+'/'+iso.slice(11,16).replace(':','')+'Z/';
@@ -16,7 +19,7 @@ export function combineSources(primary,other=[]){
  return {...primary,sources,variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
 }
 export function fieldSource(meta,key,time){
- return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||hasTime(source,time)))??null;
+ return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&!(intervalFields.has(key)&&Date.parse(time)===Date.parse(source.reference_time)))))??null;
 }
 export function hasFieldTime(meta,key,time){return !!fieldSource(meta,key,time);}
 export function fieldDataURL(meta,key,time){

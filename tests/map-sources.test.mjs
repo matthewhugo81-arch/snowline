@@ -7,6 +7,21 @@ const run='2026-10-09T06:00:00Z',t0='2026-10-09T06:00Z',t1='2026-10-09T07:00Z',t
 const surface={domain:'ncep_gfs013',reference_time:run,completed:true,variables:['temperature_2m','precipitation','wind_u_component_10m','wind_v_component_10m'],valid_times:[t0,t1,t2]};
 const upper={domain:'ncep_gfs025',reference_time:run,completed:true,variables:['pressure_msl','temperature_850hPa','wind_gusts_10m'],valid_times:[t0,t1]};
 
+test('interval fields exclude initialization without hiding instantaneous fields or later intervals',()=>{
+ const keys=['precipitation','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation'];
+ const meta={...surface,variables:[...surface.variables,...keys]};
+ for(const key of keys){
+  assert.equal(hasFieldTime(meta,key,t0),false,key);
+  assert.equal(fieldDataURL(meta,key,run),null,'Equivalent UTC timestamps still identify initialization');
+  assert.equal(hasFieldTime(meta,key,t1),true,key);
+  assert.equal(fieldSource(meta,key),meta,'Source notes retain the original interval boundaries');
+  assert.equal(hasFieldTime({...meta,valid_times:[t1,t2]},key,t1),true,'Do not drop an already-trimmed first interval');
+ }
+ assert.equal(hasFieldTime(meta,'temperature_2m',t0),true);
+ assert.equal(hasFieldTime({...meta,reference_time:undefined},'precipitation',t0),true,'Do not guess initialization when metadata omits it');
+ assert.equal(hasFieldTime({...meta,valid_times:[t0,t2]},'precipitation',t1),false,'Do not fill gaps');
+});
+
 test('GFS keeps surface fields on the fine grid and routes pressure and upper air to its companion',()=>{
  const meta=combineSources(surface,[upper]);
  assert.equal(sourceVariable(meta,'pressure_msl'),'pressure_msl');

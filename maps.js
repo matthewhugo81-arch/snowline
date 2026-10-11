@@ -1,11 +1,11 @@
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow} from './map-frames.js?v=20261010-buffered-playback';
-import {ForecastPlayback} from './map-playback.js?v=20261010-buffered-playback';
+import {ForecastFrames,frameWindow} from './map-frames.js?v=20261011-continuous-loop';
+import {ForecastPlayback} from './map-playback.js?v=20261011-continuous-loop';
 import {overlayGroups} from './map-overlay-specs.js?v=20261010-buffered-playback';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261010-valid-frames';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-continuous-loop';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261010-ukv-families';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261011-continuous-loop';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv-families';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-cloud-scale';
@@ -188,7 +188,7 @@ function pauseAnimation(){
  $('play-map').textContent='▶ Play';$('play-map').setAttribute('aria-pressed','false');
 }
 function frameBudget(){
- return state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2};
+ return {loop:true,...(state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2})};
 }
 function orderForecastBasemap(panel){
  if(panel.styleOrdered)return;
@@ -201,7 +201,8 @@ function orderForecastBasemap(panel){
 }
 function panelCache(panel,model,field){
  const meta=state.metas[model],overlay=state.overlays[panel.key];
- const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars]);
+ // Changing the other panel's field can change the shared timeline too.
+ const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars,state.times]);
  if(panel.frameCache&&panel.cacheKey===signature)return panel.frameCache;
  panel.frameCache?.clear();orderForecastBasemap(panel);
  const f=fields.find(item=>item.key===field),descriptors=new Map();
@@ -217,7 +218,7 @@ function panelCache(panel,model,field){
 }
 function warmUpcoming(panel){
  if(panel.restyling||!panel.frameCache)return;
- panel.frameCache.warm(frameWindow(panel.frameURLs,state.index,frameBudget()));
+ panel.frameCache.warm({...frameWindow(panel.frameURLs,state.index,frameBudget()),delay:0});
 }
 async function prepareSelection(index,valid=()=>true){
  const choices=panelSelections(state),time=state.times[index],metas=state.metas;
@@ -245,7 +246,8 @@ async function setTime(){
   for(const {key,model,field}of panelSelections(state)){
    const panel=panels[key];await panel.ready;if(!valid()||panel.restyling)return false;
    const cache=panelCache(panel,model,field);
-   cache.warm(frameWindow(panel.frameURLs,index,frameBudget()));
+   // Retain useful downloads, but start new background work after this frame is ready.
+   cache.warm({...frameWindow(panel.frameURLs,index,frameBudget()),upcoming:[]});
    panel.requestedURL=panel.frameURLs[index];
   }
   viewportBounds();
@@ -291,7 +293,7 @@ playback=new ForecastPlayback({
   playing=['buffering','playing','next'].includes(phase);
   $('play-map').textContent=playing?'Ⅱ Pause':'▶ Play';$('play-map').setAttribute('aria-pressed',String(playing));
   if(phase==='buffering')$('animation-status').textContent='Preparing smooth playback · '+done+'/'+total+' frames';
-  if(phase==='ended')$('animation-status').textContent='End of available forecast';
+  if(phase==='ended')$('animation-status').textContent='Only one forecast frame available';
   if(phase==='failed')$('animation-status').textContent='Buffering failed · press Play to retry';
   if(phase==='paused')for(const {key}of panelSelections(state))scheduleGridValues(panels[key]);
  }

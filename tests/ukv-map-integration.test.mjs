@@ -28,7 +28,7 @@ test('both UKV choices use real domain/cycle URLs and compare matching valid tim
  assert.equal(fieldDataURL(b,'precipitation','2026-10-10T15:00Z'),null);
  const state={model:UKV,modelB:UKV_NOWCAST,field:'precipitation',fieldB:'temperature_2m',compare:true,metas:{[UKV]:a,[UKV_NOWCAST]:b}};
  assert.deepEqual(panelModelIds(state),[UKV,UKV_NOWCAST]);assert.equal(panelForecastTimes(state).length,13);
- state.compare=false;assert.equal(panelForecastTimes(state).length,55);
+ state.compare=false;assert.equal(panelForecastTimes(state).length,54);
  assert.match(ukvCoverageText(a,'main'),/main cycle/);assert.match(ukvCoverageText(b,'nowcast'),/nowcast cycle/);
 });
 test('XML 404 errors keep their HTTP status; metadata fetches revalidate caches',async t=>{
