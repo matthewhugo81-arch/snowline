@@ -1,8 +1,8 @@
 import {ForecastFrames} from './map-frames.js?v=20261011-parallel-preload';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
-import {hasFieldTime} from './map-sources.js?v=20261011-diagnostics';
-import {installDiagnostics} from './map-diagnostics.js';
+import {hasFieldTime} from './map-sources.js?v=20261011-vorticity-smooth';
+import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-smooth';
 
 const aborted=()=>new DOMException('Aborted','AbortError');
 export function briefingSettings(settings){

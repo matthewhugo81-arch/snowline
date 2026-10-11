@@ -20,8 +20,8 @@ export function diagnosticField(key){
   stops:[-20,-10,-5,0,4,8,12,16,20,24,28,32],colors:['#53318b','#355db0','#269ed0','#78d7da','#4bb958','#7ed33b','#d8e52b','#ffdf33','#ffac32','#ec662a','#c52438','#87144e'],
   contourLabel:'2°C',note:'Derived 850 hPa wet-bulb potential temperature (theta-w), expressed in °C at 1000 hPa. Bolton / Davies-Jones approximation from same-time temperature and relative humidity over liquid water. Not 850 hPa air temperature. This pressure surface can lie below high terrain.'};
  if(/^relative_vorticity_(300|400)hPa$/.test(key))return {key,name:key.match(/\d+/)[0]+' hPa relative vorticity',group:'Derived diagnostics',unit:'10⁻⁵ s⁻¹',
-  stops:[-40,-20,-10,-5,0,5,10,20,40],colors:['#36236d','#3952b3','#438fca','#a0d4e5','#f7f7ef','#fbe075','#f7a439','#df5429','#9b1839'],contourValues:Array.from({length:41},(_,i)=>(i-20)*5),
-  contourLabel:'5 × 10⁻⁵ s⁻¹',note:'Derived vertical relative vorticity from same-time horizontal winds on the stated pressure surface, with spherical geometry and projection correction. Positive = anticlockwise; negative = clockwise. Native-grid centred differences, without smoothing; high-resolution detail may be noisy. Missing neighbours, outer domain edges and poles remain blank. End colours extend beyond the scale.'};
+  stops:[-40,-20,-10,-5,0,5,10,20,40],colors:['#279ecd','#51ccdf','#86e4db','#a4dfb5','#c8df65','#fbe075','#f7a439','#df5429','#9b1839'],contourValues:Array.from({length:41},(_,i)=>(i-20)*5),
+  contourLabel:'5 × 10⁻⁵ s⁻¹',note:'Derived vertical relative vorticity from same-time horizontal winds on the stated pressure surface, with spherical geometry and projection correction. Positive = anticlockwise; negative = clockwise. Gaussian smoothing (20 km standard deviation) reduces grid-scale striping; small features and peak values are softened. Shading, contours and point values use the same smoothed field. Missing neighbours, outer domain edges and poles remain blank. End colours extend beyond the scale.'};
  return null;
 }
 
@@ -65,11 +65,11 @@ export function cyclicColumns(config){
  if(Math.abs(gap)<1e-6)return nx-1;
  return gap>0&&gap<=Math.abs(dx)*2.01?nx:0;
 }
-export function diagnosticWindow(config,ranges){
+export function diagnosticWindow(config,ranges,halo={x:1,y:1}){
  const target=ranges??[{start:0,end:config.ny},{start:0,end:config.nx}];
  if(target.length!==2||target.some((r,i)=>!Number.isInteger(r.start)||!Number.isInteger(r.end)||r.start<0||r.end<=r.start||r.end>[config.ny,config.nx][i]))throw Error('Invalid diagnostic grid window.');
- const period=cyclicColumns(config),y={start:Math.max(0,target[0].start-1),end:Math.min(config.ny,target[0].end+1)};
- const x={start:period?target[1].start-1:Math.max(0,target[1].start-1),end:period?target[1].end+1:Math.min(config.nx,target[1].end+1)};
+ const period=cyclicColumns(config),y={start:Math.max(0,target[0].start-halo.y),end:Math.min(config.ny,target[0].end+halo.y)};
+ const x={start:period?target[1].start-halo.x:Math.max(0,target[1].start-halo.x),end:period?target[1].end+halo.x:Math.min(config.nx,target[1].end+halo.x)};
  const segments=[];
  for(let column=x.start;column<x.end;){
   const start=period?((column%period)+period)%period:column;
@@ -77,6 +77,61 @@ export function diagnosticWindow(config,ranges){
   segments.push({ranges:[y,{start,end:start+length}],offset:column-x.start});column+=length;
  }
  return {target,y,x,period,segments,width:x.end-x.start,height:y.end-y.start};
+}
+
+export const VORTICITY_SMOOTHING_KM=20;
+function gaussianKernel(sigma){
+ const radius=Math.ceil(3*sigma),weights=Float64Array.from({length:2*radius+1},(_,i)=>Math.exp(-.5*((i-radius)/sigma)**2));
+ const sum=weights.reduce((a,b)=>a+b,0);return {radius,weights:weights.map(value=>value/sum)};
+}
+// Physical smoothing scale, independent of map zoom or tile boundaries. Only
+// the longitude scale beyond the Mercator display limit is capped, avoiding an
+// unbounded stencil at a pole that cannot be displayed on these maps.
+export function vorticitySmoothing(config,ranges){
+ const base=diagnosticWindow(config,ranges),radius=config.projection?.radius??6371229;
+ const regular=config.type==='regular',distance=VORTICITY_SMOOTHING_KM*1000;
+ const dy=regular?Math.abs(config.dy)*radians*radius:Math.abs(config.dy);
+ const vertical=gaussianKernel(distance/dy),horizontal=new Map();
+ const kernelForRow=row=>{
+  if(!horizontal.has(row)){
+   const latitude=Math.min(85.05112878,Math.abs(config.latMin+row*config.dy));
+   const dx=regular?Math.abs(config.dx)*radians*radius*Math.cos(latitude*radians):Math.abs(config.dx);
+   horizontal.set(row,gaussianKernel(distance/dx));
+  }
+  return horizontal.get(row);
+ };
+ const first=Math.max(1,base.target[0].start-vertical.radius),last=Math.min(config.ny-2,base.target[0].end-1+vertical.radius);
+ let maxX=0;for(let row=first;row<=last;row++)maxX=Math.max(maxX,kernelForRow(row).radius);
+ const window=diagnosticWindow(config,ranges,{x:maxX+1,y:vertical.radius+1});
+ // Vorticity needs one extra wind neighbour beyond every smoothing neighbour.
+ const derivativeWindow={...window,target:[{start:window.y.start+1,end:window.y.end-1},{start:window.x.start+1,end:window.x.end-1}]};
+ return {window,derivativeWindow,vertical,kernelForRow};
+}
+export function smoothVorticity(values,smoothing){
+ const {window,derivativeWindow,vertical,kernelForRow}=smoothing,[rows,columns]=derivativeWindow.target;
+ const width=columns.end-columns.start,height=rows.end-rows.start;
+ if(values.length!==width*height)throw Error('Vorticity smoothing grid does not match.');
+ const [targetRows,targetColumns]=window.target,outWidth=targetColumns.end-targetColumns.start;
+ const horizontal=new Float32Array(height*outWidth);
+ // Separable Gaussian, truncated at 3 sigma. Never replace missing cells with
+ // zero or renormalise across gaps. This also keeps partial domains honest.
+ for(let row=rows.start;row<rows.end;row++){
+  const {radius,weights}=kernelForRow(row),inputOffset=(row-rows.start)*width,outputOffset=(row-rows.start)*outWidth;
+  for(let column=targetColumns.start;column<targetColumns.end;column++){
+   const local=column-columns.start;let sum=0;
+   if(local-radius<0||local+radius>=width)sum=NaN;
+   else for(let k=-radius;k<=radius;k++)sum+=values[inputOffset+local+k]*weights[k+radius];
+   horizontal[outputOffset+column-targetColumns.start]=sum;
+  }
+ }
+ const output=new Float32Array(new values.buffer.constructor((targetRows.end-targetRows.start)*outWidth*4));
+ for(let row=targetRows.start;row<targetRows.end;row++)for(let column=0;column<outWidth;column++){
+  const local=row-rows.start;let sum=0;
+  if(local-vertical.radius<0||local+vertical.radius>=height)sum=NaN;
+  else for(let k=-vertical.radius;k<=vertical.radius;k++)sum+=horizontal[(local+k)*outWidth+column]*vertical.weights[k+vertical.radius];
+  output[(row-targetRows.start)*outWidth+column]=sum;
+ }
+ return output;
 }
 // Geometry is prepared once per viewport and shared across levels/times. The
 // bounded cache avoids retaining whole model grids when the user changes area.
@@ -87,7 +142,12 @@ export function vorticityGeometry(OM,config,window){
  const lat=new Float64Array(width*height),lon=new Float64Array(width*height);
  for(let j=0;j<height;j++)for(let i=0;i<width;i++){
   const column=period?((x.start+i)%period+period)%period:x.start+i,row=y.start+j,index=j*width+i;
-  const point=config.type==='regular'?[config.latMin+row*config.dy,config.lonMin+column*config.dx]:grid.projection.reverse(grid.minX+column*grid.dx,grid.minY+row*grid.dy);
+  const projectedX=grid.minX+column*grid.dx,projectedY=grid.minY+row*grid.dy;
+  // The bundled LAEA inverse has a removable 0/0 at its exact origin. Its
+  // geographic position is the projection centre, not a missing model cell.
+  const point=config.type==='regular'?[config.latMin+row*config.dy,config.lonMin+column*config.dx]
+   :projectedX===0&&projectedY===0&&config.projection?.name==='LambertAzimuthalEqualAreaProjection'?[config.projection.ϕ1,config.projection.λ0]
+   :grid.projection.reverse(projectedX,projectedY);
   lat[index]=point[0]*radians;lon[index]=point[1]*radians;
  }
  let out=0;
@@ -154,7 +214,8 @@ export function installDiagnostics(OM,settings){
   const domain=new URL(url).pathname.split('/data_spatial/')[1]?.split('/')[0],inputs=diagnosticInputs(domain,key);
   const config=settings.domainOptions?.find(option=>option.value===domain)?.grid;
   if(!inputs||!config)throw Error('Unsupported vorticity source grid.');
-  return {domain,inputs,config,window:diagnosticWindow(config,ranges)};
+  const smoothing=vorticitySmoothing(config,ranges);
+  return {domain,inputs,config,window:smoothing.window,smoothing};
  };
  const useInputs=async(url,spec,signal,prefetch=false)=>reader.withReader(url,async file=>{
   const children=[];
@@ -187,14 +248,16 @@ export function installDiagnostics(OM,settings){
  reader.readVariable=async(url,variable,ranges=null,signal)=>{
   const spec=selection(url,variable,ranges);if(!spec)return originalRead(url,variable,ranges,signal);
   const inputs=await useInputs(url,spec,signal);signal?.throwIfAborted();
-  const key=JSON.stringify([spec.config,spec.window.target]);let geometry=geometries.get(key);
+  const derivativeWindow=spec.smoothing.derivativeWindow;
+  const key=JSON.stringify([spec.config,derivativeWindow.target]);let geometry=geometries.get(key);
   if(geometry){geometries.delete(key);geometries.set(key,geometry);}else{
-   geometry=vorticityGeometry(OM,spec.config,spec.window);
+   geometry=vorticityGeometry(OM,spec.config,derivativeWindow);
    const bytes=geometry.reduce((sum,a)=>sum+a.byteLength,0);
    while(geometryBytes+bytes>32*1024*1024&&geometries.size){const [old,arrays]=geometries.entries().next().value;geometryBytes-=arrays.reduce((sum,a)=>sum+a.byteLength,0);geometries.delete(old);}
    if(bytes<=32*1024*1024){geometries.set(key,geometry);geometryBytes+=bytes;}
   }
-  return {values:relativeVorticity(...inputs,spec.window,geometry,speedDirection.has(spec.domain)),directions:undefined,scaleFactor:100};
+  const raw=relativeVorticity(...inputs,derivativeWindow,geometry,speedDirection.has(spec.domain));
+  return {values:smoothVorticity(raw,spec.smoothing),directions:undefined,scaleFactor:100};
  };
  reader.prefetchVariable=async(url,variable,ranges=null,signal)=>{
   const spec=selection(url,variable,ranges);if(!spec)return originalPrefetch(url,variable,ranges,signal);

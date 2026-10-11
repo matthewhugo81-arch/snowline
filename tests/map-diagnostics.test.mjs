@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as OM from '../vendor/index.mjs';
-import {THETA_W,DIAGNOSTIC_KEYS,diagnosticWindow,vorticityGeometry,relativeVorticity,thetaWCelsius,thetaWRule,installDiagnostics} from '../map-diagnostics.js';
+import {THETA_W,DIAGNOSTIC_KEYS,diagnosticField,diagnosticWindow,vorticityGeometry,relativeVorticity,vorticitySmoothing,smoothVorticity,thetaWCelsius,thetaWRule,installDiagnostics} from '../map-diagnostics.js';
 import {sourceVariable,extendCatalogue,availableFields} from '../map-catalogue.js';
 import {combineSources,fieldSource,hasFieldTime} from '../map-sources.js';
 import {briefingPresets} from '../map-briefing-data.js';
@@ -31,7 +31,7 @@ function rotation(config,window,axis=[4e-6,-6e-6,1.2e-5]){
  const grid=OM.GridFactory.create(config),u=[],v=[],expected=[];
  for(let y=window.y.start;y<window.y.end;y++)for(let x=window.x.start;x<window.x.end;x++){
   const column=window.period?((x%window.period)+window.period)%window.period:x;
-  const [latitude,longitude]=config.type==='regular'?[config.latMin+y*config.dy,config.lonMin+column*config.dx]:grid.projection.reverse(grid.minX+column*grid.dx,grid.minY+y*grid.dy);
+  const [latitude,longitude]=config.type==='regular'?[config.latMin+y*config.dy,config.lonMin+column*config.dx]:config===ukv&&column===579&&y===518?[54.9,-2.5]:grid.projection.reverse(grid.minX+column*grid.dx,grid.minY+y*grid.dy);
   const p=latitude*radians,l=longitude*radians,[a,b,c]=axis;
   u.push(R*(c*Math.cos(p)-Math.sin(p)*(a*Math.cos(l)+b*Math.sin(l))));
   v.push(R*(a*Math.sin(l)-b*Math.cos(l)));
@@ -40,7 +40,7 @@ function rotation(config,window,axis=[4e-6,-6e-6,1.2e-5]){
  return {u:new Float32Array(u),v:new Float32Array(v),expected};
 }
 test('relative vorticity recovers tilted solid-body rotation on UKV and spherical grids',()=>{
- for(const [config,ranges] of [[ukv,[{start:35,end:42},{start:980,end:987}]],[ukv,[{start:480,end:485},{start:500,end:505}]],[OM.domainOptions.find(d=>d.value==='ncep_gfs025').grid,[{start:530,end:540},{start:710,end:725}]]]){
+ for(const [config,ranges] of [[ukv,[{start:35,end:42},{start:980,end:987}]],[ukv,[{start:480,end:485},{start:500,end:505}]],[ukv,[{start:515,end:522},{start:576,end:583}]],[OM.domainOptions.find(d=>d.value==='ncep_gfs025').grid,[{start:530,end:540},{start:710,end:725}]]]){
   const window=diagnosticWindow(config,ranges),data=rotation(config,window),geometry=vorticityGeometry(OM,config,window);
   const actual=relativeVorticity(data.u,data.v,window,geometry);
   actual.forEach((value,i)=>close(value,data.expected[i],.004));
@@ -103,7 +103,7 @@ test('bundled reader reads raw wind components with halos, prefetches both input
  const result=await reader.readVariable(url,'relative_vorticity_300hPa_derived',ranges,controller.signal);
  const window=diagnosticWindow(config,ranges),data=rotation(config,window);
  result.values.forEach((v,i)=>close(v,data.expected[i],.003));assert.equal(result.directions,undefined);assert.equal(result.scaleFactor,100);
- assert.equal(calls.length,2);assert.deepEqual(calls[0].ranges,window.segments[0].ranges);assert.equal(calls[0].signal,controller.signal);
+ assert.equal(calls.length,2);assert.deepEqual(calls[0].ranges,vorticitySmoothing(config,ranges).window.segments[0].ranges);assert.equal(calls[0].signal,controller.signal);
  await reader.prefetchVariable(url,'relative_vorticity_300hPa_derived',ranges,controller.signal);
  assert.deepEqual(prefetch.map(c=>c.key).sort(),['wind_u_component_300hPa','wind_v_component_300hPa']);assert.equal(disposed.length,4);
  // A dateline window needs two disjoint byte-range reads per component. The
@@ -114,4 +114,54 @@ test('bundled reader reads raw wind components with halos, prefetches both input
  assert.equal(calls.length,6);assert.equal(disposed.length,6);
  controller.abort();await assert.rejects(reader.readVariable(url,'relative_vorticity_300hPa_derived',ranges,controller.signal),{name:'AbortError'});
  assert.equal(disposed.length,8);
+});
+
+function smoothSample(config,ranges,fn){
+ const smoothing=vorticitySmoothing(config,ranges),[rows,columns]=smoothing.derivativeWindow.target,values=[];
+ for(let y=rows.start;y<rows.end;y++)for(let x=columns.start;x<columns.end;x++)values.push(fn(x,y));
+ return smoothVorticity(new Float32Array(values),smoothing);
+}
+test('20 km Gaussian suppresses grid striping while retaining a broad signed weather signal',()=>{
+ const config={type:'regular',nx:300,ny:200,latMin:40,lonMin:-20,dx:.1,dy:.1};
+ const ranges=[{start:60,end:90},{start:70,end:150}];
+ const broad=(x,y)=>15*Math.sin((x-100)/25)+5*Math.cos((y-75)/30);
+ const smooth=smoothSample(config,ranges,broad),striped=smoothSample(config,ranges,(x,y)=>broad(x,y)+8*Math.cos(x*Math.PI/2));
+ let noise=0,bias=0,i=0;
+ for(let y=60;y<90;y++)for(let x=70;x<150;x++,i++){noise+=(striped[i]-smooth[i])**2;bias+=(smooth[i]-broad(x,y))**2;}
+ assert.ok(Math.sqrt(noise/i)<.03,'Short wavelength striping should be strongly attenuated');
+ assert.ok(Math.sqrt(bias/i)<.15,'Broad meteorological signal should remain');
+ const opposite=smoothSample(config,ranges,(x,y)=>-broad(x,y));
+ opposite.forEach((v,i)=>close(v,-smooth[i],1e-6));
+});
+test('smoothing is independent of cropped tiles on UKV, GFS and a wrapped global seam',()=>{
+ for(const config of [ukv,OM.domainOptions.find(d=>d.value==='ncep_gfs025').grid]){
+  const row=Math.floor(config.ny*.7),column=config===ukv?400:0;
+  const full=[{start:row,end:row+6},{start:column,end:column+8}],part=[{start:row+2,end:row+4},{start:column+2,end:column+5}];
+  const fn=(x,y)=>Math.sin(x*2*Math.PI/config.nx)*10+Math.cos(y*.03)*5;
+  const all=smoothSample(config,full,fn),subset=smoothSample(config,part,fn);
+  [18,19,20,26,27,28].forEach((j,i)=>assert.equal(subset[i],all[j]));
+  const seam=smoothSample(config,[{start:row,end:row+1},{start:config.nx-1,end:config.nx}],fn);
+  assert.ok(Number.isFinite(seam[0])||config===ukv);
+ }
+});
+test('smoothing retains missing-data masks and leaves unsupported domain edges blank',()=>{
+ const config={type:'regular',nx:100,ny:100,latMin:30,lonMin:-10,dx:.25,dy:.25};
+ const ranges=[{start:40,end:60},{start:40,end:60}];
+ const values=smoothSample(config,ranges,(x,y)=>x===50&&y===50?NaN:7);
+ assert.ok(Number.isNaN(values[10*20+10]));assert.ok(Number.isNaN(values[10*20+11]));
+ assert.equal(values[0],7);assert.ok([...values].every(v=>Number.isNaN(v)||v===7));
+ const edge=smoothSample(config,[{start:0,end:1},{start:0,end:1}],()=>7);
+ assert.ok(Number.isNaN(edge[0]));
+ const smoothing=vorticitySmoothing(config,ranges),[rows,columns]=smoothing.derivativeWindow.target;
+ const shared=new Float32Array(new SharedArrayBuffer((rows.end-rows.start)*(columns.end-columns.start)*4)).fill(3);
+ assert.ok(smoothVorticity(shared,smoothing).buffer instanceof SharedArrayBuffer);
+});
+test('vorticity palette keeps positive thresholds and colours, with matching processing notes',()=>{
+ for(const level of [300,400]){
+  const field=diagnosticField('relative_vorticity_'+level+'hPa');
+  assert.deepEqual(field.stops,[-40,-20,-10,-5,0,5,10,20,40]);
+  assert.deepEqual(field.colors.slice(5),['#fbe075','#f7a439','#df5429','#9b1839']);
+  assert.equal(field.colors[0],'#279ecd');assert.equal(field.colors[4],'#c8df65');
+  assert.match(field.note,/Gaussian smoothing \(20 km/);
+ }
 });

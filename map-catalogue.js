@@ -1,6 +1,6 @@
 import {ensembleField} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
-import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js';
+import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-smooth';
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
 export const PRESSURE_LEVELS = [1000,925,850,700,500,300,250,200,100,50,10];
