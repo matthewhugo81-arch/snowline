@@ -1,7 +1,7 @@
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-square-uk';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-square-uk';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-live-runs';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-live-runs';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
-import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
+import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-dew-point';
 
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
@@ -124,20 +124,43 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   };
   work=work.catch(()=>{}).then(task).catch(error=>{if(token===generation){$('status').textContent=error.message;$('retry').hidden=false;}});
  }
- async function configure(){
+ async function configure(force=false){
   cancel();const token=generation;
   model=choices.find(item=>item.id===$('model').value);meta=null;times=[];controlsDisabled(true);
   $('grid').replaceChildren();$('legend').replaceChildren();$('run').textContent='Checking model run…';$('status').textContent='Checking available chart fields…';$('retry').hidden=true;
   try{
-   const data=await loadModel(model.id);if(token!==generation||!active)return;meta=data;
+   const data=await loadModel(model.id,force);if(token!==generation||!active)return;meta=data;
    const available=briefingPresets(meta),previous=$('preset').value;
    $('preset').replaceChildren(...available.map(item=>option(item.id,item.name)));
    if(!available.length)throw Error('This run does not supply the fields for these briefing charts. Choose another model.');
    $('preset').value=available.some(item=>item.id===previous)?previous:available[0].id;
-   $('run').textContent=model.name+' · initialized '+runLabel(meta);
+   $('run').textContent=model.name+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
    controlsDisabled(false);timeline();renderPage();
   }catch(error){if(token===generation){meta=null;$('run').textContent=model.name;$('status').textContent=error.message;controlsDisabled(true);$('retry').hidden=false;}}
  }
+ let refreshing=false;
+ async function refreshRun(){
+  if(!active||document.hidden||refreshing)return;
+  if(!meta)return configure(true);
+  refreshing=true;const selected=model.id,previous=meta;
+  try{
+   const incoming=await loadModel(selected,true);
+   if(!active||model.id!==selected||meta!==previous)return;
+   const next=retainRunProgress(previous,incoming);
+   if(runSignature(next)!==runSignature(previous)){
+    requestedTime=Date.parse(times[start])||requestedTime;meta=next;
+    const available=briefingPresets(meta),selection=$('preset').value;
+    $('preset').replaceChildren(...available.map(item=>option(item.id,item.name)));
+    if(!available.length){cancel();times=[];controlsDisabled(true);$('grid').replaceChildren();$('run').textContent=model.name+' · initialized '+runLabel(meta)+' · Updating';$('status').textContent='New run arriving; awaiting the fields for this chart.';return;}
+    $('preset').value=available.some(item=>item.id===selection)?selection:available[0].id;
+    controlsDisabled(false);timeline();renderPage();
+   }
+   $('run').textContent=model.name+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
+  }catch{if(active&&model.id===selected)$('run').textContent=model.name+' · initialized '+runLabel(meta)+' · Live check unavailable; retrying in one minute.';}
+  finally{refreshing=false;}
+ }
+ let refreshTimer=setInterval(refreshRun,60000);
+ window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(refreshTimer);refreshTimer=setInterval(refreshRun,60000);refreshRun();}});
  $('model').addEventListener('change',()=>{requestedTime=Date.parse(times[start])||requestedTime;configure();});
  for(const id of ['preset','interval'])$(id).addEventListener('change',()=>{
   if(!meta)return;requestedTime=Date.parse(times[start]??meta.reference_time);
@@ -156,8 +179,8 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   renderer?.destroy();renderer=null;host.hidden=true;onClose();
  }
  $('close').addEventListener('click',close);
- document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden)cancel();else if(meta)renderPage();else configure();});
- window.addEventListener('pagehide',()=>{cancel();images.clear();renderer?.destroy();renderer=null;});
+ document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden)cancel();else if(meta){renderPage();refreshRun();}else configure();});
+ window.addEventListener('pagehide',()=>{clearInterval(refreshTimer);cancel();images.clear();renderer?.destroy();renderer=null;});
  return {open(selection){
   active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';
   $('model').value=choices.some(item=>item.id===selection.model)?selection.model:choices[0].id;

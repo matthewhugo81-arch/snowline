@@ -18,7 +18,7 @@ test('GEFS and ECMWF ENS use their own spatial domains and only published fields
   assert.equal(MODELS.some(m=>m.id===id),false,'Spatial IDs must not leak into location-chart requests');
   assert.ok(OM.domainOptions.some(domain=>domain.value===id),'Renderer supports the ensemble grid');
   const meta=await loadSpatialModel(id,async url=>{
-   assert.equal(url,SPATIAL_BASE+id+'/latest.json');return fixture;
+   assert.ok(['latest.json','in-progress.json'].some(path=>url===SPATIAL_BASE+id+'/'+path));return fixture;
   });
   assert.equal(fieldDataURL(meta,probability,t(3)),SPATIAL_BASE+id+'/2026/10/10/0000Z/2026-10-10T0300.om');
   assert.equal(fieldDataURL(meta,probability,t(0)),null,'No interval at initialization');

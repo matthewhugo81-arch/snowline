@@ -47,6 +47,10 @@ try{
   page.on('pageerror',e=>errors.push(e.message));
   page.on('console',m=>{if(m.type()==='warning'||m.type()==='error')console.log('BROWSER',m.text());});
   await page.addInitScript(()=>localStorage.setItem('snowline-terrain','false'));
+  await page.addInitScript(()=>{
+   const original=window.setInterval;window.fixtureRefreshers=[];
+   window.setInterval=(callback,delay,...args)=>{if(delay===60000)window.fixtureRefreshers.push(callback);return original(callback,delay,...args);};
+  });
   await page.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
   await page.route('**/map-tile-cache.js*',async route=>{
    const code=await readFile(resolve(root,'map-tile-cache.js'),'utf8');
@@ -56,6 +60,7 @@ try{
   await page.route('https://tiles.openfreemap.org/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
   const metadata=[];
+  let livePhase=0;
   const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','relative_humidity_2m','cloud_cover','cloud_cover_high','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
   const ensembleFixture=(hours,step)=>({...fixture(0,hours),variables:['precipitation_probability'],valid_times:fixture(0,hours).valid_times.filter((_,i)=>i%step===0)});
   const ensembleFixtures={ncep_gefs025:ensembleFixture(24,3),ncep_gefs05:ensembleFixture(48,6),ecmwf_ifs025_ensemble:ensembleFixture(30,3)};
@@ -64,7 +69,8 @@ try{
   await page.route('https://openmeteo.s3.amazonaws.com/**',route=>{
    const url=route.request().url();metadata.push(url);
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
-   const gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','geopotential_height_500hPa']}:null;
+   let gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','geopotential_height_500hPa']}:null;
+   if(gfs&&livePhase&& !url.endsWith('/latest.json'))gfs={...gfs,...fixture(12,livePhase===1?6:livePhase===2?12:18),variables:gfs.variables,completed:false};
    const meta=gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
@@ -407,6 +413,27 @@ try{
    await page.locator('#briefing-close').click();
    await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length>0,{},{timeout:60000});
+   await page.locator('#briefing-close').click();
+   // Provider latest.json stays at the old complete run. The live pointer has
+   // an earlier horizon, and grows while the user keeps this page open.
+   livePhase=1;
+   await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('1200Z'));
+   assert.match(await page.locator('#run-update-status').textContent(),/Updating/);
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'5');
+   const selectedValid=await page.locator('#map-time-label').textContent();
+   livePhase=2;
+   await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'11','New forecast hours arrive without a page reload');
+   assert.equal(await page.locator('#map-time-label').textContent(),selectedValid,'Refreshing retains the selected valid time');
+   assert.equal(await page.locator('.map-error:visible').count(),0);
+   await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
+   await page.waitForFunction(()=>document.getElementById('briefing-run').textContent.includes('1200Z'));
+   assert.match(await page.locator('#briefing-run').textContent(),/Updating/);
+   const briefingHours=await page.locator('#briefing-time option').count();
+   livePhase=3;
+   await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
+   assert.ok(await page.locator('#briefing-time option').count()>briefingHours,'Briefing also appends newly published forecast hours');
    await page.locator('#briefing-close').click();
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));

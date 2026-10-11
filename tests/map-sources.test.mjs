@@ -62,17 +62,18 @@ test('latest GFS fetches companion metadata for the exact selected cycle',async(
  const meta=await loadSpatialModel('gfs_global',async url=>{
   requested.push(url);
   if(url===SPATIAL_BASE+'ncep_gfs013/latest.json')return surface;
+  if(url.endsWith('/in-progress.json'))throw Object.assign(Error('Not updating'),{status:404});
   if(url===SPATIAL_BASE+'ncep_gfs025/2026/10/09/0600Z/meta.json')return upper;
   throw new Error('Unexpected URL: '+url);
  },'latest');
- assert.equal(requested.length,2);
+ assert.equal(requested.length,3);
  assert.equal(meta.sources.length,2);
  assert.deepEqual(meta.sourceWarnings,[]);
 });
 test('missing or mismatched companion data preserves surface forecasts and reports the partial feed',async()=>{
  for(const companion of [null,{...upper,reference_time:'2026-10-09T00:00:00Z'}]){
   const meta=await loadSpatialModel('gfs_global',async url=>{
-   if(url.endsWith('ncep_gfs013/latest.json'))return surface;
+   if(url.endsWith('ncep_gfs013/latest.json')||url.endsWith('/in-progress.json'))return surface;
    if(companion)return companion;
    throw new Error('Not yet published');
   },'latest');
@@ -86,11 +87,12 @@ test('latest mode never substitutes an older longer run',async()=>{
  const meta=await loadSpatialModel('gfs_global',async url=>{
   requested.push(url);
   if(url===SPATIAL_BASE+'ncep_gfs013/latest.json')return surface;
+  if(url.endsWith('/in-progress.json'))throw Object.assign(Error('Not updating'),{status:404});
   if(url===SPATIAL_BASE+'ncep_gfs025/2026/10/09/0600Z/meta.json')return upper;
   throw new Error('Older run unexpectedly requested');
  });
  assert.equal(meta.reference_time,run);
- assert.equal(requested.length,2);
+ assert.equal(requested.length,3);
 });
 test('UTC timestamp formatting differences identify the same forecast hour',()=>{
  const meta=combineSources(surface,[{...upper,valid_times:['2026-10-09T07:00:00.000Z']}]);
@@ -99,7 +101,7 @@ test('UTC timestamp formatting differences identify the same forecast hour',()=>
 });
 test('ordinary models keep their existing feed and do not request GFS data',async()=>{
  const meta=await loadSpatialModel('icon_eu',async url=>{
-  assert.equal(url,SPATIAL_BASE+'dwd_icon_eu/latest.json');
+  assert.ok(['latest.json','in-progress.json'].some(path=>url===SPATIAL_BASE+'dwd_icon_eu/'+path));
   return {...surface,variables:['temperature_2m','pressure_msl']};
  },'latest');
  assert.equal(fieldSource(meta,'pressure_msl',t1).domain,'dwd_icon_eu');

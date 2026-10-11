@@ -16,8 +16,8 @@ export function ukvRunPath(referenceTime) {
 function validatePublished(meta, expectedTime) {
  if (!meta || Date.parse(meta.reference_time) !== expectedTime)
   throw new Error('UKV metadata does not match its requested initialization. Check latest runs to retry.');
- if (meta.completed === false) return false;
- if (meta.completed !== true || !Array.isArray(meta.variables) || !meta.variables.length ||
+ if (Array.isArray(meta.valid_times) && !meta.valid_times.length) return false;
+ if (!Array.isArray(meta.variables) || !meta.variables.length ||
      !Array.isArray(meta.valid_times) || !meta.valid_times.length ||
      meta.valid_times.some(time => !Number.isFinite(Date.parse(time)) || Date.parse(time) < expectedTime))
   throw new Error('UKV metadata is invalid; the latest cycle cannot be verified.');
@@ -31,7 +31,7 @@ export async function selectUKVRun(latest, base, load, family, {lookbackHours = 
  if (!Number.isInteger(lookbackHours) || lookbackHours < 0 || lookbackHours > 48)
   throw new Error('Invalid UKV search window.');
  const skipped = [];
- // latest.json is the provider's published frontier, not the browser's clock.
+ // The newest of in-progress.json/latest.json is the published frontier.
  for (let time = newest; time >= newest - lookbackHours * HOUR; time -= HOUR) {
   const reference = new Date(time).toISOString();
   if (cycleFamily(reference) !== family) continue;
@@ -46,9 +46,9 @@ export async function selectUKVRun(latest, base, load, family, {lookbackHours = 
   if (!validatePublished(meta, time)) { skipped.push(reference); continue; }
   return {...meta, runFamily: family, selectionWarnings: skipped.length ? [
    'A newer ' + (family === 'main' ? 'main' : 'hourly nowcast') +
-   ' cycle is not yet fully published. Showing the latest verified completed cycle in this group.'
+   ' cycle has no published hours yet. Showing the newest available cycle in this group.'
   ] : []};
  }
- throw new Error('No completed UKV ' + family + ' cycle is available within the last ' + lookbackHours +
+ throw new Error('No published UKV ' + family + ' cycle is available within the last ' + lookbackHours +
   ' hours of the published feed. The other run group has not been substituted.');
 }

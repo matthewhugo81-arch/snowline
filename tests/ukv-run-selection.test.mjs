@@ -40,12 +40,18 @@ test('midnight and UTC offsets retain the correct cycle, date and file path',asy
  assert.equal(cycleFamily('2026-10-10T04:00:00+01:00'),'main');
  assert.equal(ukvRunPath('2026-10-10T00:00:00+01:00'),'2026/10/09/2300Z/');
 });
-test('incomplete and not-yet-published cycles permit only an explicit same-family fallback',async()=>{
+test('empty and not-yet-published cycles permit only an explicit same-family fallback',async()=>{
  const latest=run('2026-10-10T08:00Z',12),prior=run('2026-10-10T03:00Z',120);
- for(const unpublished of [run('2026-10-10T06:00Z',4,{completed:false}),missing()]){
+ for(const unpublished of [run('2026-10-10T06:00Z',4,{completed:false,valid_times:[]}),missing()]){
   const {load}=loader({[base+'2026/10/10/0600Z/meta.json']:unpublished,[base+'2026/10/10/0300Z/meta.json']:prior});
   const chosen=await selectUKVRun(latest,base,load,'main');assert.equal(chosen.reference_time,prior.reference_time);assert.equal(chosen.selectionWarnings.length,1);
  }
+});
+test('an arriving UKV main run replaces an older completed run as soon as it has hours',async()=>{
+ const latest=run('2026-10-10T08:00Z',12),partial=run('2026-10-10T06:00Z',4,{completed:false});
+ const {load}=loader({[base+'2026/10/10/0600Z/meta.json']:partial});
+ const chosen=await selectUKVRun(latest,base,load,'main');
+ assert.equal(chosen.reference_time,partial.reference_time);assert.equal(chosen.completed,false);assert.equal(chosen.valid_times.length,5);
 });
 test('service and timeout errors cannot silently select an older run',async()=>{
  const latest=run('2026-10-10T08:00Z',12);

@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import threading
 import time
+import xml.etree.ElementTree as ET
 
 import eccodes as ec
 import numpy as np
@@ -106,7 +107,12 @@ class Source:
         if model == 'ecmwf':
             for block in (240, 360):
                 url = self.url(block, 'mean')
-                self.indexes[block] = [json.loads(line) for line in fetch(url.replace('.grib2', '.index')).decode().splitlines()]
+                try:
+                    self.indexes[block] = [json.loads(line) for line in fetch(url.replace('.grib2', '.index')).decode().splitlines()]
+                except requests.HTTPError as error:
+                    if error.response.status_code != 404:
+                        raise
+                    self.indexes[block] = []
 
     def url(self, hour, stat):
         date, cycle = self.run.strftime('%Y%m%d'), self.run.strftime('%H')
@@ -122,11 +128,28 @@ class Source:
             return gefs_records(fetch(self.url(hour, stat) + '.idx').decode(), stat)
         return ecmwf_records(self.indexes[240 if hour <= 240 else 360], hour, stat)
 
-    def check_complete(self):
-        # Require the full published horizon for both statistics. Every earlier
-        # message is also checked as it is decoded before latest.json is updated.
-        for stat in ('mean', 'spread'):
-            self.records(self.config['hours'][-1], stat)
+    def available_hours(self):
+        if self.model == 'gefs':
+            available = []
+            for stat in ('mean', 'spread'):
+                prefix = self.url(0, stat).split('.com/', 1)[1][:-3]
+                url = 'https://noaa-gefs-pds.s3.amazonaws.com/?' + requests.compat.urlencode(
+                    {'list-type': '2', 'prefix': prefix})
+                listing = ET.fromstring(fetch(url))
+                if listing.findtext('{*}IsTruncated') == 'true':
+                    raise ValueError('GEFS availability listing was truncated')
+                keys = [node.text for node in listing.findall('{*}Contents/{*}Key')]
+                available.append({int(key[-3:]) for key in keys if key.startswith(prefix) and key[-3:].isdigit()})
+            return [hour for hour in self.config['hours'] if all(hour in hours for hours in available)]
+        available = []
+        for hour in self.config['hours']:
+            try:
+                for stat in ('mean', 'spread'):
+                    self.records(hour, stat)
+                available.append(hour)
+            except ValueError:
+                continue
+        return available
 
 
 def normalize_values(values, key, stat, units):
@@ -214,7 +237,7 @@ def frame_path(root, domain, run, hour):
     return root / domain / run.strftime('%Y/%m/%d/%H00Z') / ((run + timedelta(hours=hour)).strftime('%Y-%m-%dT%H%M') + '.om')
 
 
-def build_model(model, root, now, workers, hours=None):
+def build_model(model, root, now, workers, hours=None, max_new_frames=24):
     config = MODELS[model]
     latest_path = root / config['domain'] / 'latest.json'
     previous = json.loads(latest_path.read_text()) if latest_path.exists() else None
@@ -222,43 +245,76 @@ def build_model(model, root, now, workers, hours=None):
     source = None
     for offset in range(8):
         candidate = run - timedelta(hours=offset * config['cycle'])
-        if (previous and previous.get('format_version') == VERSION and iso(candidate) <= previous['reference_time']
+        if (previous and previous.get('format_version') == VERSION and iso(candidate) == previous['reference_time']
                 and previous.get('variables') == VARIABLES and len(previous.get('valid_times', [])) == len(config['hours'])
                 and all(frame_path(root, config['domain'], datetime.fromisoformat(previous['reference_time']), h).exists() for h in config['hours'])):
-            print(f'{model}: latest complete run already prepared ({previous["reference_time"]})', flush=True)
+            print(f'{model}: latest run already prepared ({previous["reference_time"]})', flush=True)
             return
+        if previous and iso(candidate) < previous['reference_time']:
+            break  # Never roll a published feed back to an older initialization.
         try:
             source = Source(model, candidate)
-            source.check_complete()
+            available = source.available_hours()
+            if not available:
+                raise ValueError('No complete forecast frames published yet')
             break
         except (requests.RequestException, ValueError) as error:
             source = None
             print(f'{model}: {iso(candidate)} not ready: {error}', flush=True)
     if source is None:
-        raise RuntimeError(f'{model}: no complete run available')
-    hours = config['hours'] if hours is None else hours
-    paths = [(h, frame_path(root, config['domain'], source.run, h)) for h in hours]
+        if previous:
+            print(f'::warning::{model}: live source unavailable; retaining {previous["reference_time"]}', flush=True)
+            return
+        raise RuntimeError(f'{model}: no published forecast hours available')
+    requested = config['hours'] if hours is None else hours
+    paths = [(h, frame_path(root, config['domain'], source.run, h)) for h in requested if h in available]
+    if not paths:
+        raise ValueError('Requested forecast hours are not published yet')
     paths[0][1].parent.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
+    # A small batch goes live promptly; later scheduled passes append the rest.
+    # An individual frame still requires all six verified fields.
+    pending = [(h, path) for h, path in paths if not path.exists()][:max_new_frames]
+    failures = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        jobs = {pool.submit(write_frame, source, h, path): h for h, path in paths if not path.exists()}
+        jobs = {pool.submit(write_frame, source, h, path): h for h, path in pending}
         for i, job in enumerate(as_completed(jobs), 1):
-            job.result()
+            try:
+                job.result()
+            except Exception as error:
+                failures.append(f'T+{jobs[job]}: {error}')
             if i % 10 == 0 or i == len(jobs):
                 print(f'{model}: {i}/{len(jobs)} frames prepared in {time.monotonic()-started:.0f}s', flush=True)
-    meta = dict(format_version=VERSION, reference_time=iso(source.run), completed=True,
-                variables=VARIABLES, valid_times=[iso(source.run + timedelta(hours=h)) for h in hours],
+    paths = [(h, frame_path(root, config['domain'], source.run, h)) for h in requested
+             if frame_path(root, config['domain'], source.run, h).exists()]
+    if failures:
+        print(f'::warning::{model}: {len(failures)} frames will be retried: {failures[0]}', flush=True)
+    if not paths:
+        if previous:
+            print(f'::warning::{model}: keeping previous published run until a new frame is verified', flush=True)
+            return
+        raise ValueError('No verified ensemble frames could be prepared')
+    prepared = [h for h, _ in paths]
+    preceding = (previous['reference_time'] if previous['reference_time'] != iso(source.run)
+                 else previous.get('previous_reference_time')) if previous else None
+    meta = dict(format_version=VERSION, reference_time=iso(source.run), completed=prepared == config['hours'],
+                variables=VARIABLES, valid_times=[iso(source.run + timedelta(hours=h)) for h in prepared],
+                expected_forecast_hours=config['hours'][-1],
                 generated_at=iso(now), source='NOAA GEFS' if model == 'gefs' else 'ECMWF IFS ENS',
                 grid_resolution=config['step'], statistic='Ensemble mean and standard deviation',
                 source_url='https://www.nco.ncep.noaa.gov/pmb/products/gens/' if model == 'gefs' else 'https://www.ecmwf.int/en/forecasts/datasets/open-data')
+    if preceding:
+        meta['previous_reference_time'] = preceding
     text = json.dumps(meta, indent=2) + '\n'
-    (paths[0][1].parent / 'meta.json').write_text(text)
+    run_meta = paths[0][1].parent / 'meta.json'
+    run_meta.with_suffix('.tmp').write_text(text)
+    run_meta.with_suffix('.tmp').replace(run_meta)
     latest_path.with_suffix('.tmp').write_text(text)
     latest_path.with_suffix('.tmp').replace(latest_path)
     # Retain the preceding prepared cycle so already-open pages can finish a loop.
     keep = {paths[0][1].parent}
-    if previous:
-        keep.add(root / config['domain'] / datetime.fromisoformat(previous['reference_time']).strftime('%Y/%m/%d/%H00Z'))
+    if preceding:
+        keep.add(root / config['domain'] / datetime.fromisoformat(preceding).strftime('%Y/%m/%d/%H00Z'))
     for folder in (root / config['domain']).glob('*/*/*/*Z'):
         if folder not in keep:
             if not folder.resolve().is_relative_to((root / config['domain']).resolve()):
@@ -274,13 +330,14 @@ def main():
     parser.add_argument('--model', choices=list(MODELS), action='append')
     parser.add_argument('--now', help='UTC time override for reproducible validation')
     parser.add_argument('--workers', type=int, default=4)
+    parser.add_argument('--max-new-frames', type=int, default=24, help='Publish this many new frames per model per pass')
     parser.add_argument('--hours', help='Validation only: comma-separated hours; use a scratch output directory')
     args = parser.parse_args()
     now = datetime.fromisoformat(args.now).replace(tzinfo=timezone.utc) if args.now else datetime.now(timezone.utc)
     errors = []
     for model in args.model or MODELS:
         try:
-            build_model(model, args.output, now, args.workers, [int(h) for h in args.hours.split(',')] if args.hours else None)
+            build_model(model, args.output, now, args.workers, [int(h) for h in args.hours.split(',')] if args.hours else None, args.max_new_frames)
         except Exception as error:
             errors.append(f'{model}: {error}')
             print(f'::error::{model}: {error}', flush=True)

@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 import tempfile
+import json
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -69,10 +70,49 @@ class EnsembleDataTests(unittest.TestCase):
 
     def test_failed_run_does_not_publish_partial_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
-            source=SimpleNamespace(run=datetime(2026,10,11,tzinfo=timezone.utc),config=b.MODELS['gefs'],check_complete=lambda:None)
+            source=SimpleNamespace(run=datetime(2026,10,11,tzinfo=timezone.utc),config=b.MODELS['gefs'],available_hours=lambda:[0,3])
             with patch.object(b,'Source',return_value=source),patch.object(b,'write_frame',side_effect=ValueError('missing field')):
                 with self.assertRaises(ValueError): b.build_model('gefs',Path(directory),source.run,1,[0,3])
             self.assertFalse((Path(directory)/b.MODELS['gefs']['domain']/'latest.json').exists())
+
+    def test_partial_run_publishes_good_frames_and_appends_without_redownloading(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            source=SimpleNamespace(run=datetime(2026,10,11,12,tzinfo=timezone.utc),config=b.MODELS['gefs'],available_hours=lambda:[0,3,6,9])
+            downloaded=[]
+            def write(source,hour,path):
+                downloaded.append(hour)
+                if hour==3: raise ValueError('temporary missing field')
+                path.write_bytes(b'verified frame'); return 14
+            with patch.object(b,'Source',return_value=source),patch.object(b,'write_frame',side_effect=write):
+                b.build_model('gefs',root,source.run,1,max_new_frames=2)
+                meta=json.loads((root/b.MODELS['gefs']['domain']/'latest.json').read_text())
+                self.assertFalse(meta['completed'])
+                self.assertEqual(meta['valid_times'],[b.iso(source.run)])
+                b.build_model('gefs',root,source.run,1,max_new_frames=2)
+                updated=json.loads((root/b.MODELS['gefs']['domain']/'latest.json').read_text())
+                self.assertEqual(len(updated['valid_times']),2)
+                self.assertEqual(downloaded.count(0),1)
+                self.assertNotIn(b.iso(source.run+b.timedelta(hours=3)),updated['valid_times'])
+
+    def test_ecmwf_first_block_does_not_wait_for_day_fifteen(self):
+        rows=[dict(type=stat,step='0',param=v[2],levtype=v[3],levelist=v[4],_offset=i*100,_length=100)
+              for stat in ('em','es') for i,v in enumerate(b.FIELDS.values())]
+        response=b.requests.Response();response.status_code=404
+        def fetch(url):
+            if '360h' in url: raise b.requests.HTTPError(response=response)
+            return '\n'.join(json.dumps(row) for row in rows).encode()
+        with patch.object(b,'fetch',side_effect=fetch):
+            source=b.Source('ecmwf',datetime(2026,10,11,12,tzinfo=timezone.utc))
+            self.assertEqual(source.available_hours(),[0])
+
+    def test_gefs_availability_requires_mean_and_spread_but_not_full_run(self):
+        source=b.Source('gefs',datetime(2026,10,11,12,tzinfo=timezone.utc))
+        def fetch(url):
+            stat='mean' if 'geavg' in url else 'spread'
+            keys=[source.url(hour,stat).split('.com/',1)[1] for hour in ([0,3,6] if stat=='mean' else [0,3])]
+            return ('<ListBucketResult><IsTruncated>false</IsTruncated>'+''.join('<Contents><Key>'+key+'</Key></Contents>' for key in keys)+'</ListBucketResult>').encode()
+        with patch.object(b,'fetch',side_effect=fetch): self.assertEqual(source.available_hours(),[0,3])
 
     def test_utc_and_native_horizons(self):
         self.assertEqual(b.iso(datetime(2026,10,11)), '2026-10-11T00:00:00Z')

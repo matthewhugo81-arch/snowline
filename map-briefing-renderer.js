@@ -1,7 +1,7 @@
 import {ForecastFrames} from './map-frames.js?v=20261011-parallel-preload';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
-import {hasFieldTime} from './map-sources.js?v=20261011-dew-point';
+import {hasFieldTime} from './map-sources.js?v=20261011-live-runs';
 
 const aborted=()=>new DOMException('Aborted','AbortError');
 export function briefingSettings(settings){

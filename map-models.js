@@ -1,5 +1,5 @@
 import {MODELS} from './data.js?v=20261010-ukv';
-import {UKV,UKV_NOWCAST} from './ukv-run-selection.js?v=20261010-ukv-families';
+import {UKV,UKV_NOWCAST} from './ukv-run-selection.js?v=20261011-live-runs';
 // Spatial-only choices must not become point-API IDs or duplicate chart averages.
 export const MAP_MODELS = [...MODELS.flatMap(model => model.id !== UKV ? [model] : [
  {...model, name:'UKV — latest main run', runFamily:'main', sourceModel:UKV},

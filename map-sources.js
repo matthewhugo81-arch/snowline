@@ -1,5 +1,5 @@
-import {chooseRun,hasTime,forecastTimes} from './map-runs.js?v=20261010-latest-cycles';
-import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261010-ukv-families';
+import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
+import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
 import {sourceVariable} from './map-catalogue.js?v=20261011-dew-point';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 
@@ -32,7 +32,7 @@ export function runPath(referenceTime){
 }
 export function combineSources(primary,other=[]){
  const sources=[primary,...other.filter(meta=>Date.parse(meta.reference_time)===Date.parse(primary.reference_time))];
- return {...primary,sources,variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
+ return {...primary,sources,completed:sources.every(meta=>meta.completed!==false),variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
 }
 export function fieldSource(meta,key,time){
  return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&!((intervalFields.has(key)||(source.domain==='ncep_gfs013'&&gfsForecastOnly.has(key)))&&Date.parse(time)===Date.parse(source.reference_time)))))??null;
@@ -48,15 +48,21 @@ export async function loadSpatialModel(model,load){
  if(!domain)throw new Error('Unknown spatial model');
  const baseURL=ownEnsembles.has(domain)?ownBase:SPATIAL_BASE;
  const base=baseURL+domain+'/';
- const latest=await load(base+'latest.json');
+ // in-progress.json advances after EACH uploaded forecast hour. latest.json
+ // alone deliberately points to the last fully completed run.
+ const results=await Promise.allSettled((ownEnsembles.has(domain)?['latest.json']:['latest.json','in-progress.json']).map(path=>load(base+path)));
+ const published=results.filter(result=>result.status==='fulfilled').map(result=>result.value);
+ if(!published.some(publishedRun))throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
+ const latest=await chooseRun(...published);
  const family=ukvRunFamily(model);
  const primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
  const warnings=[...(primary.selectionWarnings??[])];
- if(ownEnsembles.has(domain)&&Date.now()-Date.parse(primary.reference_time)>36*3600000)warnings.push('Ensemble run is over 36 hours old. A newer complete run is not yet prepared.');
+ if(results.some(result=>result.status==='rejected'&&result.reason?.status!==404))warnings.push('A live run check failed; using verified published data and retrying automatically.');
+ if(ownEnsembles.has(domain)&&Date.now()-Date.parse(primary.reference_time)>36*3600000)warnings.push('Ensemble run is over 36 hours old. Checking for newer published hours.');
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{
    const meta=await load(SPATIAL_BASE+companion+'/'+runPath(primary.reference_time)+'meta.json');
-   if(Date.parse(meta.reference_time)!==Date.parse(primary.reference_time)||!Array.isArray(meta.variables)||!meta.valid_times?.length)throw new Error('Matching companion run is not available');
+   if(Date.parse(meta.reference_time)!==Date.parse(primary.reference_time)||!publishedRun(meta))throw new Error('Matching companion run is not available');
    return {...meta,domain:companion};
   }catch{
    warnings.push('GFS companion fields could not be loaded for this run. Try Check latest runs.');
