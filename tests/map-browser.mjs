@@ -20,7 +20,7 @@ const fakeOM=`
  const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOQSznxHwAEOAJKNKHrggAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
  export async function omProtocol(params,controller){
   window.fixtureRequests.push({url:params.url,type:params.type});
-  await new Promise(r=>setTimeout(r,80));
+  await new Promise(r=>setTimeout(r,window.fixtureDelay??80));
   if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
   if(!params.url.startsWith('om://fixture/'))return {data:{tilejson:'2.2.0',minzoom:0,maxzoom:10,tiles:['om://fixture/'+encodeURIComponent(params.url)+'/{z}/{x}/{y}']}};
   const fault=window.fixtureFault;
@@ -259,10 +259,12 @@ try{
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Freezing level')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    await page.locator('#map-a .maplibregl-ctrl-zoom-out').click();
    await page.locator('#map-b .maplibregl-ctrl-zoom-in').click();
-   await page.locator('#map-time').evaluate(el=>{el.value='30';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.evaluate(()=>window.fixtureDelay=180);
    await page.locator('#map-a canvas.maplibregl-canvas').press('ArrowRight');
+   await page.locator('#map-time').evaluate(el=>{el.value='30';el.dispatchEvent(new Event('change',{bubbles:true}));});
    await bothAt('Sun 11 Oct, 07:00 UTC');
    await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
+   await page.evaluate(()=>window.fixtureDelay=80);
    assert.equal(await page.locator('.map-error:visible').count(),0);
    assert.notEqual(await page.locator('#zoom-a').textContent(),await page.locator('#zoom-b').textContent());
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
