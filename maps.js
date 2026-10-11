@@ -2,17 +2,17 @@ import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {ForecastFrames,frameWindow} from './map-frames.js?v=20261011-continuous-loop';
 import {ForecastPlayback} from './map-playback.js?v=20261011-continuous-loop';
 import {overlayGroups} from './map-overlay-specs.js?v=20261010-buffered-playback';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-continuous-loop';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-ensemble-maps';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL} from './map-sources.js?v=20261011-continuous-loop';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-ensemble-maps';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv-families';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-cloud-scale';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-ensemble-maps';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_MODELS as MODELS} from './map-models.js?v=20261010-ukv-families';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261011-ensemble-maps';
 import {ukvRunFamily} from './ukv-run-selection.js?v=20261010-ukv-families';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
@@ -75,8 +75,9 @@ function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fiel
 function status(message){$('map-status').textContent=message;}
 function usageUpdate(){$('usage-summary').textContent=usageText();}window.addEventListener('snowline-usage',usageUpdate);usageUpdate();
 const modelGroups=[
- ['Short-term models',MODELS.filter(model=>model.regional)],
- ['Medium-term models',MODELS.filter(model=>!model.regional)]
+ ['Short-term models',MODELS.filter(model=>model.regional&&!model.ensemble)],
+ ['Medium-term models',MODELS.filter(model=>!model.regional&&!model.ensemble)],
+ ['Ensemble models',MODELS.filter(model=>model.ensemble)]
 ];
 for(const id of ['map-model','map-model-b']){
  for(const [label,models] of modelGroups){
@@ -306,7 +307,7 @@ function setLegend(){
   const displayBreaks=displayStops(f),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
   if(panels[key].legendField!==field){
   panels[key].legendField=field;
-  el('legend-title').textContent=displayUnit(f);
+  el('legend-title').textContent=field==='precipitation_probability'?'Chance (%)':displayUnit(f);
   gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
   gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
   [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
@@ -316,10 +317,11 @@ function setLegend(){
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
   let note=f.note,interval='';
-  if(['precipitation','rain','showers','snowfall_water_equivalent'].includes(field)){
-   const times=fieldSource(state.metas[model],field)?.valid_times??[],idx=times.findIndex(t=>Date.parse(t)===Date.parse(state.times[state.index]));
-   interval=idx>0?(Date.parse(times[idx])-Date.parse(times[idx-1]))/3600000+' h ending at valid time':'Initial model time';
-   note+=' '+(idx>0?'Accumulation: '+interval+'.':'An accumulation interval is not defined at the initial model time.');
+  if(['precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
+   const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
+   interval=hours?hours+' h ending at valid time':'Period unavailable';
+   if(field==='precipitation_probability'&&hours)interval='≥'+Number((hours*.1).toFixed(2))+' mm / '+interval;
+   note+=' '+(hours?(field==='precipitation_probability'?'Probability threshold: ':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
   }
   el('legend-interval').textContent=interval;
   el('variable-note').textContent=note;

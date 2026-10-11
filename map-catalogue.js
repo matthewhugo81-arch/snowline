@@ -15,6 +15,10 @@ export const CLOUD_COVER_SCALE = {
  stops:[0,20,40,60,75,85,95,100],
  colors:['#263c55','#3b5573','#56738e','#7391ac','#96b1c7','#bdcfdf','#dce9f1','#ffffff']
 };
+export const PRECIPITATION_PROBABILITY_SCALE = {
+ stops:[0,10,25,50,75,90,100],
+ colors:['#ffffff','#dbeefd','#9ecae1','#4292c6','#2171b5','#08519c','#08306b']
+};
 export function sourceVariable(meta,key){
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
@@ -70,6 +74,10 @@ const extras={
 };
 export function describeVariable(key,OM){
  let [name,scaleKey,note]=extras[key]??[];
+ if(key==='precipitation_probability')return {
+  key,name:'Precipitation probability',group:variableGroup(key),unit:'%',...PRECIPITATION_PROBABILITY_SCALE,
+  note:'Share of ensemble members predicting at least 0.1 mm/h averaged over the model interval, including rain and snow water equivalent. The threshold and period are shown beside the scale.'
+ };
  if(key==='rain'||key==='showers')return {key,name,note,group:variableGroup(key),unit:'mm water',...PRECIPITATION_SCALE};
  if(scaleKey==='cloud_cover')return {key,name,note,group:variableGroup(key),unit:'%',...CLOUD_COVER_SCALE};
  let unit;

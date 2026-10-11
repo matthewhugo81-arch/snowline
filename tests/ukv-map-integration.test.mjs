@@ -10,7 +10,8 @@ import {cachedJSON} from '../cache.js';
 const reference=(hour)=>`2026-10-10T${String(hour).padStart(2,'0')}:00:00Z`;
 const make=(hour,hours)=>({reference_time:reference(hour),completed:true,variables:['precipitation','temperature_2m'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.parse(reference(hour))+i*3600000).toISOString())});
 test('two map UKV choices do not duplicate location-chart model averages or invent point API IDs',()=>{
- assert.equal(MAP_MODELS.length,MODELS.length+1);
+ assert.equal(MAP_MODELS.filter(m=>m.id.startsWith(UKV)).length,2);
+ for(const model of MODELS)assert.ok(MAP_MODELS.some(m=>m.id===model.id));
  assert.equal(MAP_MODELS.find(m=>m.id===UKV).name,'UKV — latest main run');
  assert.equal(MAP_MODELS.find(m=>m.id===UKV_NOWCAST).name,'UKV — latest hourly nowcast');
  assert.equal(MODELS.filter(m=>m.id.startsWith(UKV)).length,1);

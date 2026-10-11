@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261011-continuous-loop';
+import {hasFieldTime} from './map-sources.js?v=20261011-ensemble-maps';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:true,isobars:true,grid:false}]));

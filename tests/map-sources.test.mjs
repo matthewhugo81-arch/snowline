@@ -8,7 +8,7 @@ const surface={domain:'ncep_gfs013',reference_time:run,completed:true,variables:
 const upper={domain:'ncep_gfs025',reference_time:run,completed:true,variables:['pressure_msl','temperature_850hPa','wind_gusts_10m'],valid_times:[t0,t1]};
 
 test('interval fields exclude initialization without hiding instantaneous fields or later intervals',()=>{
- const keys=['precipitation','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation'];
+ const keys=['precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation'];
  const meta={...surface,variables:[...surface.variables,...keys]};
  for(const key of keys){
   assert.equal(hasFieldTime(meta,key,t0),false,key);

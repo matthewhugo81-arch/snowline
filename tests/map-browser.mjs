@@ -38,9 +38,12 @@ try{
   await page.route('**/coastline.geojson',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
   const metadata=[];
   const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
+  const ensembleFixture=(hours,step)=>({...fixture(0,hours),variables:['precipitation_probability'],valid_times:fixture(0,hours).valid_times.filter((_,i)=>i%step===0)});
+  const ensembleFixtures={ncep_gefs025:ensembleFixture(24,3),ncep_gefs05:ensembleFixture(48,6),ecmwf_ifs025_ensemble:ensembleFixture(30,3)};
   await page.route('https://openmeteo.s3.amazonaws.com/**',route=>{
    const url=route.request().url();metadata.push(url);
-   const meta=url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null;
+   const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
+   const meta=ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null;
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
   await page.goto(origin+'/maps.html');
@@ -123,6 +126,39 @@ try{
    assert.ok(await initialTemperatureRequests()>=beforeInitial+2,'Both panels request the newly available initial image');
    const invalidIntervals=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('variable=precipitation&')&&/\/(\d{4})Z\/2026-10-10T\1\.om/.test(r.url)));
    assert.deepEqual(invalidIntervals,[],'Do not request precipitation at initialization');
+   // Ensembles auto-select only their supplied layer, then compare and loop together.
+   const ensembleOptions=await page.locator('#map-model optgroup[label="Ensemble models"] option').evaluateAll(options=>options.map(o=>o.value));
+   for(const id of Object.keys(ensembleFixtures))assert.ok(ensembleOptions.includes(id));
+   assert.ok(ensembleOptions.includes('ncep_hgefs025_ensemble_mean'),'Existing ensemble mean remains available');
+   await page.locator('#map-model').selectOption('ncep_gefs025');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('GEFS 0.25°'));
+   assert.deepEqual(await page.locator('#map-variable option').evaluateAll(options=>options.map(o=>o.value)),['precipitation_probability']);
+   assert.equal(await page.locator('#legend-title-a').textContent(),'Chance (%)');
+   assert.equal(await page.locator('#legend-interval-a').textContent(),'≥0.3 mm / 3 h ending at valid time');
+   assert.equal(await page.locator('#map-mslp-a').isDisabled(),true);
+   await page.locator('#map-model-b').selectOption('ecmwf_ifs025_ensemble');
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('ECMWF ENS'));
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'7');
+   await page.locator('#map-time').evaluate(el=>{el.value=el.max;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await bothAt('Sun 11 Oct, 00:00 UTC');
+   await page.locator('#play-map').click();
+   await bothAt('Sat 10 Oct, 03:00 UTC');
+   assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true');
+   await page.locator('#play-map').click();
+   await page.locator('#map-model').selectOption('ncep_gefs05');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('GEFS 0.5°'));
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'4','Comparison intersects 3-hour and 6-hour native steps');
+   assert.equal(await page.locator('#legend-interval-a').textContent(),'≥0.6 mm / 6 h ending at valid time');
+   assert.equal(await page.locator('#legend-interval-b').textContent(),'≥0.3 mm / 3 h ending at valid time');
+   await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.waitForFunction(()=>document.getElementById('map-time').max==='7');
+   assert.match(await page.locator('#range-end').textContent(),/12 Oct/,'Single panel recovers extended GEFS horizon');
+   const invalidEnsembleRequests=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&/\/(ncep_gefs025|ncep_gefs05|ecmwf_ifs025_ensemble)\//.test(r.url)&&(!r.url.includes('variable=precipitation_probability&')||r.url.includes('/2026-10-10T0000.om'))));
+   assert.deepEqual(invalidEnsembleRequests,[],'Ensembles request neither unavailable MSLP nor initialization files');
+   await page.locator('#map-model').selectOption(main);
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('UKV — latest main run'));
+   assert.equal(await page.locator('#map-variable').inputValue(),'temperature_2m');
+   assert.equal(await page.locator('#map-mslp-a').isDisabled(),false,'Returning to UKV restores pressure availability');
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));
   }catch(error){
