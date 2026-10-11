@@ -7,6 +7,18 @@ const run='2026-10-09T06:00:00Z',t0='2026-10-09T06:00Z',t1='2026-10-09T07:00Z',t
 const surface={domain:'ncep_gfs013',reference_time:run,completed:true,variables:['temperature_2m','precipitation','wind_u_component_10m','wind_v_component_10m'],valid_times:[t0,t1,t2]};
 const upper={domain:'ncep_gfs025',reference_time:run,completed:true,variables:['pressure_msl','temperature_850hPa','wind_gusts_10m'],valid_times:[t0,t1]};
 
+test('GFS cloud layers start at the first forecast hour, while other models retain analysis clouds',()=>{
+ const variables=['cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high'];
+ for(const key of variables){
+  const meta={...surface,variables};
+  assert.equal(hasFieldTime(meta,key,t0),false);
+  assert.equal(fieldDataURL(meta,key,run),null);
+  assert.equal(hasFieldTime(meta,key,t1),true);
+  assert.equal(hasFieldTime({...meta,domain:'ukmo_uk_deterministic_2km'},key,t0),true);
+  assert.equal(hasFieldTime({...meta,valid_times:[t1,t2]},key,t1),true);
+ }
+});
+
 test('interval fields exclude initialization without hiding instantaneous fields or later intervals',()=>{
  const keys=['precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation'];
  const meta={...surface,variables:[...surface.variables,...keys]};

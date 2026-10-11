@@ -2,14 +2,15 @@ import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-render-jobs';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261011-render-jobs';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-parallel-preload';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
+import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-contours-off';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-parallel-preload';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261010-wind-mph';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-ensemble-statistics';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-parallel-preload';
 import {runLabel} from './map-runs.js?v=20261010-latest-cycles';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261010-ukv-families';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-ensemble-statistics';
@@ -85,7 +86,7 @@ function viewportBounds(){
  OM.updateCurrentBounds(bounds);
  // Renderer clipping depends on the view as well as the URL/zoom. Never reuse a
  // partially clipped tile in a different view, even if its tile coordinates match.
- if(imageryCache.setContext(JSON.stringify(bounds.map(value=>Number(value.toFixed(5)))))){
+ if(imageryCache.setContext(JSON.stringify(OM.currentBounds??bounds))){
   for(const panel of Object.values(panels))panel.frameCache?.invalidateView();
   updatePreloadStatus();
  }
@@ -257,7 +258,8 @@ function panelCache(panel,model,field){
   return url;
  });
  panel.cacheKey=signature;
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate:url=>overlayGroups(descriptors.get(url)),onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
+ const decorate=url=>overlayGroups(descriptors.get(url));
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),preloadConcurrency:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
  panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
@@ -288,6 +290,7 @@ async function loadTime(){
  dismissLocation();requestedTime=Date.parse(time);
  // The displayed valid-time label does not advance until BOTH panels are ready.
  $('animation-status').textContent='Loading '+stamp(time)+' UTC…';
+ for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
  try{
   for(const {key,model,field}of panelSelections(state)){
    const panel=panels[key];await panel.ready;if(!valid()||panel.restyling)return false;
@@ -323,6 +326,7 @@ async function loadTime(){
   }
   const shown=state.times.indexOf(panels.a?.displayedTime);
   if(shown>=0){state.index=shown;syncTimeline(shown);}
+  else{$('previous-time').disabled=index===0;$('next-time').disabled=index===state.times.length-1;}
   failedSelection={index,time};
   $('animation-status').textContent='Frame unavailable · playback stopped';status(error.message);updatePreloadStatus();return false;
  }

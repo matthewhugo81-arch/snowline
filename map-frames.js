@@ -15,10 +15,11 @@ export function fullSequence(urls,index){return [...new Set([...urls.slice(index
 // A frame owns its raster AND enabled vector overlays. They are prepared behind
 // the opaque basemap, then promoted together; we never blend forecast times.
 export class ForecastFrames{
- constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true,isActive=()=>true,maxAttempts=3}={}){
-  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload,isActive,maxAttempts});
+ constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true,isActive=()=>true,maxAttempts=3,prefetch,preloadConcurrency=2}={}){
+  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload,isActive,maxAttempts,prefetch,preloadConcurrency});
   this.frames=new Map();this.sequence=0;this.current=null;this.epoch=0;this.queue=[];this.keep=new Set();
   this.preloaded=new Set();this.failures=new Set();this.failureAttempts=new Map();this.retired=new Set();
+  this.prefetches=new Map();
  }
  prepare(url){
   let frame=this.frames.get(url);
@@ -110,6 +111,7 @@ export class ForecastFrames{
  }
  pause(){
   clearTimeout(this.timer);this.epoch++;this.queue=[];
+  this.cancelPrefetches();
   for(const frame of this.frames.values())frame.pauseTimeout?.();
  }
  resume(){
@@ -146,14 +148,58 @@ export class ForecastFrames{
  }
  stop(exceptURL){
   clearTimeout(this.timer);this.epoch++;this.queue=[];
+  this.cancelPrefetches(new Set([exceptURL]));
   for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.pending&&frame.url!==exceptURL)this.discard(frame);
+ }
+ cancelPrefetches(keep=new Set()){
+  for(const [url,job]of this.prefetches)if(!keep.has(url)){job.controller.abort();this.prefetches.delete(url);}
+ }
+ preload(url){
+  const existing=this.prefetches.get(url);if(existing)return existing.promise;
+  const job={controller:new AbortController()};this.prefetches.set(url,job);
+  let timedOut=false;
+  const timer=setTimeout(()=>{timedOut=true;job.controller.abort();},this.timeout);
+  job.promise=Promise.resolve().then(()=>this.prefetch(url,job.controller)).then(()=>{
+   if(job.controller.signal.aborted)return false;
+   this.preloaded.add(url);this.failures.delete(url);this.failureAttempts.delete(url);return true;
+  },error=>{
+   if(timedOut||(!job.controller.signal.aborted&&error?.name!=='AbortError')){
+    this.failures.add(url);this.failureAttempts.set(url,(this.failureAttempts.get(url)??0)+1);
+   }
+   return false;
+  }).finally(()=>{clearTimeout(timer);job.controller.abort();if(this.prefetches.get(url)===job)this.prefetches.delete(url);this.onProgress();});
+  return job.promise;
  }
  warm({keep,upcoming,all=[],delay=this.delay}){
   clearTimeout(this.timer);const epoch=++this.epoch;
+  this.cancelPrefetches(keep);
   this.keep=keep;this.queue=[...new Set([...upcoming.filter(url=>this.canRetry(url)),...all.filter(url=>!this.preloaded.has(url)&&this.canRetry(url))])];
   // Crucially, do NOT stop/cancel pending frames that are still in the window.
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
   if(!this.queue.length||!this.isActive())return;
+  if(this.prefetch){
+   // A bounded group overlaps network latency, while distant frames never enter
+   // the map's display/GPU pipeline. Foreground acquire() can interrupt it.
+   this.timer=setTimeout(()=>{
+    const queue=this.queue;
+    const worker=async()=>{
+     while(epoch===this.epoch&&this.isActive()&&queue.length){
+      const url=queue.shift();
+      if(!this.keep.has(url)&&(!this.canPreload()||this.preloaded.has(url)))continue;
+      let frame,ready=false;
+      try{
+       if(this.keep.has(url)){frame=this.prepare(url);ready=await frame.ready;}
+       else ready=await this.preload(url);
+       if(epoch!==this.epoch)break;
+       if(!ready){if(frame)this.discard(frame);if(this.canRetry(url)&&this.failures.has(url))queue.push(url);}
+       else if(frame&&frame!==this.current)this.cover(frame);
+      }catch{if(frame)this.discard(frame);}
+     }
+    };
+    for(let i=0;i<this.preloadConcurrency;i++)void worker();
+   },delay);
+   return;
+  }
   this.timer=setTimeout(async()=>{
    for(const url of this.queue){
     if(epoch!==this.epoch||!this.isActive())break;

@@ -132,4 +132,10 @@ export class ForecastTileCache{
    job.promise.then(result=>finish(null,result),error=>finish(error));
   });
  }
+ async prefetch(params,controller){
+  // Use the same de-duplicated path as a foreground map. Only complete bytes
+  // count as prepared; cancellation or a partial overlay never counts as ready.
+  const result=await this.protocol(params,controller);
+  result.data?.close?.();
+ }
 }

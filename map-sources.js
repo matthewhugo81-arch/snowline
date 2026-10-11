@@ -15,6 +15,10 @@ const ownBase=new URL('./ensemble-data/',import.meta.url).href;
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
 const intervalFields=new Set(['precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
+// GFS 0.13° omits these fields at analysis time, although run-wide metadata lists
+// them. Verified against the provider's Gfs013DownloadSurfaceVariable.skipHour0:
+// https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Gfs/GfsVariableDownloadable.swift
+const gfsForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high']);
 export function fieldIntervalHours(meta,key,time){
  const source=fieldSource(meta,key,time),times=source?.valid_times??[],index=times.findIndex(t=>Date.parse(t)===Date.parse(time));
  // Some feeds omit initialization from valid_times; use the actual run boundary.
@@ -31,7 +35,7 @@ export function combineSources(primary,other=[]){
  return {...primary,sources,variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
 }
 export function fieldSource(meta,key,time){
- return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&!(intervalFields.has(key)&&Date.parse(time)===Date.parse(source.reference_time)))))??null;
+ return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&!((intervalFields.has(key)||(source.domain==='ncep_gfs013'&&gfsForecastOnly.has(key)))&&Date.parse(time)===Date.parse(source.reference_time)))))??null;
 }
 export function hasFieldTime(meta,key,time){return !!fieldSource(meta,key,time);}
 export function fieldDataURL(meta,key,time){
