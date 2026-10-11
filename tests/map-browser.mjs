@@ -102,12 +102,14 @@ try{
    await page.evaluate(()=>window.fixtureFault={match:'2026-10-11T0300.om?variable=cloud_cover_high',remaining:100});
    await page.locator('#map-variable').selectOption('cloud_cover_high');
    await page.locator('#map-time').evaluate(el=>{el.value='20';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
    await page.locator('#retry-preload').filter({hasText:'Retry selected frame'}).waitFor({state:'visible'});
    assert.equal(await page.locator('.map-error:visible').count(),2);
    await page.evaluate(()=>window.fixtureFault=null);
    await page.locator('#retry-preload').click();
    await bothAt('Sun 11 Oct, 03:00 UTC');
    assert.equal(await page.locator('.map-error:visible').count(),0);
+   if(viewport.width<=650)await page.locator('#mobile-return-map').click();
    await page.locator('#map-variable').selectOption('precipitation');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Precipitation'));
    // Dragging during playback preserves the requested slider position and pauses.
