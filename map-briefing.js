@@ -1,5 +1,5 @@
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261011-briefing-overlays';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-briefing-overlays';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261011-retain-downloads';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261011-vorticity-smooth';

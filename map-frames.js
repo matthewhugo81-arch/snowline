@@ -172,8 +172,11 @@ export class ForecastFrames{
  }
  warm({keep,upcoming,all=[],delay=this.delay}){
   clearTimeout(this.timer);const epoch=++this.epoch;
-  this.cancelPrefetches(keep);
-  this.keep=keep;this.queue=[...new Set([...upcoming.filter(url=>this.canRetry(url)),...all.filter(url=>!this.preloaded.has(url)&&this.canRetry(url))])];
+  this.cancelPrefetches(new Set([...keep,...all]));
+  // A ready step must not restart useful distant downloads. Rejoin existing
+  // jobs first so each keeps its slot across queue generations; do not launch
+  // another full batch beside it. A cold foreground acquire still preempts.
+  this.keep=keep;this.queue=[...new Set([...this.prefetches.keys(),...upcoming.filter(url=>this.canRetry(url)),...all.filter(url=>!this.preloaded.has(url)&&this.canRetry(url))])];
   // Crucially, do NOT stop/cancel pending frames that are still in the window.
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
   if(!this.queue.length||!this.isActive())return;

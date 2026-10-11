@@ -4,7 +4,7 @@ import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-e
 import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-smooth';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-parallel-preload';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-retain-downloads';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
@@ -303,9 +303,10 @@ async function loadTime(){
   for(const {key,model,field}of panelSelections(state)){
    const panel=panels[key];await panel.ready;if(!valid()||panel.restyling)return false;
    const cache=panelCache(panel,model,field);
-   // Retain useful downloads, but start new background work after this frame is ready.
-   cache.warm({...frameWindow(panel.frameURLs,index,frameBudget()),upcoming:[]});
    panel.requestedURL=panel.frameURLs[index];
+   // Cached stepping can commit immediately without disturbing the download
+   // queue. Pause speculative work only when the chosen frame needs loading.
+   if(!cache.isReady(panel.requestedURL))cache.warm({...frameWindow(panel.frameURLs,index,frameBudget()),upcoming:[]});
   }
   viewportBounds();
   const prepared=await prepareSelection(index,valid);
@@ -544,7 +545,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261011-briefing-overlays');
+   const {createBriefing}=await import('./map-briefing.js?v=20261011-retain-downloads');
    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
     onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}

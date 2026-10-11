@@ -64,3 +64,31 @@ test('slow background requests release their slot and have a bounded retry count
  t.mock.timers.tick(100);await flush();t.mock.timers.tick(100);await flush();
  assert.equal(calls,2);assert.equal(cache.prefetches.size,0);assert.equal(cache.failures.has('slow'),true);cache.clear();
 });
+
+test('ready playback retains useful downloads across buffer advances without exceeding concurrency',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),started=[],jobs=new Map();let active=0,peak=0,aborted=0;
+ const cache=new ForecastFrames(map,'a',{preloadConcurrency:2,prefetch:(url,controller)=>{
+  started.push(url);active++;peak=Math.max(peak,active);
+  return new Promise((resolve,reject)=>{
+   const finish=()=>{controller.signal.removeEventListener('abort',cancel);active--;resolve();};
+   const cancel=()=>{active--;aborted++;reject(new DOMException('Aborted','AbortError'));};
+   jobs.set(url,{finish,controller});controller.signal.addEventListener('abort',cancel,{once:true});
+  });
+ }});
+ for(const url of ['t0','t1','t2'])await loaded(cache,map,url);
+ cache.show(cache.frames.get('t0'),.8,'linear');
+ const work={keep:new Set(['t0','t1','t2']),upcoming:['t1','t2'],all:['distant1','distant2','later'],delay:0};
+ cache.warm(work);t.mock.timers.tick(0);await flush();
+ assert.deepEqual(started,['distant1','distant2']);
+ const first=jobs.get('distant1'),second=jobs.get('distant2');
+ for(const url of ['t1','t2']){
+  cache.show(await cache.acquire(url),.8,'linear');
+  cache.warm(work);t.mock.timers.tick(0);await flush();
+  assert.equal(first.controller.signal.aborted,false);assert.equal(second.controller.signal.aborted,false);
+ }
+ first.finish();await flush();assert.equal(cache.preloaded.has('distant1'),true);
+ assert.equal(started.filter(url=>url==='distant1').length,1);assert.equal(started.filter(url=>url==='distant2').length,1);
+ assert.equal(peak,2);assert.equal(aborted,0);
+ second.finish();jobs.get('later').finish();await flush();cache.clear();
+});
