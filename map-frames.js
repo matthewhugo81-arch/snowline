@@ -15,10 +15,10 @@ export function fullSequence(urls,index){return [...new Set([...urls.slice(index
 // A frame owns its raster AND enabled vector overlays. They are prepared behind
 // the opaque basemap, then promoted together; we never blend forecast times.
 export class ForecastFrames{
- constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true}={}){
-  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload});
+ constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true,isActive=()=>true,maxAttempts=3}={}){
+  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload,isActive,maxAttempts});
   this.frames=new Map();this.sequence=0;this.current=null;this.epoch=0;this.queue=[];this.keep=new Set();
-  this.preloaded=new Set();this.failures=new Set();
+  this.preloaded=new Set();this.failures=new Set();this.failureAttempts=new Map();
  }
  prepare(url){
   let frame=this.frames.get(url);
@@ -45,7 +45,7 @@ export class ForecastFrames{
   }else{
    for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','visible');
    if(frame!==this.current)this.cover(frame);
-   if(frame.loaded&&!frame.suspended&&this.sourcesReady(frame)){this.preloaded.add(url);this.failures.delete(url);this.onProgress();frame.ready=Promise.resolve(true);return frame;}
+   if(frame.loaded&&!frame.suspended&&this.sourcesReady(frame)){this.preloaded.add(url);this.failures.delete(url);this.failureAttempts.delete(url);this.onProgress();frame.ready=Promise.resolve(true);return frame;}
   }
   frame.pending=true;frame.loaded=false;
   frame.ready=new Promise(resolve=>{
@@ -54,15 +54,17 @@ export class ForecastFrames{
     if(done)return;done=true;clearTimeout(timer);
     this.map.off('render',render);this.map.off('sourcedata',check);this.map.off('error',failed);
     frame.pending=false;frame.loaded=ok;frame.failed=!ok;
-    if(ok){frame.suspended=false;this.preloaded.add(url);this.failures.delete(url);}
-    else if(!frame.cancelled){this.preloaded.delete(url);this.failures.add(url);}
+    if(ok){frame.suspended=false;this.preloaded.add(url);this.failures.delete(url);this.failureAttempts.delete(url);}
+    else if(!frame.cancelled){this.preloaded.delete(url);this.failures.add(url);this.failureAttempts.set(url,(this.failureAttempts.get(url)??0)+1);}
     this.onProgress();
     resolve(ok);
    };
-   const check=()=>{if(rendered&&this.sourcesReady(frame))finish(true);};
+   const check=()=>{if(this.isActive()&&rendered&&this.sourcesReady(frame))finish(true);};
    const render=()=>{rendered=true;check();};
    const failed=event=>{if(event.error?.name!=='AbortError'&&frame.resources.includes(event.sourceId))finish(false);};
-   frame.renewTimeout=()=>{if(!done){clearTimeout(timer);timer=setTimeout(()=>finish(false),this.timeout);}};
+   frame.pauseTimeout=()=>clearTimeout(timer);
+   // Browsers suspend map rendering in hidden tabs. That is not a failed file.
+   frame.renewTimeout=()=>{if(!done){clearTimeout(timer);if(this.isActive())timer=setTimeout(()=>{if(this.isActive())finish(false);},this.timeout);}};
    frame.renewTimeout();frame.cancel=()=>{frame.cancelled=true;finish(false);};
    this.map.on('render',render);this.map.on('sourcedata',check);this.map.on('error',failed);this.map.triggerRepaint();
   });
@@ -102,9 +104,19 @@ export class ForecastFrames{
   // Only weather layers move. The basemap is ordered once, not every hour.
   for(const id of frame.layers){const first=this.firstLayer();if(first!==id)this.map.moveLayer(id,first);}
  }
+ pause(){
+  clearTimeout(this.timer);this.epoch++;this.queue=[];
+  for(const frame of this.frames.values())frame.pauseTimeout?.();
+ }
+ resume(){
+  for(const frame of this.frames.values())if(frame.pending)frame.renewTimeout?.();
+  this.map.triggerRepaint();
+ }
+ retryFailures(){this.failures.clear();this.failureAttempts.clear();}
+ canRetry(url){return (this.failureAttempts.get(url)??0)<this.maxAttempts;}
  suspend(exceptURL){
   this.stop(exceptURL);
-  this.preloaded.clear();this.failures.clear();this.onProgress();
+  this.preloaded.clear();this.retryFailures();this.onProgress();
   for(const frame of this.frames.values()){
    frame.suspended=true;
    if(frame!==this.current&&frame.url!==exceptURL)for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','none');
@@ -123,22 +135,29 @@ export class ForecastFrames{
  }
  warm({keep,upcoming,all=[],delay=this.delay}){
   clearTimeout(this.timer);const epoch=++this.epoch;
-  this.keep=keep;this.queue=[...new Set([...upcoming,...all.filter(url=>!this.preloaded.has(url)&&!this.failures.has(url))])];
+  this.keep=keep;this.queue=[...new Set([...upcoming,...all.filter(url=>!this.preloaded.has(url)&&this.canRetry(url))])];
   // Crucially, do NOT stop/cancel pending frames that are still in the window.
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
-  if(!this.queue.length)return;
+  if(!this.queue.length||!this.isActive())return;
   this.timer=setTimeout(async()=>{
    for(const url of this.queue){
-    if(epoch!==this.epoch)break;
+    if(epoch!==this.epoch||!this.isActive())break;
     if(!this.keep.has(url)&&(!this.canPreload()||this.preloaded.has(url)))continue;
     let frame;
     try{frame=this.prepare(url);const ready=await frame.ready;
      if(epoch!==this.epoch)break;
-     if(!ready){this.discard(frame);continue;}
+     if(!ready){
+      const retry=!frame.cancelled&&this.canRetry(url);
+      this.discard(frame);
+      // Finish the rest of the sequence first, then retry the missing frame.
+      // Counts survive queue restarts so an outage cannot create an endless loop.
+      if(retry)this.queue.push(url);
+      continue;
+     }
      if(frame!==this.current){if(!this.keep.has(url))this.discard(frame);else this.cover(frame);}
     }catch{if(frame)this.discard(frame);}
    }
   },delay);
  }
- clear(){this.stop();for(const frame of [...this.frames.values()])this.discard(frame);this.keep.clear();this.preloaded.clear();this.failures.clear();this.onProgress();}
+ clear(){this.stop();for(const frame of [...this.frames.values()])this.discard(frame);this.keep.clear();this.preloaded.clear();this.retryFailures();this.onProgress();}
 }

@@ -45,7 +45,50 @@ test('background failures are reported without hiding the current image or retry
  const work={keep:new Set(['now']),upcoming:[],all:['bad','later'],delay:0};cache.warm(work);t.mock.timers.tick(0);
  const bad=cache.frames.get('bad');map.emit('error',{sourceId:bad.id});await bad.ready;await flush();
  const later=cache.frames.get('later');map.load(later);await later.ready;await flush();
+ for(let attempt=1;attempt<3;attempt++){
+  const retry=cache.frames.get('bad');assert.ok(retry?.pending);assert.notEqual(retry,bad);
+  map.emit('error',{sourceId:retry.id});await retry.ready;await flush();
+ }
  assert.equal(cache.failures.has('bad'),true);assert.equal(cache.preloaded.has('bad'),false);assert.equal(cache.current.url,'now');
  cache.warm(work);t.mock.timers.tick(0);await flush();assert.equal(cache.frames.has('bad'),false);
  cache.suspend();assert.equal(cache.preloaded.size,0);assert.equal(cache.failures.size,0);cache.clear();
+});
+
+test('a timed-out background frame is retried after the rest and can complete the full sequence',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a',{timeout:100});cache.show(await loaded(cache,map,'now'),.8,'linear');
+ cache.warm({keep:new Set(['now']),upcoming:[],all:['slow','later'],delay:0});t.mock.timers.tick(0);
+ const slow=cache.frames.get('slow');t.mock.timers.tick(100);await slow.ready;await flush();
+ assert.equal(cache.current.url,'now');assert.equal(cache.failureAttempts.get('slow'),1);
+ const later=cache.frames.get('later');map.load(later);await later.ready;await flush();
+ const retry=cache.frames.get('slow');assert.ok(retry?.pending);map.load(retry);await retry.ready;await flush();
+ assert.equal(cache.preloaded.size,3);assert.equal(cache.failures.size,0);assert.equal(cache.failureAttempts.size,0);assert.equal(cache.current.url,'now');cache.clear();
+});
+
+test('automatic background retry limits survive queue restarts; a manual retry resets them',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a',{maxAttempts:2});
+ const work={keep:new Set(),upcoming:[],all:['bad'],delay:0};
+ cache.warm(work);t.mock.timers.tick(0);let frame=cache.frames.get('bad');map.emit('error',{sourceId:frame.id});await frame.ready;
+ cache.warm(work);t.mock.timers.tick(0);await flush();frame=cache.frames.get('bad');map.emit('error',{sourceId:frame.id});await frame.ready;await flush();
+ cache.warm(work);t.mock.timers.tick(0);await flush();assert.equal(cache.frames.size,0);assert.equal(cache.failureAttempts.get('bad'),2);
+ cache.retryFailures();cache.warm(work);t.mock.timers.tick(0);frame=cache.frames.get('bad');map.load(frame);await frame.ready;
+ assert.equal(cache.preloaded.has('bad'),true);assert.equal(cache.failures.size,0);cache.clear();
+});
+
+test('hidden-tab rendering pauses do not turn a valid background frame into an unavailable forecast',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});let active=true;
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a',{timeout:100,isActive:()=>active});
+ const frame=cache.prepare('next');t.mock.timers.tick(80);active=false;cache.pause();t.mock.timers.tick(1000);
+ assert.equal(frame.pending,true);assert.equal(cache.failures.size,0);
+ active=true;cache.resume();t.mock.timers.tick(80);map.load(frame);assert.equal(await frame.ready,true);
+ assert.equal(cache.failureAttempts.size,0);cache.clear();
+});
+
+test('even a delayed visibility event cannot fire a frame timeout while the tab is hidden',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});let active=true;
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a',{timeout:100,isActive:()=>active});
+ const frame=cache.prepare('next');active=false;t.mock.timers.tick(101);assert.equal(frame.pending,true);assert.equal(cache.failures.size,0);
+ cache.warm({keep:new Set(['next']),upcoming:[],all:['other'],delay:0});t.mock.timers.tick(0);assert.equal(cache.frames.has('other'),false);
+ active=true;cache.resume();map.load(frame);assert.equal(await frame.ready,true);cache.clear();
 });

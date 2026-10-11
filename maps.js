@@ -2,7 +2,7 @@ import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-frame-recovery';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261011-background-recovery';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-frame-recovery';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-ensemble-statistics';
@@ -86,7 +86,7 @@ function viewportBounds(){
  // Renderer clipping depends on the view as well as the URL/zoom. Never reuse a
  // partially clipped tile in a different view, even if its tile coordinates match.
  if(imageryCache.setContext(JSON.stringify(bounds.map(value=>Number(value.toFixed(5)))))){
-  for(const panel of Object.values(panels)){panel.frameCache?.preloaded.clear();panel.frameCache?.failures.clear();}
+  for(const panel of Object.values(panels)){panel.frameCache?.preloaded.clear();panel.frameCache?.retryFailures();}
   updatePreloadStatus();
  }
 }
@@ -201,7 +201,7 @@ async function drawGridValues(panel){
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
 function concreteURL(model,meta,time,field){const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
-let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true);
+let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null;
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
  $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');
@@ -230,7 +230,8 @@ function updatePreloadStatus(){
  if(complete)message='All '+total+' frames loaded';
  if(imageryCache.limited)message='Storage limited · nearby frames cached';
  const progress=$('preload-status');progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.total=String(total);
- $('retry-preload').hidden=!failed||imageryCache.limited;
+ $('retry-preload').hidden=!failedSelection&&(!failed||imageryCache.limited);
+ $('retry-preload').textContent=failedSelection?'Retry selected frame':'Retry background loading';
  if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(complete?'all frames loaded':loaded+'/'+total+' frames loaded');
 }
 function orderForecastBasemap(panel){
@@ -256,7 +257,7 @@ function panelCache(panel,model,field){
   return url;
  });
  panel.cacheKey=signature;
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate:url=>overlayGroups(descriptors.get(url)),onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited});
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate:url=>overlayGroups(descriptors.get(url)),onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
  panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
@@ -279,6 +280,7 @@ async function prepareSelection(index,valid=()=>true){
 }
 function setTime(){return timePending=loadTime();}
 async function loadTime(){
+ failedSelection=null;
  if(!state.times.length)return false;
  const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;
  const time=state.times[index],generation=++timeGeneration;
@@ -321,11 +323,17 @@ async function loadTime(){
   }
   const shown=state.times.indexOf(panels.a?.displayedTime);
   if(shown>=0){state.index=shown;syncTimeline(shown);}
-  $('animation-status').textContent='Frame unavailable · playback stopped';status(error.message);return false;
+  failedSelection={index,time};
+  $('animation-status').textContent='Frame unavailable · playback stopped';status(error.message);updatePreloadStatus();return false;
  }
 }
+function retrySelectedFrame(){
+ const failed=failedSelection;
+ if(failed&&state.times[failed.index]===failed.time){state.index=failed.index;return setTime();}
+ return timePending;
+}
 playback=new ForecastPlayback({
- length:()=>state.times.length,index:()=>state.index,buffer:2,settle:()=>timePending,
+ length:()=>state.times.length,index:()=>state.index,buffer:2,settle:retrySelectedFrame,
  prepare:async index=>{
   const generation=timeGeneration;
   const ready=panelSelections(state).every(({key})=>panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
@@ -343,7 +351,12 @@ playback=new ForecastPlayback({
  }
 });
 $('map-playback-speed')?.addEventListener('change',event=>{playback.interval=Number(event.target.value);});
-$('retry-preload').addEventListener('click',()=>{for(const {key}of panelSelections(state)){panels[key].frameCache?.failures.clear();warmUpcoming(panels[key]);}updatePreloadStatus();});
+$('retry-preload').addEventListener('click',()=>{
+ for(const {key}of panelSelections(state))panels[key].frameCache?.retryFailures();
+ if(failedSelection)retrySelectedFrame();
+ else for(const {key}of panelSelections(state))warmUpcoming(panels[key]);
+ updatePreloadStatus();
+});
 function setLegend(){
  for(const {key,model,field} of panelSelections(state)){
   const f=fields.find(f=>f.key===field);if(!f)continue;
@@ -403,6 +416,7 @@ function metadataLoader(force){
 }
 
 async function configure(force=false){
+ failedSelection=null;
  pauseAnimation();++timeGeneration;
  state.times=[];state.index=0;
  $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;
@@ -430,7 +444,7 @@ async function configure(force=false){
 $('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
 $('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
 for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB']])$(id).addEventListener('change',e=>{
- pauseAnimation();state[property]=e.target.value;
+ pauseAnimation();failedSelection=null;state[property]=e.target.value;
  try{refreshTimeline();setTime();}
  catch(error){
   status(error.message);$('map-time-label').textContent='Forecast unavailable';$('animation-status').textContent=error.message;
@@ -463,6 +477,12 @@ $('play-map').addEventListener('click',()=>{
  for(const {key}of panelSelections(state))clearGridValues(panels[key]);
  playback.start();
 });
-window.addEventListener('pagehide',pauseAnimation);document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseAnimation();});
+window.addEventListener('pagehide',pauseAnimation);document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){pauseAnimation();for(const panel of Object.values(panels))panel.frameCache?.pause();}
+ else{
+  for(const panel of Object.values(panels))panel.frameCache?.resume();
+  if(state.times.length)setTime();
+ }
+});
 await configure();
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'select_event_location',title:'Prepare an event analysis at a location',description:'Select latitude and longitude for the visible event analysis form. Does not calculate a hazard or fetch point forecasts; use the visible Calculate event action afterwards.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');state.location={latitude:input.latitude,longitude:input.longitude};selectEventPoint(state.location,state.times[state.index]);$('event-analysis').scrollIntoView({block:'start'});return {location:state.location,eventStartUTC:$('event-start').value+'Z',eventEndUTC:$('event-end').value+'Z',calculated:false};}},{signal:lifecycle.signal});}catch(error){console.info('Optional map tool unavailable:',error.message);}}

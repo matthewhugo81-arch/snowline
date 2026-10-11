@@ -43,7 +43,7 @@ try{
   await page.route('https://tiles.openfreemap.org/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',route=>route.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
   const metadata=[];
-  const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','cloud_cover','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
+  const fixture=(hour,hours)=>({completed:true,reference_time:'2026-10-10T'+String(hour).padStart(2,'0')+':00:00Z',variables:['temperature_2m','cloud_cover','cloud_cover_high','precipitation','pressure_msl'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.UTC(2026,9,10,hour+i)).toISOString())});
   const ensembleFixture=(hours,step)=>({...fixture(0,hours),variables:['precipitation_probability'],valid_times:fixture(0,hours).valid_times.filter((_,i)=>i%step===0)});
   const ensembleFixtures={ncep_gefs025:ensembleFixture(24,3),ncep_gefs05:ensembleFixture(48,6),ecmwf_ifs025_ensemble:ensembleFixture(30,3)};
   const statisticVariables=['geopotential_height_500hPa','temperature_850hPa','pressure_msl'].flatMap(f=>[f+'_mean',f+'_spread']);
@@ -96,6 +96,17 @@ try{
    // Rapid jumps while background warming is unfinished cannot commit an old request.
    await page.locator('#map-time').evaluate(el=>{for(const value of ['20','40','6']){el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));}});
    await bothAt('Sat 10 Oct, 13:00 UTC');
+   assert.equal(await page.locator('.map-error:visible').count(),0);
+   // After a genuinely failed selected time, Retry must display that original
+   // time and clear both banners, not merely warm files behind the old image.
+   await page.evaluate(()=>window.fixtureFault={match:'2026-10-11T0300.om?variable=cloud_cover_high',remaining:100});
+   await page.locator('#map-variable').selectOption('cloud_cover_high');
+   await page.locator('#map-time').evaluate(el=>{el.value='20';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.locator('#retry-preload').filter({hasText:'Retry selected frame'}).waitFor({state:'visible'});
+   assert.equal(await page.locator('.map-error:visible').count(),2);
+   await page.evaluate(()=>window.fixtureFault=null);
+   await page.locator('#retry-preload').click();
+   await bothAt('Sun 11 Oct, 03:00 UTC');
    assert.equal(await page.locator('.map-error:visible').count(),0);
    await page.locator('#map-variable').selectOption('precipitation');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Precipitation'));
