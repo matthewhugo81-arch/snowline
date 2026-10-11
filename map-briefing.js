@@ -75,6 +75,7 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
  }
  function enlarge(src,time){
   const title=model.name+' · '+preset.name+' · '+stamp(time);
+  const [width,height]=chartSize();$('enlarged-image').width=width;$('enlarged-image').height=height;
   $('enlarged-title').textContent=title;$('enlarged-image').src=src;$('enlarged-image').alt=title;
   $('enlarged-note').textContent=briefingCaption(meta,preset,time)+'. '+preset.note;
   $('enlarged').classList.toggle('briefing-square',chartSize()[0]===chartSize()[1]);

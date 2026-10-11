@@ -361,7 +361,10 @@ try{
    await page.locator('.briefing-chart').first().click();
    assert.equal(await page.locator('#briefing-enlarged').evaluate(dialog=>dialog.open),true);
    const enlargedBox=await page.locator('#briefing-enlarged-image').boundingBox();
-   assert.ok(Math.abs(enlargedBox.width-enlargedBox.height)<1,'Enlarged UK chart stays square');
+   assert.ok(Math.abs(enlargedBox.width-enlargedBox.height)<1,'Enlarged UK chart reserves its square shape before decoding');
+   await page.locator('#briefing-enlarged-image').evaluate(image=>image.decode());
+   const decodedBox=await page.locator('#briefing-enlarged-image').boundingBox();
+   assert.ok(Math.abs(decodedBox.width-decodedBox.height)<1,'Enlarged UK chart stays square after decoding');
    await page.locator('#briefing-enlarged-close').click();
    await page.locator('#briefing-next').click();
    assert.equal(await page.locator('.briefing-card[data-ready="true"]').count(),6,'Next prepared page is displayed immediately from image cache');
