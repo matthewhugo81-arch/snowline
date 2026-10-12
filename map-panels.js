@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261011-vorticity-smooth';
+import {hasFieldTime} from './map-sources.js?v=20261012-menu-extrema';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

@@ -19,7 +19,7 @@ export function modelOptionLabel(model, result) {
 }
 
 export function installModelRunMenu({models, loadModel, loadJSON, root = document, refreshMs = 60000, concurrency = 3}) {
-  const selects = ['map-model', 'map-model-b'].map(id => root.getElementById(id)).filter(Boolean);
+  const selects = new Set();
   const knownModels = new Map(models.map(model => [model.id, model]));
   const results = new Map();
   let stopped = false;
@@ -27,8 +27,18 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
   let timer = null;
   let lastAttempt = 0;
 
+  function attachMenus() {
+    for (const id of ['map-model', 'map-model-b', 'briefing-model']) {
+      const select = root.getElementById(id);
+      if (!select || selects.has(select)) continue;
+      selects.add(select);
+      select.addEventListener('focus', refreshWhenDue);
+      select.addEventListener('pointerdown', refreshWhenDue);
+    }
+  }
   function render() {
     if (stopped) return;
+    attachMenus();
     for (const select of selects) {
       for (const option of select.options) {
         const model = knownModels.get(option.value);
@@ -85,7 +95,7 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
   }
 
   function refresh(force = false) {
-    if (stopped || !selects.length) return Promise.resolve();
+    if (stopped || !selects.size) return Promise.resolve();
     if (inFlight) return inFlight;
     clearTimeout(timer);
     if (root.hidden && !force) {
@@ -105,10 +115,21 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
   }
   const manualRefresh = () => { void refresh(true); };
   const reload = root.getElementById('reload-maps');
-  for (const select of selects) {
-    select.addEventListener('focus', refreshWhenDue);
-    select.addEventListener('pointerdown', refreshWhenDue);
-  }
+  // Briefing is created lazily. Reuse already verified results immediately,
+  // rather than opening a second polling loop or waiting for the next minute.
+  const menuReady = () => { render(); refreshWhenDue(); };
+  const verifiedRun = event => {
+    const {model, meta} = event.detail ?? {};
+    if (!knownModels.has(model) || !formatModelRun(meta)) return;
+    const previous = results.get(model)?.meta;
+    if (previous && Date.parse(meta.reference_time) < Date.parse(previous.reference_time)) return;
+    const value = previous?.completed === true && Date.parse(meta.reference_time) === Date.parse(previous.reference_time)
+      ? {...meta, completed: true} : meta;
+    results.set(model, {meta: value, error: null});
+    render();
+  };
+  root.addEventListener('snowline-model-menu-ready', menuReady);
+  root.addEventListener('snowline-model-run-verified', verifiedRun);
   root.addEventListener('visibilitychange', refreshWhenDue);
   reload?.addEventListener('click', manualRefresh);
   render();
@@ -124,6 +145,8 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
         select.removeEventListener('pointerdown', refreshWhenDue);
       }
       root.removeEventListener('visibilitychange', refreshWhenDue);
+      root.removeEventListener('snowline-model-menu-ready', menuReady);
+      root.removeEventListener('snowline-model-run-verified', verifiedRun);
       reload?.removeEventListener('click', manualRefresh);
     }
   };

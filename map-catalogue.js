@@ -5,6 +5,18 @@ import {MPH_PER_MS} from './map-wind-units.js';
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
 export const PRESSURE_LEVELS = [1000,925,850,700,500,300,250,200,100,50,10];
+// Shared menu policy for every model and both panels. Native inputs remain
+// available internally for diagnostics such as 850 hPa theta-w.
+const MENU_PRESSURE_LEVELS = {
+ temperature:[1000,850,500,250],
+ wind_speed:[1000,500,300,200],
+ relative_humidity:[1000,700,300],
+ geopotential_height:[500,300,200]
+};
+function menuField(key){
+ const pressure=key.match(/^(temperature|wind_speed|relative_humidity|geopotential_height)_(\d+)hPa$/);
+ return !pressure||MENU_PRESSURE_LEVELS[pressure[1]].includes(Number(pressure[2]));
+}
 const HEIGHT_LEVELS = [50,100,200,300];
 const GROUPS = ['Ensemble mean','Ensemble spread','Temperature','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
@@ -69,6 +81,8 @@ export function variableGroup(key){
 const hex=rgba=>'#'+rgba.slice(0,3).map(n=>Math.round(n).toString(16).padStart(2,'0')).join('')+Math.round((rgba[3]??1)*255).toString(16).padStart(2,'0');
 const plain=key=>key.replace(/_/g,' ').replace(/(\d)(cm|m)\b/g,'$1 $2').replace(/\bto\b/g,'–').replace(/^./,s=>s.toUpperCase());
 const extras={
+ temperature_2m_max:['2 m maximum temperature · native period','temperature','Native maximum 2 m air temperature over the provider’s reporting period ending at the valid time. Not a daily maximum. The spatial metadata does not specify the period length; do not infer it from the playback interval.'],
+ temperature_2m_min:['2 m minimum temperature · native period','temperature','Native minimum 2 m air temperature over the provider’s reporting period ending at the valid time. Not a daily minimum. The spatial metadata does not specify the period length; do not infer it from the playback interval.'],
  wind_gusts_10m:['10 m wind gusts','wind','Maximum gust over the model interval, in m/s. Location-chart gusts are shown in mph.'],
  visibility:['Visibility','visibility','Horizontal visibility in metres; lower values can highlight fog and poor visibility.'],
  cloud_cover_low:['Low cloud cover','cloud_cover','Low-level cloud fraction; layer boundaries vary by model.'],
@@ -129,7 +143,7 @@ export function describeVariable(key,OM){
  return {key,name,group:variableGroup(key),unit:unit??raw.unit,note,stops:raw.breakpoints,colors:raw.colors.map(hex)};
 }
 export function availableFields(fields,metas){
- return fields.filter(f=>!f.overlayOnly&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
+ return fields.filter(f=>!f.overlayOnly&&menuField(f.key)&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
   const group=GROUPS.indexOf(variableGroup(a.key))-GROUPS.indexOf(variableGroup(b.key));
   if(group)return group;
   const ap=a.key.match(/_(\d+)hPa$/),bp=b.key.match(/_(\d+)hPa$/);
@@ -148,6 +162,12 @@ export function extendCatalogue(fields,metas,OM,settings){
   }
   const field=fields.find(f=>f.key===key);
   field.group=variableGroup(key);
+  // Use exactly the same temperature palette for instantaneous and extreme
+  // temperatures, so equal values always have equal colours.
+  if(/^temperature_2m_(max|min)$/.test(key)){
+   const base=fields.find(item=>item.key==='temperature_2m');
+   if(base){for(const property of ['unit','stops','colors','temperatureBands','bands'])if(property in base)field[property]=base[property];}
+  }
   if(key==='wind_speed_10m'){field.name='10 m wind speed & direction';field.note='Shading, legend and readouts display mph; underlying spatial data remains in m/s. Arrows show flow direction.';}
   for(const meta of metas){const source=sourceVariable(meta,key);if(!source)continue;
    settings.colorScales[source]={type:'breakpoint',unit:field.unit,breakpoints:field.stops,colors:field.colors.map(c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16),c.length===9?parseInt(c.slice(7,9),16)/255:1])};

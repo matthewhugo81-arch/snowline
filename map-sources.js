@@ -1,6 +1,6 @@
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261011-vorticity-smooth';
+import {sourceVariable} from './map-catalogue.js?v=20261012-menu-extrema';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
@@ -14,12 +14,15 @@ for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
-const intervalFields=new Set(['precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
+const intervalFields=new Set(['temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
 // GFS 0.13° omits these fields at analysis time, although run-wide metadata lists
 // them. Verified against the provider's Gfs013DownloadSurfaceVariable.skipHour0:
 // https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Gfs/GfsVariableDownloadable.swift
 const gfsForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high']);
 export function fieldIntervalHours(meta,key,time){
+ // Extrema may use 3/6-hour or other reporting periods independent of file cadence.
+ // Their OM metadata exposes no time bounds: never invent a duration.
+ if(/^temperature_2m_(max|min)$/.test(key))return null;
  const source=fieldSource(meta,key,time),times=source?.valid_times??[],index=times.findIndex(t=>Date.parse(t)===Date.parse(time));
  // Some feeds omit initialization from valid_times; use the actual run boundary.
  const previous=index>0?times[index-1]:source?.reference_time;
