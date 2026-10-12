@@ -1,12 +1,14 @@
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261012-chart-style';
+import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261012-accum-history';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable} from './map-catalogue.js?v=20261012-chart-style';
+import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
 
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, rain & pressure',field:'cloud_cover',required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
  {id:'temperature',name:'2 m air temperature & pressure',field:'temperature_2m',required:['temperature_2m','pressure_msl'],note:'2 m air temperature in °C at the chart valid time, with MSLP isobars every 4 hPa. This is instantaneous air temperature, not a maximum or minimum.'},
  {id:'dew-point',name:'2 m dew point & pressure',field:'dew_point_2m',required:['dew_point_2m','pressure_msl'],note:'2 m dew point in °C at the chart valid time, with MSLP isobars every 4 hPa. UKMO dew point is calculated from matching 2 m temperature and relative humidity on the same grid, run and valid time when no native dew-point field is supplied.'},
  ...['max','min'].map(statistic=>({id:'temperature-'+statistic,name:'2 m '+(statistic==='max'?'maximum':'minimum')+' temperature & pressure',field:'temperature_2m_'+statistic,required:['temperature_2m_'+statistic,'pressure_msl'],note:'Native-period '+(statistic==='max'?'maximum':'minimum')+' 2 m air temperature, not a daily extreme, with MSLP isobars every 4 hPa. The reporting period ends at the chart time; its duration is not supplied in the spatial metadata.'})),
+ ...ACCUMULATION_KEYS.map(key=>({id:key,name:accumulationField(key).name+' & pressure',field:key,required:[key,'pressure_msl'],note:accumulationField(key).note+' MSLP isobars describe the ending valid time.'})),
  {id:'airmass',name:'850 hPa temperature & pressure',field:'temperature_850hPa',required:['temperature_850hPa','pressure_msl'],note:'850 hPa air temperature with MSLP isobars every 4 hPa. This is air temperature, not theta-w or a surface snow forecast. With Contours enabled, isotherms every 5°C from −25°C to +25°C are thicker than the intermediate contours.'},
  {id:'upper',name:'500 hPa height & pressure',field:'geopotential_height_500hPa',required:['geopotential_height_500hPa','pressure_msl'],note:'500 hPa geopotential height with MSLP isobars every 4 hPa.'},
  {id:'jet',name:'300 hPa wind speed & direction',field:'wind_speed_300hPa',required:['wind_speed_300hPa','pressure_msl'],note:'300 hPa wind speed in mph, with arrows pointing along the flow and MSLP isobars every 4 hPa. White below 60 mph; coloured bands every 15 mph from 60 to 180+ mph. Arrows and optional grid labels are shown only at 60 mph and above. Longer arrows indicate stronger winds.'},
@@ -27,7 +29,7 @@ export function briefingPage(times,start,count=6){return times.slice(Math.max(0,
 export function briefingCaption(meta,preset,time){
  const lead=(Date.parse(time)-Date.parse(meta.reference_time))/3600000;
  const period=preset.id==='weather'?fieldIntervalHours(meta,'precipitation',time):null;
- return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h precipitation ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
+ return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h precipitation ending at this time':'')+(accumulationHours(preset.field)?' · '+accumulationPeriod(preset.field,time):'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
 export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid]);}
 

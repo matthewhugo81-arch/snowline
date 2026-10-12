@@ -1,3 +1,5 @@
+import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
+import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-history';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261012-weather-composite';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
@@ -10,14 +12,14 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261012-chart-style';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261012-accum-history';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261012-chart-style';
+import {loadSpatialModel,loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261012-accum-history';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261011-live-runs';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261012-chart-style';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261012-accum-history';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
@@ -26,7 +28,7 @@ import {ukvRunFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261012-chart-style';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261012-accum-history';
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
@@ -55,6 +57,7 @@ const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptio
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);
 installDiagnostics(OM,settings);
+const accumulationReader=installAccumulations(OM,settings);
 const renderMapTile=(params,controller)=>OM.omProtocol(params,controller,isCompositeURL(params.url)?compositeSettings(settings):settings);
 const readMapValue=createValueReader({...OM,omProtocol:renderMapTile},settings);
 OM.updateCurrentBounds(UK);
@@ -112,7 +115,7 @@ const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
 if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isFinite(initialLon)&&Math.abs(initialLat)<=90&&Math.abs(initialLon)<=180){state.location={latitude:initialLat,longitude:initialLon};$('nav-charts').href='./?'+new URLSearchParams({lat:initialLat,lon:initialLon,time:params.get('time')??''});}
 function modelName(id){return MODELS.find(m=>m.id===id)?.name??id;}
 function panelRunLabel(model){return modelName(model)+' · '+runLabel(state.metas[model])+(state.metas[model]?.completed===false?' · updating':'');}
-function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · Valid '+stamp(time)+' UTC';}
+function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · Valid '+stamp(time)+' UTC'+(accumulationHours(field)?' · '+accumulationPeriod(field,time):'');}
 function status(message){$('map-status').textContent=message;}
 function usageUpdate(){$('usage-summary').textContent=usageText();}window.addEventListener('snowline-usage',usageUpdate);usageUpdate();
 const modelGroups=[
@@ -247,6 +250,7 @@ function updatePreloadStatus(){
  let message='Checking imagery…';
  if(total)message='Loading imagery · '+loaded+'/'+total+' frames'+(failed?' · '+failed+' unavailable':'');
  if(complete)message='All '+total+' frames loaded';
+ if(choices.some(({field})=>accumulationHours(field)))message='Accumulations · selected period first; nearby totals cached'+(failed?' · '+failed+' unavailable':'');
  if(imageryCache.limited)message='Storage limited · nearby frames cached';
  const progress=$('preload-status');progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.total=String(total);
  $('retry-preload').hidden=!failedSelection&&(!failed||imageryCache.limited);
@@ -277,12 +281,14 @@ function panelCache(panel,model,field){
  });
  panel.cacheKey=signature;
  const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),preloadConcurrency:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
  panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
  if(panel.restyling||!panel.frameCache)return;
- panel.frameCache.warm({...frameWindow(panel.frameURLs,state.index,frameBudget()),all:fullSequence(panel.frameURLs,state.index),delay:0});
+ const accumulation=accumulationHours(panelSelection(state,panel.key).field);
+ const window=frameWindow(panel.frameURLs,state.index,accumulation?{ahead:1,behind:1,loop:false}:frameBudget());
+ panel.frameCache.warm({...window,all:accumulation?window.upcoming:fullSequence(panel.frameURLs,state.index),delay:accumulation?250:0});
 }
 async function prepareSelection(index,valid=()=>true){
  const choices=panelSelections(state),time=state.times[index],metas=state.metas;
@@ -403,7 +409,7 @@ function setLegend(){
   }
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
-  let note=f.note,interval=f.legendNote??'';
+  let note=f.note,interval=accumulationPeriod(field,state.times[state.index])||f.legendNote||'';
   if([WEATHER_COMPOSITE,'precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
    const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
    interval=hours?hours+' h ending at valid time':'Period unavailable';
@@ -426,6 +432,13 @@ function populateVariables(){
  for(const {key,model,field} of panelSelections(state)){
   const available=availableFields(fields,[state.metas[model]]),select=$(key==='a'?'map-variable':'map-variable-b'),groups=new Map();select.replaceChildren();
   for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
+  if(state.metas[model]?.variables.includes('precipitation')){
+   const supported=ACCUMULATION_KEYS.filter(k=>accumulationSource(state.metas[model],k));
+   let group=groups.get('Accumulated precipitation');
+   if(!group&&(state.metas[model].sources??[state.metas[model]]).some(source=>source.variables?.includes('precipitation')&&precipitationStepHours(source.domain,6))){group=document.createElement('optgroup');group.label='Accumulated precipitation';select.append(group);}
+   if(group){for(const k of ACCUMULATION_KEYS.filter(k=>!supported.includes(k))){const o=document.createElement('option');o.value=k;o.disabled=true;o.textContent=accumulationHours(k)+' h total — incomplete window in this run';group.append(o);}
+    const sorted=[...group.children].sort((a,b)=>accumulationHours(a.value)-accumulationHours(b.value));group.replaceChildren(...sorted);}
+  }
   const selected=available.some(f=>f.key===field)?field:available.find(f=>f.key==='temperature_2m')?.key??available[0]?.key;
   state[key==='a'?'field':'fieldB']=selected;select.value=selected??'';
  }
@@ -565,8 +578,10 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261012-chart-style');
+   const {createBriefing}=await import('./map-briefing.js?v=20261012-accum-history');
    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
+    loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
+    loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
     onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}
    });

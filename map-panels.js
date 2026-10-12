@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261012-chart-style';
+import {hasFieldTime} from './map-sources.js?v=20261012-accum-history';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

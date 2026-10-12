@@ -1,5 +1,5 @@
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-chart-style';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-accum-history';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261012-weather-composite';
 const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';
 const FONT='Arial, sans-serif';

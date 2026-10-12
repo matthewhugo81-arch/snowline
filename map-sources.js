@@ -1,7 +1,8 @@
+import {accumulationHours,accumulationSource} from './map-accumulation.js?v=20261012-accum-history';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261012-weather-composite';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261012-chart-style';
+import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
@@ -21,6 +22,7 @@ const intervalFields=new Set(['temperature_2m_max','temperature_2m_min','precipi
 // https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Gfs/GfsVariableDownloadable.swift
 const gfsForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high']);
 export function fieldIntervalHours(meta,key,time){
+ if(accumulationHours(key))return accumulationHours(key);
  if(key===WEATHER_COMPOSITE)return fieldIntervalHours(compositeMeta(meta),'precipitation',time);
  // Extrema may use 3/6-hour or other reporting periods independent of file cadence.
  // Their OM metadata exposes no time bounds: never invent a duration.
@@ -40,6 +42,7 @@ export function combineSources(primary,other=[]){
  return {...primary,sources,completed:sources.every(meta=>meta.completed!==false),variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
 }
 export function fieldSource(meta,key,time){
+ if(accumulationHours(key))return accumulationSource(meta,key,time);
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'precipitation',time):null;}
  return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&!((intervalFields.has(key)||(source.domain==='ncep_gfs013'&&gfsForecastOnly.has(key)))&&Date.parse(time)===Date.parse(source.reference_time)))))??null;
 }
@@ -74,6 +77,24 @@ export async function loadSpatialModel(model,load){
    warnings.push('GFS companion fields could not be loaded for this run. Try Check latest runs.');
    return null;
   }
+ }));
+ return {...combineSources(primary,other.filter(Boolean)),sourceWarnings:warnings};
+}
+
+// Deliberate historical selection never falls back to latest.json or a different
+// run family. Any GFS companion is looked up at this exact initialization.
+export async function loadSpatialRun(model,referenceTime,load){
+ const domain=domains[model===UKV_NOWCAST?UKV:model];
+ if(!domain||ownEnsembles.has(domain))throw Error('Archived runs are not supported for this model.');
+ const reference=Date.parse(referenceTime);if(!Number.isFinite(reference))throw Error('Invalid archive run time.');
+ const family=ukvRunFamily(model);
+ if(family&&((new Date(reference).getUTCHours()%3===0?'main':'nowcast')!==family))throw Error('Archived UKV run is in a different run family.');
+ const base=SPATIAL_BASE+domain+'/',data=await load(base+runPath(referenceTime)+'meta.json');
+ if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
+ const primary={...data,domain,baseURL:SPATIAL_BASE,runFamily:family},warnings=[];
+ const other=await Promise.all((companions[model]??[]).map(async companion=>{
+  try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
+  catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}
  }));
  return {...combineSources(primary,other.filter(Boolean)),sourceWarnings:warnings};
 }

@@ -1,0 +1,30 @@
+{
+  "reviewRun": 38292925735,
+  "finalLayoutRun": 38294254417,
+  "nodeTests": {"passed": 261, "failed": 0},
+  "browserSuites": ["Existing map playback and briefing", "Chart styles and PNG/clipboard", "Accumulation and pinned history at 1280 px and 390 px", "Real UKV precipitation rasters"],
+  "liveNumeric": {
+    "checkedAt": "2026-10-12T18:44:36.705Z",
+    "reference_time": "2026-10-12T12:00:00Z",
+    "gridWindow": [{"start":420,"end":452},{"start":500,"end":532}],
+    "reports": [
+      {"hours":6,"cells":1024,"maximumErrorMm":5.960464477539063e-8,"oneHourForwardAdditionalReads":1,"oneHourForwardMs":521},
+      {"hours":24,"cells":1024,"maximumErrorMm":4.6193599700927734e-7,"oneHourForwardAdditionalReads":1,"oneHourForwardMs":630}
+    ],
+    "peakConcurrentReads":3
+  },
+  "liveBrowser": {
+    "checkedAt":"2026-10-12T18:46:21.447Z",
+    "scope":"Real UKV OM data and raster workers; 1100 x 850 view, blank basemap, no pressure overlay. Runner measurements only; 24 h follows 6 h and may reuse cached data. Not a full-site user latency guarantee.",
+    "reports":[{"hours":6,"milliseconds":1594},{"hours":24,"milliseconds":3590}]
+  },
+  "ukvFrontier": {
+    "checkedAt":"2026-10-12T18:56:19.279Z",
+    "latestJson":{"status":200,"reference_time":"2026-10-12T14:00:00Z","completed":true},
+    "inProgressJson":{"status":200,"reference_time":"2026-10-12T14:00:00Z","completed":true},
+    "mainRun":"2026-10-12T12:00:00Z",
+    "candidate1500ZMetadataHTTP":404,
+    "candidate1800ZMetadataHTTP":404,
+    "interpretation":"12Z was the latest verified main run. Its age exceeded the conservative six-hour review threshold. Newer checked main-run metadata had not yet been published at this spatial source; a newer cycle must not be invented."
+  }
+}
