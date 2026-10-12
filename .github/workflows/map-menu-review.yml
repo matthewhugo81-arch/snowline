@@ -1,0 +1,56 @@
+name: Verify map menu changes
+on:
+  push:
+    branches: [review/map-menus-20261012]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record published spatial temperature fields without downloading grids
+        run: |
+          mkdir -p review-output
+          node --input-type=module <<'JS'
+          import {writeFile} from 'node:fs/promises';
+          import {MAP_MODELS} from './map-models.js';
+          import {loadSpatialModel} from './map-sources.js';
+          const requests=new Map();
+          const load=url=>{
+            if(url.startsWith('file:'))url='https://matthewhugo81-arch.github.io/snowline/ensemble-data/'+url.split('/ensemble-data/')[1];
+            if(!requests.has(url))requests.set(url,(async()=>{
+              const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(20000)});
+              if(!response.ok)throw Object.assign(new Error('HTTP '+response.status),{status:response.status});
+              return response.json();
+            })());
+            return requests.get(url);
+          };
+          const output=[];let index=0;
+          async function worker(){
+            while(index<MAP_MODELS.length){
+              const model=MAP_MODELS[index++];
+              try{
+                const meta=await loadSpatialModel(model.id,load);
+                output.push({model,meta});
+                console.log(JSON.stringify({model:model.name,run:meta.reference_time,temperatureFields:meta.variables.filter(key=>/temperature|(?:^|_)(?:tmin|tmax|min|max)(?:_|$)/i.test(key)),sources:meta.sources.map(source=>({domain:source.domain,run:source.reference_time}))}));
+              }catch(error){output.push({model,error:error.message});console.log(model.name+': '+error.message);}
+            }
+          }
+          await Promise.all(Array.from({length:3},worker));
+          await writeFile('review-output/model-fields.json',JSON.stringify({checkedAt:new Date().toISOString(),models:output},null,2));
+          JS
+      - name: Package source snapshot for local regression checks
+        run: git archive --format=zip HEAD -o review-output/source.zip
+      - name: Run map and chart regression checks
+        run: node --test tests/*.test.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: map-menu-review
+          path: review-output/
+          retention-days: 1
