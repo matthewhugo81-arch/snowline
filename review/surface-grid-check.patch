@@ -1,0 +1,8 @@
+diff --git a/tests/map-browser.mjs b/tests/map-browser.mjs
+--- a/tests/map-browser.mjs
++++ b/tests/map-browser.mjs
+@@ -465,2 +465,4 @@
+     await page.locator('#briefing-time').selectOption('0');
++    await page.locator('#briefing-contours').check();
++    await page.locator('#briefing-grid-values').check();
+     for(const [preset,variable] of [['temperature','temperature_2m'],['dew-point','dew_point_2m_derived']]){

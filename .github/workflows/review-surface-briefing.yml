@@ -2,7 +2,7 @@ name: Verify UKV surface briefing
 on:
   push:
     branches: [review/ukv-surface-briefing-20261012]
-    paths: ['review/surface-briefing.patch', 'tests/briefing-surface.test.mjs', '.github/workflows/review-surface-briefing.yml']
+    paths: ['review/surface-briefing.patch', 'review/surface-grid-check.patch', 'tests/briefing-surface.test.mjs', '.github/workflows/review-surface-briefing.yml']
 permissions:
   contents: write
 defaults:
@@ -21,6 +21,8 @@ jobs:
         run: |
           git apply --check review/surface-briefing.patch
           git apply review/surface-briefing.patch
+          git apply --check review/surface-grid-check.patch
+          git apply review/surface-grid-check.patch
           git diff --check
       - name: Run complete regression suite
         run: |
