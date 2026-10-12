@@ -500,7 +500,7 @@ try{
    await page.waitForFunction(()=>document.getElementById('briefing-run').textContent.includes('UKV')&&document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
    assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
-   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather','temperature','dew-point'],'UKV includes surface temperature and derived dew point, without unsupported diagnostics');
+   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather','temperature','dew-point','precipitation_total_6h','precipitation_total_12h','precipitation_total_18h','precipitation_total_24h','precipitation_total_36h','precipitation_total_48h'],'UKV includes surface temperature and derived dew point, without unsupported diagnostics');
    for(const selectedModel of [main,nowcast]){
     await page.evaluate(()=>{window.fixtureRequests=[];window.fixtureGridReads=[];});
     await page.locator('#briefing-model').selectOption(selectedModel);

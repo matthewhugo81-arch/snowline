@@ -66,7 +66,13 @@ try{
    const pinned=await page.locator('#previous-grid select').evaluateAll(ss=>ss.map(s=>s.value));
    newer=true;await page.evaluate(()=>document.dispatchEvent(new CustomEvent('snowline-model-run-available',{detail:{model:'ukmo_uk_deterministic_2km',meta:{reference_time:'2026-10-12T15:00:00Z'}}})));
    assert.equal(await page.locator('#previous-new').isVisible(),true);assert.deepEqual(await page.locator('#previous-grid select').evaluateAll(ss=>ss.map(s=>s.value)),pinned);
-   const saved=page.waitForEvent('download');await page.locator('#previous-grid img').first().click({button:'right'});await page.getByRole('menuitem',{name:'Save image'}).click();const download=await saved;await download.saveAs(`review-output/history-export-${viewport.width}.png`);assert.match(download.suggestedFilename(),/precipitation/);await page.keyboard.press('Escape');
+   const exportImage=page.locator('#previous-grid img').first();await exportImage.scrollIntoViewIfNeeded();
+   await page.waitForFunction(()=>{const img=document.querySelector('#previous-grid img');return img?.complete&&img.naturalWidth>0;});
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   await exportImage.click({button:'right'});await page.getByRole('menuitem',{name:'Save image'}).waitFor({state:'visible'});
+   await page.screenshot({path:`review-output/history-menu-${viewport.width}.png`});
+   const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('menuitem',{name:'Save image'}).click()]);
+   await download.saveAs(`review-output/history-export-${viewport.width}.png`);assert.match(download.suggestedFilename(),/precipitation/);await page.keyboard.press('Escape');
    await page.locator('#previous-run-0').selectOption(pinned[1]);assert.match(await page.locator('#previous-progress').textContent(),/three different/);await page.locator('#previous-run-0').selectOption(pinned[0]);await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
    await page.locator('#previous-refresh').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);assert.deepEqual(await page.locator('#previous-grid select').evaluateAll(ss=>ss.map(s=>new Date(s.value).getUTCHours())),[9,12,15]);
    newer=false;await page.locator('#previous-model').selectOption(UKV+'_nowcast');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);

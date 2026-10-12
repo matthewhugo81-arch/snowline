@@ -1,11 +1,13 @@
+import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
+import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-history';
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {hasFieldTime} from './map-sources.js?v=20261012-chart-style';
+import {hasFieldTime} from './map-sources.js?v=20261012-accum-history';
 import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-chart-style';
+import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-accum-history';
 
 import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261012-weather-composite';
 export {briefingSettings};
@@ -29,6 +31,7 @@ export class BriefingRenderer{
   Object.assign(this,{maplibre,OM,fields,createURL});this.baseSettings=settings;this.settings=briefingSettings(settings);
   installDiagnostics(OM,this.settings);
   installDewPoint(OM,this.settings);
+  installAccumulations(OM,this.settings);
   this.cache=new ForecastTileCache(async(params,controller)=>{
    const result=await OM.omProtocol({...params,url:params.url.replace(/^briefing:\/\//,'om://')},controller,this.settings);
    // TileJSON from the renderer uses its native protocol; keep briefing colours
@@ -89,7 +92,7 @@ export class BriefingRenderer{
    groups.push(...pressure);
    return groups;
   };
-  const frames=this.frames=new ForecastFrames(this.map,'briefing-frame',{decorate,rasterBefore:this.rasterBefore,overlayBefore:this.overlayBefore,isActive:()=>!signal.aborted});
+  const frames=this.frames=new ForecastFrames(this.map,'briefing-frame',{timeout:accumulationHours(preset.field)?120000:25000,decorate,rasterBefore:this.rasterBefore,overlayBefore:this.overlayBefore,isActive:()=>!signal.aborted});
   const cancel=()=>frames.clear();signal.addEventListener('abort',cancel,{once:true});
   try{
    const frame=await frames.acquire(main,()=>!signal.aborted);

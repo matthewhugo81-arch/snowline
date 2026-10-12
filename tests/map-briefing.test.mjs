@@ -14,7 +14,7 @@ test('composite makes dry precipitation transparent and 100% cloud white without
  assert.deepEqual(settings,original);
 });
 test('briefing presets require all component fields, never silently substitute another chart',()=>{
- assert.equal(briefingPresets(meta).length,3);
+ assert.deepEqual(briefingPresets(meta).map(p=>p.id),['weather','precipitation_total_6h','precipitation_total_12h','precipitation_total_18h','precipitation_total_24h','precipitation_total_36h','precipitation_total_48h','airmass','upper']);
  assert.deepEqual(briefingPresets({...meta,variables:['cloud_cover','precipitation']}),[]);
  assert.deepEqual(briefingPresets({...meta,variables:['temperature_850hPa','pressure_msl']}).map(p=>p.id),['airmass']);
 });

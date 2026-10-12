@@ -1,5 +1,5 @@
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261012-chart-style';
-import {sourceVariable} from './map-catalogue.js?v=20261012-chart-style';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261012-accum-history';
+import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 
 // One clipped native grid supplies every label, including derived diagnostics.

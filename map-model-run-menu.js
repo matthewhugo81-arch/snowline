@@ -28,7 +28,7 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
   let lastAttempt = 0;
 
   function attachMenus() {
-    for (const id of ['map-model', 'map-model-b', 'briefing-model']) {
+    for (const id of ['map-model', 'map-model-b', 'briefing-model', 'previous-model']) {
       const select = root.getElementById(id);
       if (!select || selects.has(select)) continue;
       selects.add(select);
@@ -84,7 +84,10 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
           if (previous && Date.parse(incoming.reference_time) === Date.parse(previous.reference_time) && previous.completed === true) {
             meta = {...incoming, completed: true};
           }
-          if (!stopped) results.set(model.id, {meta, error: older ? 'Feed returned an older initialization' : null});
+          if (!stopped) {
+            results.set(model.id, {meta, error: older ? 'Feed returned an older initialization' : null});
+            root.dispatchEvent?.(new CustomEvent('snowline-model-run-available',{detail:{model:model.id,meta}}));
+          }
         } catch (error) {
           if (!stopped) results.set(model.id, {meta: results.get(model.id)?.meta, error: error?.message || 'Run check failed'});
         }

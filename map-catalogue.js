@@ -1,3 +1,4 @@
+import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261012-accum-history';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261012-weather-composite';
 import {ensembleField} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
@@ -20,7 +21,7 @@ function menuField(key){
  return !pressure||MENU_PRESSURE_LEVELS[pressure[1]].includes(Number(pressure[2]));
 }
 const HEIGHT_LEVELS = [50,100,200,300];
-const GROUPS = ['Combined weather','Ensemble mean','Ensemble spread','Temperature','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+const GROUPS = ['Combined weather','Ensemble mean','Ensemble spread','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
 export const PRECIPITATION_SCALE = {
@@ -38,6 +39,7 @@ export const PRECIPITATION_PROBABILITY_SCALE = {
  colors:['#ffffff','#dbeefd','#9ecae1','#4292c6','#2171b5','#08519c','#08306b']
 };
 export function sourceVariable(meta,key){
+ if(accumulationHours(key))return accumulationSource(meta,key)?key:null;
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
@@ -61,6 +63,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
+ if(accumulationHours(key))return 'Accumulated precipitation';
  if(key===WEATHER_COMPOSITE)return 'Combined weather';
  if(DIAGNOSTIC_KEYS.includes(key))return 'Derived diagnostics';
  const ensemble=ensembleField(key);if(ensemble)return ensemble.group;
@@ -103,6 +106,7 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ const accumulation=accumulationField(key);if(accumulation)return accumulation;
  const diagnostic=diagnosticField(key);if(diagnostic)return diagnostic;
  const ensemble=ensembleField(key);if(ensemble)return ensemble;
  if(isJetWind(key))return {
@@ -150,6 +154,7 @@ export function availableFields(fields,metas){
 }
 export function extendCatalogue(fields,metas,OM,settings){
  const keys=[...new Set(metas.flatMap(m=>m.variables??[]).map(canonicalVariable))];
+ for(const key of ACCUMULATION_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of DIAGNOSTIC_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  if(metas.some(meta=>sourceVariable(meta,'dew_point_2m'))&&!keys.includes('dew_point_2m'))keys.push('dew_point_2m');
  const omitted=[];
