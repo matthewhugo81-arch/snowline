@@ -19,6 +19,7 @@ jobs:
       - name: Apply isolated chart updates
         run: |
           python review/apply-chart-update.py
+          python review/browser-readiness.py
           git diff --check
           mkdir -p review-output
       - name: Check all regression tests
