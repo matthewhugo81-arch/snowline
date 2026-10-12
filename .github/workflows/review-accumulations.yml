@@ -1,56 +1,58 @@
-name: Inspect precipitation and previous runs
+name: Review accumulations and previous runs
 on:
   push:
     branches: [review/accumulations-history-20261012]
-    paths: ['.github/workflows/review-accumulations.yml', 'review/**']
+    paths: ['.github/workflows/review-accumulations.yml', 'review/**', 'map-accumulation*.js', 'map-previous*', 'tests/accumulation*', 'tests/previous*', 'scripts/verify_accumulation_live.mjs']
 permissions:
-  contents: read
+  contents: write
+defaults:
+  run:
+    shell: bash
 jobs:
-  inspect:
+  review:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Inspect live run metadata and retained UKV cycles
+      - name: Apply exact reviewed application changes
         run: |
+          python review/apply.py
+          git diff --check
           mkdir -p review-output
-          node --input-type=module <<'JS'
-          import {writeFile} from 'node:fs/promises';
-          import {MAP_MODELS} from './map-models.js';
-          import {loadSpatialModel,SPATIAL_BASE,runPath} from './map-sources.js';
-          const requests=new Map(),timings=[];
-          async function get(url){const t=performance.now();const r=await fetch(url,{signal:AbortSignal.timeout(20000),cache:'no-store'});timings.push({url,status:r.status,ms:Math.round(performance.now()-t)});if(!r.ok)throw Object.assign(Error('HTTP '+r.status),{status:r.status});return r.json();}
-          const load=url=>{if(!requests.has(url))requests.set(url,get(url));return requests.get(url);};
-          const results=[];let n=0;
-          async function worker(){while(n<MAP_MODELS.length){const model=MAP_MODELS[n++];try{results.push({model:model.id,meta:await loadSpatialModel(model.id,load)});}catch(e){results.push({model:model.id,error:e.message});}}}
-          await Promise.all([worker(),worker(),worker()]);
-          const latest=results.find(r=>r.model==='ukmo_uk_deterministic_2km')?.meta,history=[];
-          if(latest){for(const back of [3,6,9,12,24,48]){const time=new Date(Date.parse(latest.reference_time)-back*3600000).toISOString();try{const meta=await load(SPATIAL_BASE+latest.domain+'/'+runPath(time)+'meta.json');const end=meta.valid_times.find(t=>Date.parse(t)>=Date.parse(latest.reference_time)+6*3600000);let file;if(end){const url=SPATIAL_BASE+latest.domain+'/'+runPath(time)+end.slice(0,16).replace(':','')+'.om';const r=await fetch(url,{headers:{Range:'bytes=0-63'},signal:AbortSignal.timeout(20000)});file={url,status:r.status,range:r.headers.get('content-range')};await r.arrayBuffer();}history.push({time,meta,file});}catch(e){history.push({time,error:e.message});}}}
-          await writeFile('review-output/live-audit.json',JSON.stringify({checkedAt:new Date().toISOString(),results,history,timings},null,2));
-          console.log(results.map(r=>({model:r.model,run:r.meta?.reference_time,hours:r.meta?.valid_times.length,precip:r.meta?.variables.includes('precipitation'),error:r.error})));
-          JS
-      - name: Inspect upstream precipitation definitions
+          git diff > review-output/application.patch
+      - name: Full numerical, timing and regression tests
+        run: node --test tests/*.test.mjs | tee review-output/unit-tests.txt
+      - name: Install pinned browser runner
         run: |
-          git clone -q --depth=1 https://github.com/open-meteo/open-meteo.git /tmp/open-meteo
-          git -C /tmp/open-meteo rev-parse HEAD > review-output/provider-commit.txt
-          python - <<'PY'
-          from pathlib import Path
-          import zipfile
-          root=Path('/tmp/open-meteo')
-          files=[]
-          for p in (root/'Sources/App').rglob('*.swift'):
-              s=p.read_text()
-              if any(t in p.name.lower() for t in ['ukmo','metoffice','spatial','genericdomain','generichandle','gfsdownload','ecmwfdownload','iconvariable','ecmwfvariable','gfsvariable','arpegedownload']):files.append(p)
-          with zipfile.ZipFile('review-output/provider-sources.zip','w',zipfile.ZIP_DEFLATED) as z:
-              for p in files:z.write(p,p.relative_to(root))
-          print('\n'.join(str(p.relative_to(root)) for p in files))
-          PY
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Check accumulation panels and pinned three-run comparison
+        run: node tests/accumulation-history-browser.mjs 2>&1 | tee review-output/history-browser.txt
+      - name: Check existing playback, maps and briefing behavior
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/existing-browser.txt
+      - name: Check right-click exports and existing chart styles
+        run: node tests/chart-image-browser.mjs 2>&1 | tee review-output/export-browser.txt
+      - name: Verify numerical totals against actual UKV source grids
+        run: node scripts/verify_accumulation_live.mjs 2>&1 | tee review-output/live-numeric.txt
+      - name: Check published feeds and timing without generating imagery
+        continue-on-error: true
+        run: node scripts/check_map_feeds.mjs review-output/map-feeds.json
+      - name: Commit tested changes to the review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add map-*.js maps.js maps.html tests/map-briefing.test.mjs tests/map-browser.mjs
+          git commit -m 'Apply verified accumulation and previous-run integration'
+          git push origin HEAD:review/accumulations-history-20261012
+          git rev-parse HEAD HEAD^{tree} > review-output/tested-refs.txt
+          git ls-tree -r HEAD > review-output/tested-blobs.txt
+          git archive --format=zip HEAD > review-output/tested-source.zip
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: precipitation-history-audit
-          path: review-output
+          name: accumulation-history-review
+          path: review-output/
           retention-days: 7

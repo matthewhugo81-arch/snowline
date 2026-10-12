@@ -1,0 +1,30 @@
+name: Map feed health
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/check_map_feeds.mjs', '.github/workflows/map-feed-health.yml']
+permissions:
+  contents: read
+concurrency:
+  group: snowline-map-feed-health
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact published runs, coverage and tiny forecast samples
+        run: node scripts/check_map_feeds.mjs health-output/map-feeds.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: map-feed-health
+          path: health-output/
+          retention-days: 7
