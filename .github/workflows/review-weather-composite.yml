@@ -1,8 +1,8 @@
-name: Verify interactive weather composite
+name: Verify composite legend layout
 on:
   push:
     branches: [review/weather-composite-20261012]
-    paths: ['review/apply-weather-composite.py', 'review/composite-browser-snippet.txt', 'map-weather-composite.js', 'tests/weather-composite.test.mjs', '.github/workflows/review-weather-composite.yml']
+    paths: ['review/apply-composite-legend.py', '.github/workflows/review-weather-composite.yml']
 permissions:
   contents: write
 concurrency:
@@ -11,7 +11,7 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 6
     defaults:
       run:
         shell: bash
@@ -20,9 +20,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Apply isolated composite changes
+      - name: Apply scoped composite legend layout
         run: |
-          python review/apply-weather-composite.py
+          python review/apply-composite-legend.py
           git diff --check
           mkdir -p review-output
       - name: Run full regression suite
@@ -31,20 +31,22 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium
-      - name: Verify desktop and phone maps, composite panels and briefings
+      - name: Recheck composite panels and legend geometry on desktop and phone
+        env:
+          SNOWLINE_COMPOSITE_SMOKE: '1'
         run: node tests/map-browser.mjs 2>&1 | tee review-output/browser-tests.txt
-      - name: Commit tested application changes to the review branch only
+      - name: Commit reviewed legend layout to the review branch only
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add map-briefing-data.js map-briefing-renderer.js map-briefing-values.js map-briefing.js map-catalogue.js map-frames.js map-panels.js map-sources.js maps.html maps.js tests/map-browser.mjs tests/map-integration.test.mjs
-          git commit -m 'Verify cloud precipitation and MSLP composite in both map panels'
+          git add maps.css maps.html tests/map-browser.mjs
+          git commit -m 'Keep both composite scales visible and comparison panels aligned'
           git push origin HEAD:review/weather-composite-20261012
           git rev-parse HEAD HEAD^{tree} | tee review-output/tested-refs.txt
-          git ls-tree HEAD map-briefing-data.js map-briefing-renderer.js map-briefing-values.js map-briefing.js map-catalogue.js map-frames.js map-panels.js map-sources.js maps.html maps.js map-weather-composite.js tests/map-browser.mjs tests/map-integration.test.mjs tests/weather-composite.test.mjs | tee review-output/tested-blobs.txt
+          git ls-tree HEAD map-briefing-data.js map-briefing-renderer.js map-briefing-values.js map-briefing.js map-catalogue.js map-frames.js map-panels.js map-sources.js maps.html maps.js maps.css map-weather-composite.js tests/map-browser.mjs tests/map-integration.test.mjs tests/weather-composite.test.mjs docs/weather-composite-20261012.md | tee review-output/tested-blobs.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: weather-composite-tests
+          name: weather-composite-legend-tests
           path: review-output/
           retention-days: 1
