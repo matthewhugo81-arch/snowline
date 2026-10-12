@@ -1,0 +1,130 @@
+// Decorate native model options only: model IDs, selections and map loading stay unchanged.
+const runDate = new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short', timeZone: 'UTC'});
+
+export function formatModelRun(meta) {
+  const time = typeof meta?.reference_time === 'string' ? Date.parse(meta.reference_time) : NaN;
+  if (!Number.isFinite(time)) return null;
+  const date = new Date(time);
+  const iso = date.toISOString();
+  const cycle = iso.slice(14, 16) === '00' ? iso.slice(11, 13) : iso.slice(11, 16).replace(':', '');
+  return `${runDate.format(date)} · ${cycle}Z`;
+}
+
+export function modelOptionLabel(model, result) {
+  const run = formatModelRun(result?.meta);
+  const label = run
+    ? run + (result.error ? ' · check failed' : result.meta.completed === false ? ' · updating' : '')
+    : result?.error ? 'run unavailable' : 'checking…';
+  return `${model.name} (${label})`;
+}
+
+export function installModelRunMenu({models, loadModel, loadJSON, root = document, refreshMs = 60000, concurrency = 3}) {
+  const selects = ['map-model', 'map-model-b'].map(id => root.getElementById(id)).filter(Boolean);
+  const knownModels = new Map(models.map(model => [model.id, model]));
+  const results = new Map();
+  let stopped = false;
+  let inFlight = null;
+  let timer = null;
+  let lastAttempt = 0;
+
+  function render() {
+    if (stopped) return;
+    for (const select of selects) {
+      for (const option of select.options) {
+        const model = knownModels.get(option.value);
+        if (!model) continue;
+        const result = results.get(model.id);
+        const text = modelOptionLabel(model, result);
+        if (option.textContent !== text) option.textContent = text;
+        const run = formatModelRun(result?.meta);
+        option.title = run
+          ? `Published initialization (UTC): ${new Date(result.meta.reference_time).toISOString()}.` +
+            (result.error ? ' Latest-run check failed; showing the last verified initialization.' :
+              result.meta.completed === false ? ' Forecast hours are still arriving.' : '') +
+            (result.meta.sourceWarnings?.length ? ' ' + result.meta.sourceWarnings.join(' ') : '')
+          : result?.error ? 'The published run could not be verified. The next check will retry.' : 'Checking published run metadata…';
+      }
+    }
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    if (!stopped) timer = setTimeout(() => { void refresh(); }, refreshMs);
+  }
+
+  async function collect(force) {
+    // Metadata only, with a bounded queue. UKV main/nowcast share identical JSON
+    // requests within this check, but the existing loader selects each family separately.
+    const requests = new Map();
+    const load = url => {
+      if (!requests.has(url)) requests.set(url, Promise.resolve().then(() => loadJSON(url, {force})));
+      return requests.get(url);
+    };
+    let index = 0;
+    async function worker() {
+      while (!stopped && (!root.hidden || force) && index < models.length) {
+        const model = models[index++];
+        try {
+          const incoming = await loadModel(model.id, load);
+          if (!formatModelRun(incoming)) throw new Error('No verified initialization in model metadata');
+          const previous = results.get(model.id)?.meta;
+          const older = previous && Date.parse(incoming.reference_time) < Date.parse(previous.reference_time);
+          let meta = older ? previous : incoming;
+          // Do not regress the cycle or completion flag on an out-of-order response.
+          if (previous && Date.parse(incoming.reference_time) === Date.parse(previous.reference_time) && previous.completed === true) {
+            meta = {...incoming, completed: true};
+          }
+          if (!stopped) results.set(model.id, {meta, error: older ? 'Feed returned an older initialization' : null});
+        } catch (error) {
+          if (!stopped) results.set(model.id, {meta: results.get(model.id)?.meta, error: error?.message || 'Run check failed'});
+        }
+        render();
+      }
+    }
+    await Promise.all(Array.from({length: Math.min(models.length, Math.max(1, concurrency))}, worker));
+  }
+
+  function refresh(force = false) {
+    if (stopped || !selects.length) return Promise.resolve();
+    if (inFlight) return inFlight;
+    clearTimeout(timer);
+    if (root.hidden && !force) {
+      schedule();
+      return Promise.resolve();
+    }
+    lastAttempt = Date.now();
+    inFlight = collect(force).finally(() => {
+      inFlight = null;
+      schedule();
+    });
+    return inFlight;
+  }
+
+  function refreshWhenDue() {
+    if (!root.hidden && Date.now() - lastAttempt >= 15000) void refresh();
+  }
+  const manualRefresh = () => { void refresh(true); };
+  const reload = root.getElementById('reload-maps');
+  for (const select of selects) {
+    select.addEventListener('focus', refreshWhenDue);
+    select.addEventListener('pointerdown', refreshWhenDue);
+  }
+  root.addEventListener('visibilitychange', refreshWhenDue);
+  reload?.addEventListener('click', manualRefresh);
+  render();
+  void refresh();
+
+  return {
+    refresh,
+    destroy() {
+      stopped = true;
+      clearTimeout(timer);
+      for (const select of selects) {
+        select.removeEventListener('focus', refreshWhenDue);
+        select.removeEventListener('pointerdown', refreshWhenDue);
+      }
+      root.removeEventListener('visibilitychange', refreshWhenDue);
+      reload?.removeEventListener('click', manualRefresh);
+    }
+  };
+}
