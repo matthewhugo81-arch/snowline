@@ -1,0 +1,56 @@
+name: Inspect precipitation and previous runs
+on:
+  push:
+    branches: [review/accumulations-history-20261012]
+    paths: ['.github/workflows/review-accumulations.yml', 'review/**']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inspect live run metadata and retained UKV cycles
+        run: |
+          mkdir -p review-output
+          node --input-type=module <<'JS'
+          import {writeFile} from 'node:fs/promises';
+          import {MAP_MODELS} from './map-models.js';
+          import {loadSpatialModel,SPATIAL_BASE,runPath} from './map-sources.js';
+          const requests=new Map(),timings=[];
+          async function get(url){const t=performance.now();const r=await fetch(url,{signal:AbortSignal.timeout(20000),cache:'no-store'});timings.push({url,status:r.status,ms:Math.round(performance.now()-t)});if(!r.ok)throw Object.assign(Error('HTTP '+r.status),{status:r.status});return r.json();}
+          const load=url=>{if(!requests.has(url))requests.set(url,get(url));return requests.get(url);};
+          const results=[];let n=0;
+          async function worker(){while(n<MAP_MODELS.length){const model=MAP_MODELS[n++];try{results.push({model:model.id,meta:await loadSpatialModel(model.id,load)});}catch(e){results.push({model:model.id,error:e.message});}}}
+          await Promise.all([worker(),worker(),worker()]);
+          const latest=results.find(r=>r.model==='ukmo_uk_deterministic_2km')?.meta,history=[];
+          if(latest){for(const back of [3,6,9,12,24,48]){const time=new Date(Date.parse(latest.reference_time)-back*3600000).toISOString();try{const meta=await load(SPATIAL_BASE+latest.domain+'/'+runPath(time)+'meta.json');const end=meta.valid_times.find(t=>Date.parse(t)>=Date.parse(latest.reference_time)+6*3600000);let file;if(end){const url=SPATIAL_BASE+latest.domain+'/'+runPath(time)+end.slice(0,16).replace(':','')+'.om';const r=await fetch(url,{headers:{Range:'bytes=0-63'},signal:AbortSignal.timeout(20000)});file={url,status:r.status,range:r.headers.get('content-range')};await r.arrayBuffer();}history.push({time,meta,file});}catch(e){history.push({time,error:e.message});}}}
+          await writeFile('review-output/live-audit.json',JSON.stringify({checkedAt:new Date().toISOString(),results,history,timings},null,2));
+          console.log(results.map(r=>({model:r.model,run:r.meta?.reference_time,hours:r.meta?.valid_times.length,precip:r.meta?.variables.includes('precipitation'),error:r.error})));
+          JS
+      - name: Inspect upstream precipitation definitions
+        run: |
+          git clone -q --depth=1 https://github.com/open-meteo/open-meteo.git /tmp/open-meteo
+          git -C /tmp/open-meteo rev-parse HEAD > review-output/provider-commit.txt
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('/tmp/open-meteo')
+          files=[]
+          for p in (root/'Sources/App').rglob('*.swift'):
+              s=p.read_text()
+              if any(t in p.name.lower() for t in ['ukmo','metoffice','spatial','genericdomain','generichandle','gfsdownload','ecmwfdownload','iconvariable','ecmwfvariable','gfsvariable','arpegedownload']):files.append(p)
+          with zipfile.ZipFile('review-output/provider-sources.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in files:z.write(p,p.relative_to(root))
+          print('\n'.join(str(p.relative_to(root)) for p in files))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: precipitation-history-audit
+          path: review-output
+          retention-days: 7
