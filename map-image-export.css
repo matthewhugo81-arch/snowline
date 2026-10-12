@@ -1,0 +1,11 @@
+/* On-demand menu only. Desktop and mobile map geometry is unchanged. */
+.chart-image-menu{position:fixed;z-index:100000;min-width:185px;max-width:min(310px,calc(100vw - 16px));padding:5px;background:#fff;color:#0e2034;border:1px solid #b7c7d7;border-radius:7px;box-shadow:0 5px 22px #0e203433;font:13px Arial,sans-serif}
+.chart-image-menu[hidden],.chart-image-message[hidden]{display:none}
+.chart-image-menu button{display:block;width:100%;text-align:left;border:0;border-radius:4px;background:#fff;color:#0e2034;padding:10px 13px;font:600 13px Arial,sans-serif;cursor:pointer}
+.chart-image-menu button:hover,.chart-image-menu button:focus-visible{background:#e7f4f2;outline:2px solid #007e84;outline-offset:-2px}
+.chart-image-menu button:disabled{opacity:.55;cursor:wait}
+.chart-image-message{margin:4px 8px 5px;font:12px/1.4 Arial,sans-serif;max-width:270px;overflow-wrap:anywhere}
+.chart-image-preview{max-width:95vw;max-height:93vh;overflow:auto;background:white;color:#0e2034;border:1px solid #b7c7d7;border-radius:8px;padding:14px;font:14px/1.4 Arial,sans-serif}
+.chart-image-preview::backdrop{background:#0e2034aa}
+.chart-image-preview img{display:block;max-width:100%;height:auto;margin-top:12px}
+.chart-image-preview button{float:right;margin-left:15px}

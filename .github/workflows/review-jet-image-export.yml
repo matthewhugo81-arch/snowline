@@ -1,28 +1,49 @@
-name: Review jet scales and chart image export
+name: Review chart styling and image export
 on:
   push:
     branches: [review/jet-image-export-20261012]
 permissions:
-  contents: read
+  contents: write
+defaults:
+  run:
+    shell: bash
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Package source for isolated review
+      - name: Apply isolated chart updates
         run: |
+          python review/apply-chart-update.py
+          git diff --check
           mkdir -p review-output
-          git archive --format=zip HEAD > review-output/source.zip
-          git rev-parse HEAD HEAD^{tree} > review-output/refs.txt
-      - name: Check existing regression suite
-        run: node --test tests/*.test.mjs > review-output/node-tests.txt
+      - name: Check all regression tests
+        run: node --test tests/*.test.mjs | tee review-output/node-tests.txt
+      - name: Install pinned browser runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Check contours, jet scales, PNG exports and clipboard on desktop and mobile
+        run: node tests/chart-image-browser.mjs 2>&1 | tee review-output/chart-image-browser.txt
+      - name: Check existing map playback and briefing behaviour
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/map-browser.txt
+      - name: Commit tested application files to review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add maps.js maps.html map-*.js map-image-export.css tests/*.mjs
+          git commit -m 'Apply verified jet scales, image export and major 850 hPa isotherms'
+          git push origin HEAD:review/jet-image-export-20261012
+          git rev-parse HEAD HEAD^{tree} > review-output/tested-refs.txt
+          git ls-tree -r HEAD > review-output/tested-blobs.txt
+          git archive --format=zip HEAD > review-output/tested-source.zip
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: jet-image-export-review
+          name: chart-style-image-export-tests
           path: review-output/
           retention-days: 1
