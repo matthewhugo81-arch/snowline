@@ -2,6 +2,7 @@ import {ForecastFrames} from './map-frames.js?v=20261011-retain-downloads';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-jet-arrows';
 import {hasFieldTime} from './map-sources.js?v=20261012-menu-extrema';
+import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-menu-extrema';
 
@@ -30,6 +31,7 @@ export class BriefingRenderer{
  constructor({maplibre,OM,settings,fields,createURL}){
   Object.assign(this,{maplibre,OM,fields,createURL});this.baseSettings=settings;this.settings=briefingSettings(settings);
   installDiagnostics(OM,this.settings);
+  installDewPoint(OM,this.settings);
   this.cache=new ForecastTileCache(async(params,controller)=>{
    const result=await OM.omProtocol({...params,url:params.url.replace(/^briefing:\/\//,'om://')},controller,this.settings);
    // TileJSON from the renderer uses its native protocol; keep briefing colours
