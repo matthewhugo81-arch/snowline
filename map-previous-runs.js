@@ -1,6 +1,6 @@
 import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261012-accum-history';
 import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261012-accum-history';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261012-accum-history';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261012-accum-speed';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261012-accum-history';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
@@ -11,17 +11,18 @@ function option(value,label){const el=document.createElement('option');el.value=
 // Separate controller: no changes to the forecast-sequence state or main maps.
 // Runs remain pinned until the user explicitly chooses/reloads them.
 export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose,...renderOptions}){
- host.innerHTML=`<div class="briefing-heading"><div><h2>Previous Run Analysis</h2><p id="previous-status" role="status">Choose a model to compare three runs.</p></div><button type="button" class="secondary" id="previous-close">Back to maps</button></div>
- <div class="previous-controls">
+ host.innerHTML=`<div class="briefing-heading"><div><h2>Previous Run Analysis</h2><p id="previous-status" role="status">Choose a model to compare three runs.</p></div><div class="briefing-heading-actions"><button type="button" class="secondary" id="previous-toggle-controls" aria-expanded="true" aria-controls="previous-control-section">Hide controls</button><button type="button" class="secondary" id="previous-close">Back to maps</button></div></div>
+ <div id="previous-control-section"><div class="previous-controls">
  <label>Forecast model<select id="previous-model"></select></label>
  <label>Chart<select id="previous-preset" disabled></select></label>
  <label>Area<select id="previous-area"></select></label>
  <label>Shared valid time · UTC<select id="previous-time" disabled></select></label>
  <label>Forecast interval<select id="previous-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
  <button type="button" class="secondary" id="previous-refresh">Load latest three runs</button></div>
- <p id="previous-new" class="previous-notice" hidden>A newer run is available. Your comparison is unchanged. Use Load latest three runs to update it.</p>
  <div class="briefing-overlays"><label class="check-row"><input type="checkbox" id="previous-contours"> Contours</label><label class="check-row"><input type="checkbox" id="previous-grid-values"> Grid values</label><span class="small-note">Same area, chart, colour scale and valid time. Each panel retains its own initialization and lead time.</span></div>
- <p id="previous-note" class="small-note"></p><div id="previous-legend" class="briefing-legend"></div>
+ <p id="previous-note" class="small-note"></p></div>
+ <p id="previous-new" class="previous-notice" hidden>A newer run is available. Your comparison is unchanged. Show controls and use Load latest three runs to update it.</p>
+ <div id="previous-legend" class="briefing-legend"></div>
  <div class="briefing-navigation"><button type="button" class="secondary" id="previous-back">Earlier valid time</button><p id="previous-progress" role="status"></p><button type="button" class="secondary" id="previous-retry" hidden>Retry charts</button><button type="button" class="secondary" id="previous-forward">Later valid time</button></div>
  <div id="previous-grid" class="previous-grid"></div>
  <p class="small-note">Recent run availability depends on the provider archive. No model cycles or missing hours are substituted. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth.</p>
@@ -88,7 +89,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   };
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;
-   c.title.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'');c.caption.textContent='Valid '+utc(time)+' · '+briefingCaption(meta,p,time);c.button.replaceChildren('Preparing this run…');c.button.disabled=true;
+   c.title.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'');c.caption.textContent='Valid '+utc(time)+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
    const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays),cached=images.get(key);if(cached)show(c,cached,meta);
    return {c,meta,key,cached};
   });progress();
@@ -96,7 +97,9 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    if(signal.aborted)return;renderer??=new BriefingRenderer({...renderOptions,fields});
    for(const item of tasks){
     if(signal.aborted||!active)return;if(item.cached)continue;
-    try{const src=await renderer.render({...opts,meta:item.meta,time,signal});if(signal.aborted){URL.revokeObjectURL(src);return;}images.set(item.key,src);show(item.c,src,item.meta);}
+    try{const src=await renderer.render({...opts,meta:item.meta,time,signal,onProgress:({done,total})=>{
+     if(signal.aborted)return;item.c.button.textContent=done<total?'Preparing '+accumulationHours(p.field)+' h total · '+done+'/'+total+' native intervals':'Drawing map and grid values…';
+    }});if(signal.aborted){URL.revokeObjectURL(src);return;}images.set(item.key,src);show(item.c,src,item.meta);}
     catch(error){if(signal.aborted)return;item.c.button.textContent='This run/time is unavailable. Use Retry charts.';item.c.card.dataset.failed='true';failed++;$('retry').hidden=false;}
     progress();
    }
@@ -130,6 +133,12 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  for(const name of ['area','contours','grid-values'])$(name).addEventListener('change',render);
  $('time').addEventListener('change',()=>{index=Number($('time').value);render();});
  $('back').addEventListener('click',()=>{index=Math.max(0,index-1);render();});$('forward').addEventListener('click',()=>{index=Math.min(times.length-1,index+1);render();});$('retry').addEventListener('click',render);
+ $('toggle-controls').addEventListener('click',()=>{
+  const hidden=!$('control-section').hidden;$('control-section').hidden=hidden;
+  for(const c of cards)c.select.closest('.previous-run-label').hidden=hidden;
+  $('toggle-controls').textContent=hidden?'Show controls':'Hide controls';
+  $('toggle-controls').setAttribute('aria-expanded',String(!hidden));
+ });
  $('close').addEventListener('click',onClose);$('enlarged-close').addEventListener('click',()=>$('enlarged').close());
  const available=event=>{if(active&&event.detail?.model===model?.id&&newerRunAvailable(selected(),event.detail.meta))$('new').hidden=false;};
  document.addEventListener('snowline-model-run-available',available);

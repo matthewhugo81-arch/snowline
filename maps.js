@@ -1,5 +1,5 @@
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
-import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-history';
+import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261012-weather-composite';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
@@ -578,7 +578,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261012-accum-history');
+   const {createBriefing}=await import('./map-briefing.js?v=20261012-accum-speed');
    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},
