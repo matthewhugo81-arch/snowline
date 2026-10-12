@@ -1,0 +1,15 @@
+/* Location charts only: no shared map rules or touch/wheel overrides. */
+.location-page .zoom-reset{font-size:11px;padding:5px 8px;min-height:30px;white-space:nowrap}
+.location-page .zoom-reset[hidden],.location-page #zoom-window[hidden]{display:none}
+.location-page .chart-card:has(.zoom-reset:not([hidden])) .chart-tools{flex-wrap:wrap;justify-content:flex-end;max-width:58%}
+.location-page .agreement-card .chart-tools{flex-wrap:wrap;justify-content:flex-end}
+.location-page #zoom-window{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin:0 0 15px;padding:9px 12px;background:#e8f4f3;border:1px solid #b9d7d4;border-radius:7px;font-size:12px;color:#162b40}
+.location-page #zoom-period{flex:1;min-width:180px;line-height:1.5}
+.location-page .zoom-selection{pointer-events:none}
+.location-page .zoom-selection rect{fill:#007a8026;stroke:#007a80;stroke-width:1;vector-effect:non-scaling-stroke}
+.location-page .zoom-selection text{fill:#162b40;stroke:white;stroke-width:4px;paint-order:stroke;stroke-linejoin:round;font-size:11px;font-weight:700}
+.location-page .agreement-card .zoom-selection rect{fill:#6ce1d633;stroke:#6ce1d6}
+.location-page .agreement-card .zoom-selection text{fill:#ebf5ff;stroke:#0e2034}
+.location-page .zoom-selecting{user-select:none;-webkit-user-select:none}
+.location-page .plot:focus-visible{outline:2px solid #008e9b;outline-offset:3px;border-radius:3px}
+@media (pointer:coarse){.location-page .mouse-zoom-hint{display:none}}
