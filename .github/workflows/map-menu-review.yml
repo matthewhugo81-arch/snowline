@@ -3,24 +3,43 @@ on:
   push:
     branches: [review/map-menus-20261012]
 permissions:
-  contents: read
+  contents: write
+defaults:
+  run:
+    shell: bash
 jobs:
-  audit:
+  review:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check native temperature extrema in individual spatial files
+      - name: Apply isolated menu changes
+        run: |
+          git apply --check --unidiff-zero review/map-menu-updates.patch
+          git apply --unidiff-zero review/map-menu-updates.patch
+          git diff --check
+      - name: Run complete regression suite
         run: |
           mkdir -p review-output
-          node scripts/inspect_temperature_extrema.mjs
-      - name: Package source snapshot for local regression checks
-        run: git archive --format=zip HEAD -o review-output/source.zip
-      - name: Run map and chart regression checks
-        run: node --test tests/*.test.mjs
+          node --test tests/*.test.mjs | tee review-output/node-tests.txt
+      - name: Install pinned browser runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Check desktop and mobile maps and briefings
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/browser-tests.txt
+      - name: Commit tested changes to review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/map-menu-updates-20261012.md docs/temperature-extrema-audit-20261012.json map-briefing-data.js map-briefing-renderer.js map-briefing-values.js map-briefing.js map-catalogue.js map-model-run-menu.js map-panels.js map-sources.js maps.html maps.js tests/map-briefing.test.mjs tests/map-browser.mjs tests/map-catalogue.test.mjs tests/map-pressure-menu.test.mjs tests/map-temperature-extrema.test.mjs tests/model-run-menu.test.mjs
+          git commit -m 'Validate concise upper-air menus, native extrema and shared briefing run labels'
+          git push origin HEAD:review/map-menus-20261012
+          git rev-parse HEAD HEAD^{tree} | tee review-output/tested-refs.txt
+          git archive --format=zip HEAD -o review-output/tested-source.zip
       - uses: actions/upload-artifact@v4
         if: always()
         with:
