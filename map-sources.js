@@ -1,7 +1,7 @@
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261012-weather-composite';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261012-weather-composite';
+import {sourceVariable} from './map-catalogue.js?v=20261012-chart-style';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';

@@ -9,15 +9,15 @@ import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=2026101
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
-import {overlayGroups} from './map-overlay-specs.js?v=20261011-jet-arrows';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261012-weather-composite';
+import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261012-chart-style';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261011-briefing-overlays';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261012-weather-composite';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261012-chart-style';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261011-live-runs';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261012-weather-composite';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261012-chart-style';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
@@ -25,7 +25,10 @@ import {MAP_MODELS as MODELS} from './map-models.js?v=20261011-live-runs';
 import {ukvRunFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
+import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261012-chart-style';
 const $=id=>document.getElementById(id);
+const imageMenu=createChartImageMenu();
 setupMobileMap();
 const UK=[-11,49,2.7,61.6];
 const tempColors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643'];
@@ -137,11 +140,13 @@ function makeMap(key){
  map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
 locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await readMapValue(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${displayValue(result.value,field).toFixed(1)} ${displayUnit(field)} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
+ imageMenu.registerMap(map,()=>({...panel.imageInfo,subtitle:$('map-error-'+key).hidden?'':$('map-error-'+key).textContent,ready:panel.loaded&&!!panel.displayedTime&&!!panel.imageInfo&&!!map.getLayer(panel.weatherLayer)}),pauseAnimation);
  return panel;
 }
 const a=makeMap('a');
 if(state.location)locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat([state.location.longitude,state.location.latitude]).addTo(a.map);
 function contourLevels(field){
+ if(is850Temperature(field.key))return temperatureContourLevels(field);
  if(field.contourValues)return field.contourValues;
  if(/hPa$/.test(field.key)&&field.unit==='°C')return Array.from({length:71},(_,i)=>-100+i*2);
  if(field.key.startsWith('geopotential_height_')){const min=field.stops[0],max=field.stops.at(-1),step=Number(field.key.match(/_(\d+)hPa/)?.[1])<=100?120:60;return Array.from({length:Math.ceil((max-min)/step)+2},(_,i)=>Math.floor(min/step)*step+i*step);}
@@ -214,7 +219,7 @@ async function drawGridValues(panel){
   note.textContent=features.length?'Grid values · '+(field===WEATHER_COMPOSITE?'precipitation · ':'')+displayUnit(f):'No grid values in this area.';
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
-function concreteURL(model,meta,time,field){if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(field==='wind_speed_300hPa'?{wind_style:'20261011-jet-arrows',arrow_profile:'jet'}:{}),variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
+function concreteURL(model,meta,time,field){if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null;
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
@@ -328,6 +333,7 @@ async function loadTime(){
    scheduleGridValues(panel);
   }
   syncTimeline(index);setLegend();pressureNote();
+  for(const {panel,key,field}of prepared)panel.imageInfo={title:$('panel-label-'+key).textContent,scales:chartScales(fields.find(f=>f.key===field),$('legend-interval-'+key).textContent)};
   for(const {panel}of prepared)warmUpcoming(panel);
   $('animation-status').textContent=playing?'Playing · buffered native forecast frames':'Ready';updatePreloadStatus();
   status('Click a map for a value and local charts.');return true;
@@ -380,7 +386,7 @@ function setLegend(){
  for(const {key,model,field} of panelSelections(state)){
   const f=fields.find(f=>f.key===field);if(!f)continue;
   const el=name=>$(name+'-'+key),gradient=el('legend-gradient'),ticks=el('legend-ticks'),bands=el('legend-bands');
-  const displayBreaks=displayStops(f),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
+  const legendOffset=f.legendStart??0,legendColors=f.colors.slice(legendOffset),displayBreaks=displayStops(f).slice(legendOffset),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
   if(panels[key].legendField!==field){
   panels[key].legendField=field;
   el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm)':field==='precipitation_probability'?'Chance (%)':displayUnit(f);
@@ -388,8 +394,8 @@ function setLegend(){
   gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
   [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
   ticks.classList.toggle('temperature-ticks',!!f.temperatureBands);
-  if(f.bands)displayBreaks.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categorical?String(v):i===displayBreaks.length-1?v+'+':v+'–<'+displayBreaks[i+1];item.title=range+' '+displayUnit(f);item.setAttribute('aria-label',range+' '+displayUnit(f));swatch.style.background=f.colors[i];label.textContent=v+(i===displayBreaks.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
-  bands.style.gridTemplateColumns='repeat('+f.stops.length+',minmax(0,1fr))';
+  if(f.bands)displayBreaks.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categorical?String(v):i===displayBreaks.length-1?v+'+':v+'–<'+displayBreaks[i+1];item.title=range+' '+displayUnit(f);item.setAttribute('aria-label',range+' '+displayUnit(f));swatch.style.background=legendColors[i];label.textContent=v+(i===displayBreaks.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
+  bands.style.gridTemplateColumns='repeat('+displayBreaks.length+',minmax(0,1fr))';
   if(field===WEATHER_COMPOSITE){
    gradient.hidden=false;ticks.hidden=false;gradient.style.background='linear-gradient(to right,#414141,#ffffff)';ticks.replaceChildren();
    for(const text of ['Clear · 0%','Overcast · 100%']){const label=document.createElement('span');label.textContent=text;ticks.append(label);}
@@ -397,7 +403,7 @@ function setLegend(){
   }
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
-  let note=f.note,interval='';
+  let note=f.note,interval=f.legendNote??'';
   if([WEATHER_COMPOSITE,'precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
    const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
    interval=hours?hours+' h ending at valid time':'Period unavailable';
@@ -559,8 +565,8 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261012-weather-composite');
-   briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,maplibre:maplibregl,OM,settings,createURL:concreteURL,
+   const {createBriefing}=await import('./map-briefing.js?v=20261012-chart-style');
+   briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
     onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}
    });
