@@ -10,15 +10,16 @@ const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new U
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
 const fakeOM=`
- export const defaultOmProtocolSettings={colorScales:{}};
- export const domainOptions=['ncep_gfs013','ncep_gfs025','ukmo_uk_deterministic_2km'].map(value=>({value,grid:{type:'regular',nx:360,ny:181,latMin:-90,lonMin:-180,dx:1,dy:1}}));
+ const fixtureScale=unit=>({unit,breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
+ export const defaultOmProtocolSettings={colorScales:{temperature:fixtureScale('°C'),relative:fixtureScale('%'),wind:fixtureScale('m/s')}};
+ export const domainOptions=['ncep_gfs013','ncep_gfs025','ukmo_uk_deterministic_2km','ecmwf_ifs'].map(value=>({value,grid:{type:'regular',nx:360,ny:181,latMin:-90,lonMin:-180,dx:1,dy:1}}));
  export const GridFactory={create:config=>({...config,originLat:config.latMin,originLon:config.lonMin,longitudeWrap:true,getInterpolatedValue:values=>values[0]})};
  export const getRanges=()=>[{start:0,end:181},{start:0,end:360}];
  window.fixtureGridReads=[];
  export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{},readVariable:async(url,variable,ranges,signal)=>{signal?.throwIfAborted();window.fixtureGridReads.push({url,variable});return {values:new Float32Array(360*181).fill(10)};}}});
  export const updateCurrentBounds=()=>{};
  export const getValueFromLatLong=async()=>({value:10});
- export const getColorScale=()=>({unit:'m/s',breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
+ export const getColorScale=key=>defaultOmProtocolSettings.colorScales[key]??fixtureScale(key.startsWith('geopotential_height_')?'m':'m/s');
  window.fixtureRequests=[];
  const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOQSznxHwAEOAJKNKHrggAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
  export async function omProtocol(params,controller){
@@ -74,7 +75,8 @@ try{
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
    let gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','relative_humidity_850hPa','geopotential_height_500hPa',...['300','400'].flatMap(level=>['wind_u_component_'+level+'hPa','wind_v_component_'+level+'hPa'])]}:null;
    if(gfs&&livePhase&& !url.endsWith('/latest.json'))gfs={...gfs,...fixture(12,livePhase===1?6:livePhase===2?12:18),variables:gfs.variables,completed:false};
-   const meta=gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
+   const ifs=domain==='ecmwf_ifs'?{...fixture(0,48),variables:['pressure_msl','temperature_2m','temperature_2m_max','temperature_2m_min',...['temperature','relative_humidity','geopotential_height','wind_u_component','wind_v_component'].flatMap(kind=>[1000,925,850,700,500,400,300,250,200,100,50,10].map(level=>kind+'_'+level+'hPa'))]}:null;
+   const meta=ifs??gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
   await page.goto(origin+'/maps.html');
@@ -351,6 +353,9 @@ try{
    await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6,{},{timeout:60000});
    assert.equal(await page.locator('#briefing-model').inputValue(),'gfs_global');
+   await page.waitForFunction(()=>document.querySelector('#briefing-model option:checked').textContent.includes('00Z'));
+   assert.equal(await page.locator('#briefing-model option:checked').textContent(),await page.locator('#map-model option:checked').textContent());
+   assert.deepEqual(await page.locator('#briefing-model optgroup').evaluateAll(groups=>groups.map(g=>g.label)),['Short-term models','Medium-term models']);
    assert.equal(await page.locator('#briefing-area').inputValue(),'uk');
    assert.equal(await page.locator('#briefing-grid canvas').count(),0);
    assert.equal(await page.locator('.briefing-renderer canvas').count(),1);
@@ -488,6 +493,26 @@ try{
    livePhase=3;
    await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
    assert.ok(await page.locator('#briefing-time option').count()>briefingHours,'Briefing also appends newly published forecast hours');
+   await page.locator('#briefing-close').click();
+   await page.locator('#map-model').selectOption('ecmwf_ifs');
+   await page.waitForFunction(()=>document.querySelector('#map-variable option[value="temperature_2m_max"]'));
+   const pressureKeys=await page.locator('#map-variable option').evaluateAll(options=>options.map(o=>o.value).filter(k=>/^(temperature|wind_speed|relative_humidity|geopotential_height)_\d+hPa$/.test(k)));
+   assert.deepEqual(pressureKeys,['temperature_1000hPa','temperature_850hPa','temperature_500hPa','temperature_250hPa','wind_speed_1000hPa','wind_speed_500hPa','wind_speed_300hPa','wind_speed_200hPa','relative_humidity_1000hPa','relative_humidity_700hPa','relative_humidity_300hPa','geopotential_height_500hPa','geopotential_height_300hPa','geopotential_height_200hPa']);
+   for(const statistic of ['max','min']){
+    await page.locator('#map-variable').selectOption('temperature_2m_'+statistic);
+    await page.waitForFunction(word=>document.getElementById('panel-label-a').textContent.includes(word),statistic==='max'?'maximum':'minimum');
+    assert.match(await page.locator('#legend-interval-a').textContent(),/Native period/);
+    assert.ok(await page.evaluate(key=>window.fixtureRequests.some(r=>r.url.includes('variable='+key)),'temperature_2m_'+statistic));
+   }
+   await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
+   await page.waitForFunction(()=>document.querySelector('#briefing-preset option[value="temperature-max"]'));
+   for(const statistic of ['max','min']){
+    await page.locator('#briefing-preset').selectOption('temperature-'+statistic);
+    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length>=6,{},{timeout:60000});
+    assert.match(await page.locator('#briefing-note').textContent(),/not a daily extreme/);
+    assert.match(await page.locator('.briefing-card p').first().textContent(),/duration unspecified/);
+   }
+   assert.equal(await page.locator('#briefing-model option:checked').textContent(),await page.locator('#map-model option:checked').textContent());
    await page.locator('#briefing-close').click();
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));

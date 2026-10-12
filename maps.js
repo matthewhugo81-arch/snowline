@@ -9,14 +9,14 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-jet-arrows';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261011-vorticity-smooth';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261012-menu-extrema';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261011-briefing-overlays';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261011-vorticity-smooth';
+import {loadSpatialModel,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261012-menu-extrema';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261011-live-runs';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261011-vorticity-purple';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261012-menu-extrema';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
@@ -393,6 +393,7 @@ function setLegend(){
    if(field==='precipitation_probability'&&hours)interval='≥'+Number((hours*.1).toFixed(2))+' mm / '+interval;
    note+=' '+(hours?(field==='precipitation_probability'?'Probability threshold: ':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
   }
+  if(/^temperature_2m_(max|min)$/.test(field))interval='Native period ending at valid time · duration unspecified';
   el('legend-interval').textContent=f.ensembleStatistic==='spread'?'Standard deviation · higher = more disagreement':f.ensembleStatistic==='mean'?'Ensemble mean':interval;
   el('variable-note').textContent=note;
   el('field-availability').textContent=modelName(model)+' · '+f.name;
@@ -453,6 +454,7 @@ async function refreshLiveRuns(){
   results.forEach((result,index)=>{
    if(result.status==='rejected'){failed=true;return;}
    const id=ids[index],meta=retainRunProgress(state.metas[id],result.value);
+   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:id,meta}}));
    if(runSignature(meta)!==runSignature(state.metas[id])){next[id]=meta;changed=true;}
   });
   if(changed){
@@ -484,6 +486,7 @@ async function configure(force=false){
   const load=metadataLoader(force);
   const pairs=await Promise.all(panelModelIds(state).map(async id=>[id,await loadSpatialModel(id,load)]));if(generation!==state.generation)return;
   state.metas=Object.fromEntries(pairs);const metas=pairs.map(p=>p[1]);
+  for(const [model,meta] of pairs)document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model,meta}}));
   showRunUpdates();
   extendCatalogue(fields,metas,OM,settings);populateVariables();
   if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
@@ -545,7 +548,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261011-jet-arrows');
+   const {createBriefing}=await import('./map-briefing.js?v=20261012-menu-extrema');
    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
     onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}

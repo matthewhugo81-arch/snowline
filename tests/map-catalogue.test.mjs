@@ -31,7 +31,7 @@ test('new layers use physical units and appropriate renderer scales',()=>{
  assert.notDeepEqual(describeVariable('geopotential_height_850hPa',OM).stops,describeVariable('geopotential_height_500hPa',OM).stops);
 });
 test('unsupported, ambiguous and spread fields cannot inherit an unrelated scale',()=>{
- for(const key of ['unknown_field','precipitation_type','weather_code','vertical_velocity_500hPa','temperature_2m_spread','wind_u_component_10m_spread','geopotential_height_300hPa_spread','temperature_2m_max','sea_ice_thickness'])assert.equal(describeVariable(key,OM),null,key);
+ for(const key of ['unknown_field','precipitation_type','weather_code','vertical_velocity_500hPa','temperature_2m_spread','wind_u_component_10m_spread','geopotential_height_300hPa_spread','sea_ice_thickness'])assert.equal(describeVariable(key,OM),null,key);
 });
 test('wind fields require both components from the same model',()=>{
  assert.equal(sourceVariable({variables:['wind_u_component_300hPa']},'wind_speed_300hPa'),null);
@@ -58,10 +58,10 @@ test('switching models hides stale fields; comparison offers the supported union
  assert.equal(availableFields(fields,[first,second]).length,5);
  assert.equal(availableFields(fields,[]).length,0);
 });
-test('upper-air levels have a consistent surface-to-stratosphere order',()=>{
+test('upper-air menus hide removed levels',()=>{
  const meta={variables:['temperature_10hPa','temperature_500hPa','temperature_925hPa','temperature_300hPa']};
  const fields=[];extendCatalogue(fields,[meta],OM,{colorScales:{}});
- assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['temperature_925hPa','temperature_500hPa','temperature_300hPa','temperature_10hPa']);
+ assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['temperature_500hPa']);
 });
 
 test('precipitation renderer preserves rain boundaries with an opaque white dry band',()=>{

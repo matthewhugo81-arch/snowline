@@ -14,7 +14,7 @@ class Target {
     this.listeners.get(name).add(callback);
   }
   removeEventListener(name, callback) { this.listeners.get(name)?.delete(callback); }
-  emit(name) { for (const callback of this.listeners.get(name) ?? []) callback(); }
+  emit(name, event = {}) { for (const callback of this.listeners.get(name) ?? []) callback(event); }
 }
 function dom(models) {
   const root = new Target();
@@ -173,4 +173,32 @@ test('Check latest runs refreshes labels; destroying the menu removes listeners'
   await menu.refresh();
   assert.equal(calls, 2);
   assert.equal(root.elements['map-model'].listeners.get('focus').size, 0);
+});
+
+
+test('a lazily created briefing selector shares verified labels without a second poller', async t => {
+  let calls = 0;
+  const {menu, root} = setup(t, {models: [ifs, main, nowcast], loadModel: async id => {
+    calls++;
+    return run(id === main.id ? '2026-10-12T03:00:00Z' : id === nowcast.id ? '2026-10-12T05:00:00Z' : '2026-10-12T00:00:00Z');
+  }});
+  await menu.refresh();
+  const briefing = dom([ifs, main, nowcast]).elements['map-model'];
+  briefing.value = nowcast.id;
+  root.elements['briefing-model'] = briefing;
+  root.emit('snowline-model-menu-ready');
+  assert.deepEqual(briefing.options.map(o => o.textContent), root.elements['map-model'].options.map(o => o.textContent));
+  assert.equal(briefing.value, nowcast.id);
+  assert.equal(calls, 3);
+  root.emit('snowline-model-run-verified', {detail: {model: ifs.id, meta: run('2026-10-12T06:00:00Z', false)}});
+  for (const id of ['map-model', 'map-model-b', 'briefing-model']) {
+    assert.equal(root.elements[id].options[0].textContent, 'IFS 9 km (12 Oct · 06Z · updating)');
+  }
+  root.emit('snowline-model-run-verified', {detail: {model: ifs.id, meta: run('2026-10-12T00:00:00Z')}});
+  assert.match(briefing.options[0].textContent, /06Z/);
+  root.emit('snowline-model-menu-ready');
+  assert.equal(briefing.listeners.get('focus').size, 1);
+  menu.destroy();
+  assert.equal(briefing.listeners.get('focus').size, 0);
+  assert.equal(root.listeners.get('snowline-model-run-verified').size, 0);
 });
