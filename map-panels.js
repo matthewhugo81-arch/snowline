@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261012-menu-extrema';
+import {hasFieldTime} from './map-sources.js?v=20261012-weather-composite';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

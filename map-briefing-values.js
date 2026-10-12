@@ -1,5 +1,5 @@
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261012-menu-extrema';
-import {sourceVariable} from './map-catalogue.js?v=20261012-menu-extrema';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261012-weather-composite';
+import {sourceVariable} from './map-catalogue.js?v=20261012-weather-composite';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261011-briefing-overlays';
 
 // One clipped native grid supplies every label, including derived diagnostics.

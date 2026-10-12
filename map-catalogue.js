@@ -1,3 +1,4 @@
+import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261012-weather-composite';
 import {ensembleField} from './map-ensemble.js?v=20261011-ensemble-statistics';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
@@ -18,7 +19,7 @@ function menuField(key){
  return !pressure||MENU_PRESSURE_LEVELS[pressure[1]].includes(Number(pressure[2]));
 }
 const HEIGHT_LEVELS = [50,100,200,300];
-const GROUPS = ['Ensemble mean','Ensemble spread','Temperature','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+const GROUPS = ['Combined weather','Ensemble mean','Ensemble spread','Temperature','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
 export const PRECIPITATION_SCALE = {
@@ -42,6 +43,7 @@ export const PRECIPITATION_PROBABILITY_SCALE = {
  colors:['#ffffff','#dbeefd','#9ecae1','#4292c6','#2171b5','#08519c','#08306b']
 };
 export function sourceVariable(meta,key){
+ if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
  if(DIAGNOSTIC_KEYS.includes(key))return diagnosticVariable(meta,key);
@@ -64,6 +66,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
+ if(key===WEATHER_COMPOSITE)return 'Combined weather';
  if(DIAGNOSTIC_KEYS.includes(key))return 'Derived diagnostics';
  const ensemble=ensembleField(key);if(ensemble)return ensemble.group;
  if(/^temperature_\d+hPa$/.test(key))return 'Upper-air temperature';
@@ -91,7 +94,7 @@ const extras={
  cloud_cover_2m:['Near-surface cloud (2 m)','cloud_cover','Model cloud fraction near the surface, useful alongside visibility when assessing fog.'],
  cloud_base:['Cloud base','cloud_base','Model cloud-base height in metres.'],
  surface_temperature:['Surface (skin) temperature','temperature','Model surface (skin) temperature; not a road-surface forecast.'],
- rain:['Rain','precipitation','Rain water amount over the native model interval.'],
+ rain:['Rain','precipitation','Rain water amount over the native model interval, excluding frozen precipitation. Some model feeds supply convective showers separately. Use Precipitation for the total water amount.'],
  showers:['Showers','precipitation','Convective precipitation water amount over the native model interval.'],
  snowfall_height:['Snowfall height','snowfall_height','Model snowfall-height estimate in metres; distinct from the freezing level and not a guarantee of settling snow.'],
  cape:['CAPE','cape','Convective available potential energy: instability guidance, not a thunderstorm probability.'],

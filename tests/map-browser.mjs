@@ -20,9 +20,10 @@ const fakeOM=`
  export const updateCurrentBounds=()=>{};
  export const getValueFromLatLong=async()=>({value:10});
  export const getColorScale=key=>defaultOmProtocolSettings.colorScales[key]??fixtureScale(key.startsWith('geopotential_height_')?'m':'m/s');
- window.fixtureRequests=[];
+ window.fixtureRequests=[];window.fixturePalettes=[];
  const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOQSznxHwAEOAJKNKHrggAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
- export async function omProtocol(params,controller){
+ export async function omProtocol(params,controller,settings){
+  if(params.type==='json')window.fixturePalettes.push({url:params.url,cloud:settings?.colorScales?.cloud_cover?.colors?.[0],rain:settings?.colorScales?.precipitation?.colors?.[0]});
   window.fixtureRequests.push({url:params.url,type:params.type});
   await new Promise(r=>setTimeout(r,window.fixtureDelay??80));
   if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
@@ -90,6 +91,39 @@ try{
    assert.equal(await page.locator('#map-error-a').isVisible(),false);
    await page.locator('#map-variable').selectOption('temperature_2m');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature'));
+   // Combined field: complete same-time cloud/precipitation/pressure in either panel.
+   const composite='cloud_precipitation_mslp';
+   assert.equal(await page.locator('#map-variable option[value="'+composite+'"]').count(),1);
+   await page.locator('#map-mslp-a').uncheck();
+   await page.locator('#map-variable').selectOption(composite);
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Cloud, precipitation & MSLP')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-mslp-a').isChecked(),true);
+   assert.equal(await page.locator('#map-mslp-a').isDisabled(),true);
+   assert.match(await page.locator('#legend-title-a').textContent(),/cloud.*precipitation/i);
+   assert.match(await page.locator('#legend-interval-a').textContent(),/1 h ending/);
+   await page.locator('#map-grid-a').check();
+   await page.waitForFunction(()=>document.getElementById('grid-note-a').textContent.includes('precipitation · mm water'));
+   await page.locator('#map-grid-a').uncheck();
+   await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Precipitation')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   const palettes=await page.evaluate(()=>window.fixturePalettes);
+   assert.ok(palettes.some(p=>p.url.includes('weather_composite=1')&&p.rain?.[3]===0&&p.cloud?.[0]===65),'Composite uses transparent dry band and grayscale cloud');
+   assert.ok(palettes.some(p=>!p.url.includes('weather_composite=1')&&p.url.includes('variable=precipitation')&&p.rain?.[3]===1),'Ordinary precipitation stays opaque');
+   await page.locator('#map-variable-b').selectOption(composite);
+   await page.locator('#map-variable').selectOption('temperature_2m');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature')&&document.getElementById('panel-label-b').textContent.includes('Cloud, precipitation & MSLP')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-mslp-a').isChecked(),false,'Leaving composite restores the independent pressure switch');
+   assert.equal(await page.locator('#map-mslp-a').isDisabled(),false);
+   assert.equal(await page.locator('#map-mslp-b').isDisabled(),true);
+   assert.equal(await page.locator('.map-error:visible').count(),0);
+   const compositeLabels=await page.locator('.map-panel-label').allTextContents();
+   assert.equal(compositeLabels[0].split('Valid ')[1],compositeLabels[1].split('Valid ')[1]);
+   await page.screenshot({path:'review-output/composite-'+viewport.width+'.png',fullPage:true});
+   await page.locator('#map-variable-b').selectOption('precipitation');
+   await page.locator('#map-mslp-a').check();
+   await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.locator('#map-variable').selectOption('temperature_2m');
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    const bitmapRoundTrip=await page.evaluate(async()=>{
     const {ForecastTileCache}=await import('./map-tile-cache.js');
     let calls=0;
