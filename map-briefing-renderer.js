@@ -1,10 +1,10 @@
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-history';
+import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {hasFieldTime} from './map-sources.js?v=20261012-accum-history';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261012-accum-history';
 import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-accum-history';
@@ -31,7 +31,7 @@ export class BriefingRenderer{
   Object.assign(this,{maplibre,OM,fields,createURL});this.baseSettings=settings;this.settings=briefingSettings(settings);
   installDiagnostics(OM,this.settings);
   installDewPoint(OM,this.settings);
-  installAccumulations(OM,this.settings);
+  this.accumulations=installAccumulations(OM,this.settings);
   this.cache=new ForecastTileCache(async(params,controller)=>{
    const result=await OM.omProtocol({...params,url:params.url.replace(/^briefing:\/\//,'om://')},controller,this.settings);
    // TileJSON from the renderer uses its native protocol; keep briefing colours
@@ -62,7 +62,7 @@ export class BriefingRenderer{
   this.ready.catch(()=>{});
  }
  cancel(){this.frames?.clear();}
- async render({model,meta,preset,bounds,size=[960,660],time,signal,overlays={}}){
+ async render({model,meta,preset,bounds,size=[960,660],time,signal,overlays={},onProgress}){
   await this.ready;if(signal.aborted)throw aborted();
   // A newly selected model may add a pressure-level scale to the catalogue.
   this.settings.colorScales=briefingSettings(this.baseSettings).colorScales;
@@ -94,6 +94,8 @@ export class BriefingRenderer{
   };
   const frames=this.frames=new ForecastFrames(this.map,'briefing-frame',{timeout:accumulationHours(preset.field)?120000:25000,decorate,rasterBefore:this.rasterBefore,overlayBefore:this.overlayBefore,isActive:()=>!signal.aborted});
   const cancel=()=>frames.clear();signal.addEventListener('abort',cancel,{once:true});
+  const dataURL=fieldDataURL(meta,preset.field,time);
+  const unsubscribe=onProgress&&accumulationHours(preset.field)?this.accumulations.subscribe(update=>{if(!signal.aborted&&update.url===dataURL&&update.key===preset.field)onProgress(update);}):null;
   try{
    const frame=await frames.acquire(main,()=>!signal.aborted);
    if(signal.aborted)throw aborted();
@@ -113,7 +115,7 @@ export class BriefingRenderer{
    if(signal.aborted)throw aborted();
    if(!blob)throw Error('Chart image could not be prepared.');
    return URL.createObjectURL(blob);
-  }finally{signal.removeEventListener('abort',cancel);frames.clear();}
+  }finally{unsubscribe?.();signal.removeEventListener('abort',cancel);frames.clear();}
  }
  destroy(){this.cancelReady?.();this.frames?.clear();this.cache.release();this.map.remove();this.container.remove();this.maplibre.removeProtocol('briefing');}
 }

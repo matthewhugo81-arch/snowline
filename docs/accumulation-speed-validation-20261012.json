@@ -1,0 +1,12 @@
+{
+  "reviewRun": 38301568738,
+  "testedCommit": "d404576c6965f46c58107f51d982ffa9aaa19f3f",
+  "nodeTests": {"passed": 269, "failed": 0},
+  "scope": "Real IFS 9 km grids/raster workers, MSLP and grid values; 3 runs 2026-10-12 00/06/12Z; 72 h ending 2026-10-15 13Z; UK & Ireland; 1664 x 940; blank basemap with glyphs; independent browser contexts on one hosted runner, not a full-site latency guarantee.",
+  "baseline": {"checkedAt":"2026-10-12T20:02:43.878Z","firstPanelMs":35839,"allThreeMs":98348,"precipitationDecodes":432,"providerRequests":2583,"nextHourMs":92711,"nextHourRequests":2575,"cachedReturnMs":83,"cachedReturnRequests":0},
+  "optimized": {"checkedAt":"2026-10-12T20:05:57.267Z","firstPanelMs":15361,"allThreeMs":40151,"precipitationDecodes":216,"providerRequests":1428,"nextHourMs":7911,"nextHourRequests":59,"cachedReturnMs":60,"cachedReturnRequests":0},
+  "pixelComparison": {"screenshots":["baseline-ifs-72h.png","optimized-ifs-72h.png"],"rgbCrop":[12,550,1651,1088],"differenceBoundingBox":null},
+  "ukvIndependentSum": {"checkedAt":"2026-10-12T20:06:50.044Z","reference_time":"2026-10-12T15:00:00Z","hours":6,"cells":1024,"maximumErrorMm":3.725290298461914e-8,"oneHourForwardAdditionalReads":1,"peakNativeConcurrency":6,"24HourWindow":"Not yet available in the selected arriving run; not asserted as verified."},
+  "browserChecks": ["Three-run 72 h IFS baseline and optimized", "History and Hide/Show at 1280 px and 390 px", "Existing chart styles, image exports and clipboard", "Existing map playback and briefing"],
+  "artifactId":11770748004
+}
