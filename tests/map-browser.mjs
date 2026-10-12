@@ -457,7 +457,24 @@ try{
    await page.waitForFunction(()=>document.getElementById('briefing-run').textContent.includes('UKV')&&document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
    assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
-   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather'],'Unsupported diagnostics are not advertised');
+   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather','temperature','dew-point'],'UKV includes surface temperature and derived dew point, without unsupported diagnostics');
+   for(const selectedModel of [main,nowcast]){
+    await page.evaluate(()=>{window.fixtureRequests=[];window.fixtureGridReads=[];});
+    await page.locator('#briefing-model').selectOption(selectedModel);
+    await page.waitForFunction(()=>!document.getElementById('briefing-preset').disabled);
+    await page.locator('#briefing-time').selectOption('0');
+    await page.locator('#briefing-contours').check();
+    await page.locator('#briefing-grid-values').check();
+    for(const [preset,variable] of [['temperature','temperature_2m'],['dew-point','dew_point_2m_derived']]){
+     await page.locator('#briefing-preset').selectOption(preset);
+     await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
+     assert.match(await page.locator('#briefing-legend').textContent(),/°C/);
+     assert.match(await page.locator('#briefing-overlay-note').textContent(),/°C/);
+     assert.equal(await page.locator('.briefing-card[data-failed="true"]').count(),0);
+     assert.ok(await page.evaluate(variable=>window.fixtureRequests.some(r=>decodeURIComponent(r.url).includes('variable='+variable)),variable),'UKV briefing uses '+variable);
+     assert.ok(await page.evaluate(variable=>window.fixtureGridReads.some(r=>r.variable===variable),variable),'UKV briefing grid labels use the same '+variable);
+    }
+   }
    await page.locator('#briefing-close').click();
    await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.deepEqual(await page.evaluate(()=>['map-model','map-variable','map-model-b','map-variable-b','map-time'].map(id=>document.getElementById(id).value)),originalSelection);
