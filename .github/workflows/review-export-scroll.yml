@@ -1,0 +1,50 @@
+name: Verify mobile export test synchronization
+on:
+  push:
+    branches: [review/export-scroll-20261012]
+    paths: ['review/export-scroll.py', '.github/workflows/review-export-scroll.yml']
+permissions:
+  contents: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply test-only scroll synchronization
+        run: |
+          python review/export-scroll.py
+          git diff --check
+          test "$(git diff --name-only)" = 'tests/chart-image-browser.mjs'
+          mkdir -p review-output
+          git diff > review-output/test-only.patch
+      - name: Install pinned browser runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Repeated desktop and mobile copy, save, clipboard and fallback checks
+        run: |
+          for n in 1 2 3; do
+            node tests/chart-image-browser.mjs 2>&1 | tee "review-output/export-repeat-$n.txt"
+          done
+      - name: Preserve verified test file on review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/chart-image-browser.mjs
+          git commit -m 'Synchronize browser-generated scrolling before chart context menus'
+          git push origin HEAD:review/export-scroll-20261012
+          git rev-parse HEAD > review-output/tested-commit.txt
+          git ls-tree HEAD tests/chart-image-browser.mjs > review-output/tested-blob.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-export-scroll
+          path: review-output/
+          retention-days: 7
