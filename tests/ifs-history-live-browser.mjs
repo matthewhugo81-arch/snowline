@@ -23,10 +23,14 @@ try{
  await page.evaluate(async()=>{
   const OM=await import('/vendor/index.mjs'),maplibre=await import('/vendor/maplibre-gl.mjs');
   const {createPreviousRunAnalysis}=await import('/map-previous-runs.js'),{loadSpatialRun,fieldSource,fieldDataURL}=await import('/map-sources.js');
-  const {sourceVariable,extendCatalogue}=await import('/map-catalogue.js'),{MAP_MODELS}=await import('/map-models.js');
+  const {sourceVariable,extendCatalogue,PRECIPITATION_SCALE,CLOUD_COVER_SCALE}=await import('/map-catalogue.js'),{MAP_MODELS}=await import('/map-models.js');
   const {BRIEFING_PRESETS}=await import('/map-briefing-data.js?v=20261012-accum-history');
   const position=BRIEFING_PRESETS.findIndex(p=>p.field==='precipitation_total_72h');BRIEFING_PRESETS.unshift(...BRIEFING_PRESETS.splice(position,1));
-  const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,colorScales:{...OM.defaultOmProtocolSettings.colorScales}},fields=[];
+  // Match the application's explicitly registered base scales; the vendor's
+  // defaults include lazy functions and are not the configured application.
+  const fields=[{key:'cloud_cover',name:'Total cloud cover',unit:'%',...CLOUD_COVER_SCALE},{key:'precipitation',name:'Precipitation',unit:'mm water',...PRECIPITATION_SCALE},{key:'pressure_msl',overlayOnly:true,name:'Mean sea-level pressure (MSLP)',unit:'hPa',stops:[940,960,980,1000,1010,1020,1040,1060],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643']}];
+  const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
+  const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...OM.domainOptions],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
   const cache=new Map(),load=async url=>{if(!cache.has(url))cache.set(url,fetch(url).then(async r=>{if(!r.ok)throw Object.assign(Error('HTTP '+r.status),{status:r.status});return r.json();}));return cache.get(url);};
   const contourLevels=field=>field?.contourValues??field?.stops??[];
   const latest=await loadSpatialRun('ecmwf_ifs','2026-10-12T12:00:00Z',load);extendCatalogue(fields,[latest],OM,settings);
@@ -38,7 +42,7 @@ try{
   document.getElementById('previous-grid-values').checked=true;document.getElementById('previous-interval').value='native';
   window.benchmarkStart=performance.now();view.open({model:'ecmwf_ifs',time:'2026-10-15T13:00:00Z',bounds:[-12,48,5,61.5]});
  });
- await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length>=1,{},{timeout:180000});
+ await page.waitForFunction(()=>{const status=document.querySelector('#previous-progress')?.textContent??'';if(/not a function|undefined|cannot|could not/i.test(status))throw Error(status);if(document.querySelector('#previous-grid .briefing-card[data-failed="true"]'))throw Error('A required comparison chart failed');return document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length>=1;},{},{timeout:180000});
  report.firstPanelMs=await page.evaluate(()=>Math.round(performance.now()-window.benchmarkStart));
  await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:240000});
  report.allThreeMs=await page.evaluate(()=>Math.round(performance.now()-window.benchmarkStart));
@@ -53,5 +57,5 @@ try{
   await page.screenshot({path:resolve(output,name+'-ifs-controls-hidden.png'),fullPage:true});
  }
  assert.deepEqual(errors,[]);console.log(JSON.stringify(report));
-}catch(e){report.error=e.message;report.status=await page.locator('#previous-progress').textContent().catch(()=>null);await page.screenshot({path:resolve(output,name+'-ifs-error.png'),fullPage:true}).catch(()=>{});throw e;}
+}catch(e){report.error=e.message;report.nativeReads=await page.evaluate(()=>window.nativeReads).catch(()=>null);report.requests=requests.length;report.pageErrors=errors;report.status=await page.locator('#previous-progress').textContent().catch(()=>null);await page.screenshot({path:resolve(output,name+'-ifs-error.png'),fullPage:true}).catch(()=>{});throw e;}
 finally{await writeFile(resolve(output,name+'-ifs-benchmark.json'),JSON.stringify(report,null,2));await browser.close();server.close();}
