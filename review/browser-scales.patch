@@ -1,0 +1,10 @@
+diff --git a/tests/map-browser.mjs b/tests/map-browser.mjs
+--- a/tests/map-browser.mjs
++++ b/tests/map-browser.mjs
+@@ -13 +13,2 @@
+- export const defaultOmProtocolSettings={colorScales:{}};
++ const fixtureScale=unit=>({unit,breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
++ export const defaultOmProtocolSettings={colorScales:{temperature:fixtureScale('°C'),relative:fixtureScale('%'),wind:fixtureScale('m/s')}};
+@@ -21 +22 @@
+- export const getColorScale=()=>({unit:'m/s',breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
++ export const getColorScale=key=>defaultOmProtocolSettings.colorScales[key]??fixtureScale(key.startsWith('geopotential_height_')?'m':'m/s');

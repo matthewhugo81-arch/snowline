@@ -20,6 +20,8 @@ jobs:
         run: |
           git apply --check --unidiff-zero review/map-menu-updates.patch
           git apply --unidiff-zero review/map-menu-updates.patch
+          git apply --check --unidiff-zero review/browser-scales.patch
+          git apply --unidiff-zero review/browser-scales.patch
           git diff --check
       - name: Run complete regression suite
         run: |
