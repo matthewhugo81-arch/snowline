@@ -1,0 +1,50 @@
+name: Verify interactive weather composite
+on:
+  push:
+    branches: [review/weather-composite-20261012]
+    paths: ['review/apply-weather-composite.py', 'review/composite-browser-snippet.txt', 'map-weather-composite.js', 'tests/weather-composite.test.mjs', '.github/workflows/review-weather-composite.yml']
+permissions:
+  contents: write
+concurrency:
+  group: snowline-review-weather-composite
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply isolated composite changes
+        run: |
+          python review/apply-weather-composite.py
+          git diff --check
+          mkdir -p review-output
+      - name: Run full regression suite
+        run: node --test tests/*.test.mjs | tee review-output/node-tests.txt
+      - name: Install pinned browser test runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Verify desktop and phone maps, composite panels and briefings
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/browser-tests.txt
+      - name: Commit tested application changes to the review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add map-briefing-data.js map-briefing-renderer.js map-briefing-values.js map-briefing.js map-catalogue.js map-frames.js map-panels.js map-sources.js maps.html maps.js tests/map-browser.mjs tests/map-integration.test.mjs
+          git commit -m 'Verify cloud precipitation and MSLP composite in both map panels'
+          git push origin HEAD:review/weather-composite-20261012
+          git rev-parse HEAD HEAD^{tree} | tee review-output/tested-refs.txt
+          git ls-tree HEAD map-briefing-data.js map-briefing-renderer.js map-briefing-values.js map-briefing.js map-catalogue.js map-frames.js map-panels.js map-sources.js maps.html maps.js map-weather-composite.js tests/map-browser.mjs tests/map-integration.test.mjs tests/weather-composite.test.mjs | tee review-output/tested-blobs.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weather-composite-tests
+          path: review-output/
+          retention-days: 1
