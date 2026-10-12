@@ -1,29 +1,61 @@
-name: Profile long IFS accumulations
+name: Verify faster long accumulations and hide controls
 on:
   push:
     branches: [review/accumulation-speed-20261012]
+    paths: ['review/**', 'map-accumulation-reader.js', 'tests/accumulation-speed.test.mjs', 'tests/ifs-history-live-browser.mjs', '.github/workflows/review-accumulation-speed.yml']
 permissions:
-  contents: read
+  contents: write
 defaults:
   run:
     shell: bash
 jobs:
-  profile:
+  review:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 24
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: mkdir -p review-output
-      - name: Current 72-hour IFS numeric path
-        run: node scripts/profile_accumulation_speed.mjs baseline | tee review-output/baseline.txt
-      - name: Bounded native block prefetch comparison
-        run: node scripts/profile_accumulation_speed.mjs prefetch | tee review-output/prefetch.txt
+      - name: Preserve identical baseline and apply scoped changes
+        run: |
+          mkdir -p /tmp/snowline-before-speed review-output
+          git archive 8dc6da723bc8b8f8983fdfc249da23c06029056b | tar -x -C /tmp/snowline-before-speed
+          python review/apply-speed.py
+          git diff --check
+      - name: Numerical, cache, cancellation and regression tests
+        run: node --test tests/*.test.mjs | tee review-output/node-tests.txt
+      - name: Install pinned browser runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Baseline real 72-hour IFS three-run comparison
+        run: node tests/ifs-history-live-browser.mjs /tmp/snowline-before-speed baseline 2>&1 | tee review-output/baseline-browser.txt
+      - name: Optimized real 72-hour IFS three-run comparison
+        run: node tests/ifs-history-live-browser.mjs . optimized 2>&1 | tee review-output/optimized-browser.txt
+      - name: Recheck actual UKV numeric totals
+        run: node scripts/verify_accumulation_live.mjs | tee review-output/ukv-numeric.txt
+      - name: Desktop and mobile accumulation, previous-run and hide-controls checks
+        run: node tests/accumulation-history-browser.mjs 2>&1 | tee review-output/history-browser.txt
+      - name: Existing chart styles, left/right click, PNG and clipboard
+        run: node tests/chart-image-browser.mjs 2>&1 | tee review-output/chart-browser.txt
+      - name: Existing map playback and briefing behavior
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/map-browser.txt
+      - name: Commit verified files to review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add map-briefing-renderer.js map-briefing.js map-previous-runs.css map-previous-runs.js maps.html maps.js tests/accumulation-history-browser.mjs
+          git commit -m 'Apply tested long accumulation loading and controls toggle'
+          git push origin HEAD:review/accumulation-speed-20261012
+          git rev-parse HEAD HEAD^{tree} > review-output/tested-refs.txt
+          git ls-tree -r HEAD > review-output/tested-blobs.txt
+          git diff 8dc6da723bc8b8f8983fdfc249da23c06029056b HEAD -- map-accumulation-reader.js map-briefing-renderer.js map-briefing.js map-previous-runs.css map-previous-runs.js maps.html maps.js tests/accumulation-history-browser.mjs tests/accumulation-speed.test.mjs tests/ifs-history-live-browser.mjs > review-output/verified-speed.patch
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: accumulation-speed-profile
+          name: verified-accumulation-speed
           path: review-output/
           retention-days: 7

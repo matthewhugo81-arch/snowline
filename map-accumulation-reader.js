@@ -11,6 +11,17 @@ export function accumulationFiles(url,key){
  const base=url.slice(0,url.lastIndexOf('/')+1);
  return {domain,reference,hours,times,urls:times.map(time=>base+time.slice(0,16).replace(':','')+'.om')};
 }
+// Exact cropping only: no remapping, resampling or resolution change.
+export function cropAccumulation(data,cover,wanted){
+ if(!Array.isArray(cover)||!Array.isArray(wanted)||cover.length!==wanted.length||cover.length<1||cover.length>2)return null;
+ if(!wanted.every((r,i)=>Number.isInteger(r.start)&&Number.isInteger(r.end)&&r.start<r.end&&r.start>=cover[i].start&&r.end<=cover[i].end))return null;
+ const shape=cover.map(r=>r.end-r.start);if(shape.reduce((a,b)=>a*b,1)!==data.length)return null;
+ if(cover.every((r,i)=>r.start===wanted[i].start&&r.end===wanted[i].end))return data;
+ if(cover.length===1)return data.slice(wanted[0].start-cover[0].start,wanted[0].end-cover[0].start);
+ const width=wanted[1].end-wanted[1].start,height=wanted[0].end-wanted[0].start,result=new Float32Array(width*height);
+ for(let y=0;y<height;y++){const start=(wanted[0].start-cover[0].start+y)*shape[1]+wanted[1].start-cover[1].start;result.set(data.subarray(start,start+width),y*width);}
+ return result;
+}
 // A bounded, subscriber-aware queue. Cancelling one panel never aborts work
 // still needed by the other; abandoned background work releases its slots.
 export class SharedGridReads{
@@ -46,8 +57,28 @@ export class SharedGridReads{
  clear(){this.cache.clear();this.bytes=0;for(const job of this.pending.values()){job.controller.abort();job.reject(abort());}this.pending.clear();this.queue=[];}
 }
 export class RollingAccumulations{
- constructor(read,{useSAB=false,maxSnapshotBytes=32*1024*1024,...options}={}){this.inputs=new SharedGridReads(read,options);this.snapshots=new Map();this.snapshotBytes=0;this.maxSnapshotBytes=maxSnapshotBytes;this.useSAB=useSAB;this.stats={full:0,rolling:0};}
+ constructor(read,{useSAB=false,maxSnapshotBytes=32*1024*1024,maxOutputBytes=16*1024*1024,concurrency=6,...options}={}){
+  this.inputs=new SharedGridReads(read,{...options,concurrency});this.snapshots=new Map();this.snapshotBytes=0;this.maxSnapshotBytes=maxSnapshotBytes;this.useSAB=useSAB;this.stats={full:0,rolling:0,subsetHits:0};this.listeners=new Set();
+  // One calculation per exact run/window/range. Callers receive their own buffer,
+  // so transferring a worker result cannot detach another panel's cached total.
+  this.outputs=new SharedGridReads((request,ranges,signal)=>{const [url,key]=JSON.parse(request);return this.calculate(url,key,ranges,signal);},{concurrency:2,maxBytes:maxOutputBytes});
+ }
+ subscribe(listener){this.listeners.add(listener);return ()=>this.listeners.delete(listener);}
+ report(url,key,done,total){for(const listener of this.listeners){try{listener({url,key,done,total});}catch{}}}
  async read(url,key,ranges,signal){
+  check(signal);if(!accumulationHours(key))throw Error('Not an accumulation field.');
+  const request=JSON.stringify([url,key]);let cached;
+  // A grid-label request contained by the rendered extent uses the exact same
+  // numerical total; it must not trigger another 72/120-file calculation.
+  for(const [id,data] of this.outputs.cache){
+   const [source,cover]=JSON.parse(id);if(source!==request)continue;
+   const subset=cropAccumulation(data,cover,ranges);if(subset){cached=subset;this.stats.subsetHits++;break;}
+  }
+  cached??=await this.outputs.get(request,ranges,signal);check(signal);
+  const values=new Float32Array(new (this.useSAB?SharedArrayBuffer:ArrayBuffer)(cached.byteLength));values.set(cached);
+  return {values,directions:undefined,scaleFactor:100};
+ }
+ async calculate(url,key,ranges,signal){
   check(signal);const spec=accumulationFiles(url,key);if(!spec)throw Error('Not an accumulation field.');
   const group=JSON.stringify([url.slice(0,url.lastIndexOf('/')),ranges,spec.hours]),wanted=new Set(spec.urls);
   let previous=null,best=spec.urls.length;
@@ -59,31 +90,33 @@ export class RollingAccumulations{
   let sum=previous?previous.sum.slice():null,missing=previous?previous.missing.slice():null;
   const changes=previous?[...previous.urls.filter(u=>!wanted.has(u)).map(u=>[u,-1]),...spec.urls.filter(u=>!previous.set.has(u)).map(u=>[u,1])]:spec.urls.map(u=>[u,1]);
   this.stats[previous?'rolling':'full']++;
-  // Three input grids at a time: bounded memory and network load, deterministic
-  // summation order, regular yielding while adding large clipped native grids.
-  for(let i=0;i<changes.length;i+=3){
-   check(signal);const batch=changes.slice(i,i+3),settled=await Promise.allSettled(batch.map(([u])=>this.inputs.get(u,ranges,signal)));
-   check(signal);const failure=settled.find(r=>r.status==='rejected');if(failure)throw failure.reason;
-   for(let j=0;j<batch.length;j++){
-    const values=settled[j].value,sign=batch[j][1];
-    if(!sum){sum=new Float64Array(values.length);missing=new Uint16Array(values.length);}
-    if(values.length!==sum.length)throw Error('Accumulation input grids do not match.');
-    for(let k=0;k<values.length;k++){const v=values[k];if(Number.isFinite(v)&&v>=0)sum[k]+=sign*v;else missing[k]+=sign;}
-   }
-   if(changes.length>3)await new Promise(resolve=>setTimeout(resolve,0));
+  // Rolling pipeline: refill a slot immediately, instead of waiting for the
+  // slowest of each fixed batch. The shared input queue bounds total network work.
+  const width=Math.max(1,Math.min(6,this.inputs.concurrency)),pending=new Map();
+  const launch=i=>{const task=this.inputs.get(changes[i][0],ranges,signal);task.catch(()=>{});pending.set(i,task);};
+  for(let i=0;i<Math.min(width,changes.length);i++)launch(i);
+  this.report(url,key,0,changes.length);
+  for(let i=0;i<changes.length;i++){
+   check(signal);const values=await pending.get(i),sign=changes[i][1];pending.delete(i);check(signal);
+   if(i+width<changes.length)launch(i+width);
+   if(!sum){sum=new Float64Array(values.length);missing=new Uint16Array(values.length);}
+   if(values.length!==sum.length)throw Error('Accumulation input grids do not match.');
+   for(let k=0;k<values.length;k++){const v=values[k];if(Number.isFinite(v)&&v>=0)sum[k]+=sign*v;else missing[k]+=sign;}
+   this.report(url,key,i+1,changes.length);
+   if(i%3===2)await new Promise(resolve=>setTimeout(resolve,0));
   }
   check(signal);if(!sum)throw Error('No precipitation intervals to sum.');
-  const values=new Float32Array(new (this.useSAB?SharedArrayBuffer:ArrayBuffer)(sum.length*4));
+  const values=new Float32Array(sum.length);
   for(let i=0;i<sum.length;i++)values[i]=missing[i]||sum[i]<-1e-6?NaN:Math.max(0,sum[i]);
   const snapshot={group,sum,missing,urls:spec.urls,set:wanted},id=group+'|'+spec.urls.at(-1),bytes=sum.byteLength+missing.byteLength;
   const old=this.snapshots.get(id);if(old){this.snapshotBytes-=old.sum.byteLength+old.missing.byteLength;this.snapshots.delete(id);}
   if(bytes<=this.maxSnapshotBytes){
-   while((this.snapshotBytes+bytes>this.maxSnapshotBytes||this.snapshots.size>=4)&&this.snapshots.size){const [id,item]=this.snapshots.entries().next().value;this.snapshots.delete(id);this.snapshotBytes-=item.sum.byteLength+item.missing.byteLength;}
+   while((this.snapshotBytes+bytes>this.maxSnapshotBytes||this.snapshots.size>=8)&&this.snapshots.size){const [id,item]=this.snapshots.entries().next().value;this.snapshots.delete(id);this.snapshotBytes-=item.sum.byteLength+item.missing.byteLength;}
    this.snapshots.set(id,snapshot);this.snapshotBytes+=bytes;
   }
-  return {values,directions:undefined,scaleFactor:100};
+  return values;
  }
- clear(){this.inputs.clear();this.snapshots.clear();this.snapshotBytes=0;}
+ clear(){this.outputs.clear();this.inputs.clear();this.snapshots.clear();this.snapshotBytes=0;}
 }
 const installed=new WeakMap();
 export function installAccumulations(OM,settings){
@@ -94,10 +127,13 @@ export function installAccumulations(OM,settings){
   const domain=new URL(url).pathname.split('/data_spatial/')[1]?.split('/')[0],grid=OM.domainOptions?.find(d=>d.value===domain)?.grid;
   // Reuse the reader's cached header. A provider grid revision must not be
   // combined with another shape merely because a cropped read has equal size.
-  if(grid&&reader.withReader)await reader.withReader(url,async file=>{
-   const child=await file.getChildByName('precipitation');if(!child)throw Error('Native precipitation is missing from an accumulation interval.');
-   try{const dims=child.getDimensions(),shape=grid.ny===1?[grid.nx]:[grid.ny,grid.nx],actual=dims.length===2&&dims[0]===1?[dims[1]]:dims;
+  if(grid&&reader.withReader&&reader.readSimpleVariable)return reader.withReader(url,async file=>{
+   check(signal);const child=await file.getChildByName('precipitation');if(!child)throw Error('Native precipitation is missing from an accumulation interval.');
+   try{
+    const dims=child.getDimensions(),shape=grid.ny===1?[grid.nx]:[grid.ny,grid.nx],actual=dims.length===2&&dims[0]===1?[dims[1]]:dims;
     if(actual.length!==shape.length||actual.some((n,i)=>n!==shape[i]))throw Error('Native precipitation grid dimensions changed. Accumulation withheld.');
+    // readSimpleVariable already performs native block prefetch. Do not do it twice.
+    const data=await reader.readSimpleVariable(file,'precipitation',ranges,signal);check(signal);return data.values;
    }finally{child.dispose();}
   });
   const data=await original(url,'precipitation',ranges,signal);check(signal);return data.values;
