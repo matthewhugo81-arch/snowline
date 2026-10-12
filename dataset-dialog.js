@@ -1,3 +1,4 @@
+import {chartWindow} from './chart-window.js?v=20261012-zoom';
 import {MODELS, VARIABLES} from './data.js?v=20261007-wind-mph';
 import {buildDataset, datasetTable, datasetCoverage, datasetCSV, datasetHTML, datasetFilename, variableLegend, escapeHTML} from './export.js?v=20261007-wind-mph';
 
@@ -15,7 +16,7 @@ export function createDatasetDialog(state){
     if(!dialog.open || !variable) return;
     const selection = get('dataset-model').value;
     const modelDefinitions = MODELS.filter(model => selection === 'all' || (selection === 'selected' ? state.selected.has(model.id) : model.id === selection));
-    dataset = buildDataset({variable, modelDefinitions, models:state.models, times:state.times.slice(0,state.hours), full:get('dataset-period').value === 'full', location:state.location, loading:state.loading, errors:state.errors});
+    dataset = buildDataset({variable, modelDefinitions, models:state.models, times:chartWindow(state).times, full:get('dataset-period').value === 'full', location:state.location, loading:state.loading, errors:state.errors});
     get('dataset-title').textContent = variable.title + ' (' + variable.unit + ')';
     get('dataset-context').textContent = `${state.location.name} · ${state.location.latitude.toFixed(4)}, ${state.location.longitude.toFixed(4)} · ${variable.note}`;
     const rows = dataset.rows;
