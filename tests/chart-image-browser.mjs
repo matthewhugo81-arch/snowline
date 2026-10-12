@@ -27,9 +27,24 @@ try{
   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
   await page.evaluate(async()=>{const {Map}=await import('/vendor/maplibre-gl.mjs');window.fixtureLayers=[];const original=Map.prototype.addLayer;Map.prototype.addLayer=function(layer,before){window.fixtureLayers.push(structuredClone(layer));return original.call(this,layer,before);};});
   const map=page.locator('#map-a .maplibregl-canvas'),menu=page.locator('.chart-image-menu'),copy=menu.getByRole('menuitem',{name:'Copy image'}),save=menu.getByRole('menuitem',{name:'Save image'});
-  const right=async(target=map)=>{await target.click({button:'right',position:{x:100,y:130}});await menu.waitFor({state:'visible'});};
+  const right=async(target=map)=>{
+   // Settle test-driven page scrolling before contextmenu: the actual menu
+   // correctly closes on scroll. Click the visible centre so Playwright does
+   // not initiate another scroll for an off-screen fixed canvas coordinate.
+   await target.scrollIntoViewIfNeeded();
+   await target.evaluate(async el=>{
+    if(el instanceof HTMLImageElement)await el.decode();
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   });
+   const box=await target.boundingBox();assert.ok(box,'Chart must have a visible rectangle');
+   const left=Math.max(0,box.x),right=Math.min(viewport.width,box.x+box.width);
+   const top=Math.max(0,box.y),bottom=Math.min(viewport.height,box.y+box.height);
+   assert.ok(right>left&&bottom>top,'Chart must intersect the viewport');
+   await page.mouse.click((left+right)/2,(top+bottom)/2,{button:'right'});
+   await menu.waitFor({state:'visible'});
+  };
   const saveFile=async name=>{
-   const event=page.waitForEvent('download');await save.click();const download=await event,path=resolve('review-output',name+'.png');await download.saveAs(path);
+   const [download]=await Promise.all([page.waitForEvent('download'),save.click()]);const path=resolve('review-output',name+'.png');await download.saveAs(path);
    assert.match(download.suggestedFilename(),/^Snowline-.*\.png$/);const bytes=await readFile(path);assert.deepEqual([...bytes.subarray(0,8)],[137,80,78,71,13,10,26,10]);
    const pixel=await page.evaluate(async b=>{const img=new Image();img.src='data:image/png;base64,'+b;await img.decode();const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const x=c.getContext('2d');x.drawImage(img,0,0);return [...x.getImageData(c.width>>1,c.height>>1,1,1).data];},bytes.toString('base64'));
    assert.equal(pixel[3],255,'PNG is opaque, not a cleared WebGL buffer');assert.ok(pixel.slice(0,3).some(v=>v<230),'PNG includes displayed weather pixels');await page.keyboard.press('Escape');return download;
