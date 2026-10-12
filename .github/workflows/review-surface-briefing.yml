@@ -1,0 +1,50 @@
+name: Verify UKV surface briefing
+on:
+  push:
+    branches: [review/ukv-surface-briefing-20261012]
+    paths: ['review/surface-briefing.patch', 'tests/briefing-surface.test.mjs', '.github/workflows/review-surface-briefing.yml']
+permissions:
+  contents: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply surface briefing changes
+        run: |
+          git apply --check review/surface-briefing.patch
+          git apply review/surface-briefing.patch
+          git diff --check
+      - name: Run complete regression suite
+        run: |
+          mkdir -p review-output
+          node --test tests/*.test.mjs | tee review-output/node-tests.txt
+      - name: Install pinned browser runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Verify desktop and phone maps and both UKV briefing families
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/browser-tests.txt
+      - name: Commit tested files to the review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add map-briefing-data.js map-briefing-renderer.js map-briefing.js maps.html maps.js tests/map-browser.mjs
+          git commit -m 'Add tested 2 m temperature and dew point briefing charts'
+          git push origin HEAD:review/ukv-surface-briefing-20261012
+          git rev-parse HEAD HEAD^{tree} | tee review-output/tested-refs.txt
+          git ls-tree HEAD map-briefing-data.js map-briefing-renderer.js map-briefing.js maps.html maps.js > review-output/tested-blobs.txt
+          git ls-tree HEAD tests/briefing-surface.test.mjs tests/map-browser.mjs >> review-output/tested-blobs.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ukv-surface-briefing-tests
+          path: review-output/
+          retention-days: 1

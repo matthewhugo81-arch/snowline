@@ -1,0 +1,72 @@
+diff --git a/map-briefing-data.js b/map-briefing-data.js
+index c31e428..309b55d 100644
+--- a/map-briefing-data.js
++++ b/map-briefing-data.js
+@@ -6,2 +6,4 @@ export const BRIEFING_PRESETS=[
+  {id:'weather',name:'Cloud, rain & pressure',field:'cloud_cover',required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
++ {id:'temperature',name:'2 m air temperature & pressure',field:'temperature_2m',required:['temperature_2m','pressure_msl'],note:'2 m air temperature in °C at the chart valid time, with MSLP isobars every 4 hPa. This is instantaneous air temperature, not a maximum or minimum.'},
++ {id:'dew-point',name:'2 m dew point & pressure',field:'dew_point_2m',required:['dew_point_2m','pressure_msl'],note:'2 m dew point in °C at the chart valid time, with MSLP isobars every 4 hPa. UKMO dew point is calculated from matching 2 m temperature and relative humidity on the same grid, run and valid time when no native dew-point field is supplied.'},
+  ...['max','min'].map(statistic=>({id:'temperature-'+statistic,name:'2 m '+(statistic==='max'?'maximum':'minimum')+' temperature & pressure',field:'temperature_2m_'+statistic,required:['temperature_2m_'+statistic,'pressure_msl'],note:'Native-period '+(statistic==='max'?'maximum':'minimum')+' 2 m air temperature, not a daily extreme, with MSLP isobars every 4 hPa. The reporting period ends at the chart time; its duration is not supplied in the spatial metadata.'})),
+diff --git a/map-briefing-renderer.js b/map-briefing-renderer.js
+index 0ebd15a..51d2876 100644
+--- a/map-briefing-renderer.js
++++ b/map-briefing-renderer.js
+@@ -4,2 +4,3 @@ import {overlayGroups} from './map-overlay-specs.js?v=20261011-jet-arrows';
+ import {hasFieldTime} from './map-sources.js?v=20261012-menu-extrema';
++import {installDewPoint} from './map-dew-point.js';
+ import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
+@@ -32,2 +33,3 @@ export class BriefingRenderer{
+   installDiagnostics(OM,this.settings);
++  installDewPoint(OM,this.settings);
+   this.cache=new ForecastTileCache(async(params,controller)=>{
+diff --git a/map-briefing.js b/map-briefing.js
+index 1fa7f37..591f7b9 100644
+--- a/map-briefing.js
++++ b/map-briefing.js
+@@ -1,3 +1,3 @@
+-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261012-menu-extrema';
+-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261012-menu-extrema';
++import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261012-briefing-surface';
++import {BriefingRenderer} from './map-briefing-renderer.js?v=20261012-briefing-surface';
+ import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
+diff --git a/maps.html b/maps.html
+index 6199fc4..15d4f1a 100644
+--- a/maps.html
++++ b/maps.html
+@@ -1,2 +1,2 @@
+-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>UK weather maps · Snowline</title><meta name="description" content="UK winter weather model maps with linked local forecast charts."><link rel="preconnect" href="https://openmeteo.s3.amazonaws.com" crossorigin><link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin><link rel="modulepreload" href="vendor/maplibre-gl.mjs"><link rel="modulepreload" href="vendor/index.mjs?v=20261011-jet-arrows"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e2034'/%3E%3Cpath d='M16 5v22M6 10l20 12M6 22l20-12' stroke='%236ce1d6' stroke-width='3'/%3E%3C/svg%3E"><link rel="stylesheet" href="styles.css?v=20261007-wind-mph"><link rel="stylesheet" href="vendor/maplibre-gl.css"><link rel="stylesheet" href="maps.css?v=20261011-larger-imagery"><link rel="stylesheet" href="map-briefing.css?v=20261011-jet-arrows"><script type="module" src="maps.js?v=20261012-menu-extrema"></script><script type="module">
++<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>UK weather maps · Snowline</title><meta name="description" content="UK winter weather model maps with linked local forecast charts."><link rel="preconnect" href="https://openmeteo.s3.amazonaws.com" crossorigin><link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin><link rel="modulepreload" href="vendor/maplibre-gl.mjs"><link rel="modulepreload" href="vendor/index.mjs?v=20261011-jet-arrows"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e2034'/%3E%3Cpath d='M16 5v22M6 10l20 12M6 22l20-12' stroke='%236ce1d6' stroke-width='3'/%3E%3C/svg%3E"><link rel="stylesheet" href="styles.css?v=20261007-wind-mph"><link rel="stylesheet" href="vendor/maplibre-gl.css"><link rel="stylesheet" href="maps.css?v=20261011-larger-imagery"><link rel="stylesheet" href="map-briefing.css?v=20261011-jet-arrows"><script type="module" src="maps.js?v=20261012-briefing-surface"></script><script type="module">
+ import {installModelRunMenu} from './map-model-run-menu.js?v=20261012-menu-extrema';
+diff --git a/maps.js b/maps.js
+index ec02971..af1ceb9 100644
+--- a/maps.js
++++ b/maps.js
+@@ -550,3 +550,3 @@ async function openBriefing(){
+   if(!briefingView){
+-   const {createBriefing}=await import('./map-briefing.js?v=20261012-menu-extrema');
++   const {createBriefing}=await import('./map-briefing.js?v=20261012-briefing-surface');
+    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,maplibre:maplibregl,OM,settings,createURL:concreteURL,
+diff --git a/tests/map-browser.mjs b/tests/map-browser.mjs
+index debbc64..dad620c 100644
+--- a/tests/map-browser.mjs
++++ b/tests/map-browser.mjs
+@@ -459,3 +459,18 @@ try{
+    assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
+-   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather'],'Unsupported diagnostics are not advertised');
++   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather','temperature','dew-point'],'UKV includes surface temperature and derived dew point, without unsupported diagnostics');
++   for(const selectedModel of [main,nowcast]){
++    await page.evaluate(()=>{window.fixtureRequests=[];window.fixtureGridReads=[];});
++    await page.locator('#briefing-model').selectOption(selectedModel);
++    await page.waitForFunction(()=>!document.getElementById('briefing-preset').disabled);
++    await page.locator('#briefing-time').selectOption('0');
++    for(const [preset,variable] of [['temperature','temperature_2m'],['dew-point','dew_point_2m_derived']]){
++     await page.locator('#briefing-preset').selectOption(preset);
++     await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
++     assert.match(await page.locator('#briefing-legend').textContent(),/°C/);
++     assert.match(await page.locator('#briefing-overlay-note').textContent(),/°C/);
++     assert.equal(await page.locator('.briefing-card[data-failed="true"]').count(),0);
++     assert.ok(await page.evaluate(variable=>window.fixtureRequests.some(r=>decodeURIComponent(r.url).includes('variable='+variable)),variable),'UKV briefing uses '+variable);
++     assert.ok(await page.evaluate(variable=>window.fixtureGridReads.some(r=>r.variable===variable),variable),'UKV briefing grid labels use the same '+variable);
++    }
++   }
+    await page.locator('#briefing-close').click();
