@@ -1,6 +1,8 @@
 import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js?v=20261010-ukv';
 import {averageSeries} from './average.js';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261007-wind-mph';
+import {chartWindow} from './chart-window.js?v=20261012-zoom';
+import {createChartZoom} from './chart-zoom.js?v=20261012-zoom';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261012-zoom';
 import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261007-wind-mph';
 
 const $=id=>document.getElementById(id);
@@ -9,25 +11,30 @@ const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:
 const shortDate=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
 const clock=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const fmt=(v,dec=1)=>finite(v)?v.toFixed(dec):'—';
-const state={location:{latitude:53.9239,longitude:-2.1949,name:'Starting location'},selected:new Set(MODELS.map(m=>m.id)),models:new Map(),errors:new Map(),hours:168,index:0,times:[],loading:false,controller:null,generation:0,fetched:null};
+const state={location:{latitude:53.9239,longitude:-2.1949,name:'Starting location'},selected:new Set(MODELS.map(m=>m.id)),models:new Map(),errors:new Map(),hours:168,index:0,zoom:null,times:[],loading:false,controller:null,generation:0,fetched:null};
 const cache=new Map();
 const datasetDialog=createDatasetDialog(state);
 const linkParams=new URLSearchParams(location.search);let requestedTime=Date.parse(linkParams.get('time'));
 try{if(linkParams.has('lat')&&linkParams.has('lon')){const point=parseCoordinates(linkParams.get('lat')+','+linkParams.get('lon'));if(point)state.location=point;}}catch{}
 
 let chartLayouts=new Map(),renderPending=false;
+const chartZoom=createChartZoom({root:document.querySelector('main'),getLayout:id=>chartLayouts.get(id),
+ onZoom:range=>{state.zoom=range;state.index=Math.max(range.start,Math.min(range.end,state.index));scheduleRender();},
+ onInspect:index=>{if(index!==null){state.index=index;scheduleRender();}},
+ onReset:()=>{chartZoom.cancel();state.zoom=null;scheduleRender();},onFinish:scheduleRender});
 function selectedModels(){return MODELS.filter(m=>state.selected.has(m.id)&&state.models.has(m.id)).map(m=>state.models.get(m.id));}
 function setStatus(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
 function scheduleRender(){if(renderPending)return;renderPending=true;requestAnimationFrame(()=>{renderPending=false;render();});}
 function populate(){
  $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${m.color}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
- $('charts').innerHTML=VARIABLES.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div></article>`).join('');
+ $('charts').innerHTML=VARIABLES.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div></article>`).join('');
  $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
+ document.querySelectorAll('.plot').forEach(el=>{el.tabIndex=0;el.title='Right-drag (or Shift + left-drag) to zoom all charts. Double-click or press Escape here to reset.';});
  $('data-table').previousElementSibling.innerHTML='<tr><th>Model</th>'+VARIABLES.map(v=>`<th>${v.title}<br>${v.unit}</th>`).join('')+'<th>Coverage / status</th></tr>';
 }
 async function loadLocation(location,force=false){
- datasetDialog.close();
+ datasetDialog.close();chartZoom.cancel();state.zoom=null;
  state.controller?.abort();state.controller=new AbortController();const signal=state.controller.signal;const generation=++state.generation;
  state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;
  $('place').textContent=location.name;$('coordinates').textContent=`${Math.abs(location.latitude).toFixed(4)}° ${location.latitude<0?'S':'N'} · ${Math.abs(location.longitude).toFixed(4)}° ${location.longitude<0?'W':'E'}`;
@@ -60,7 +67,8 @@ function finishStatus(){
 }
 function pathFrom(values,x,y){let drawing=false,d='';for(let i=0;i<values.length;i++){if(!finite(values[i])){drawing=false;continue;}d+=`${drawing?'L':'M'}${x(i).toFixed(1)},${y(values[i]).toFixed(1)} `;drawing=true;}return d;}
 function plot(container,series,config,times){
- const shortView=state.hours<120;
+ const shortView=times.length<120;
+ const start=chartWindow(state).start,index=state.index-start;
  const width=Math.max(280,container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,right=12,top=15,bottom=shortView?46:33,inner=width-left-right,n=times.length;
  const valid=series.flatMap(s=>s.values).filter(finite);
  if(!valid.length){container.innerHTML=`<div class="plot-empty">${state.loading?'Loading available forecasts…':state.selected.size?'No data available for the selected models.':'Select a model to see its forecast.'}</div>`;chartLayouts.delete(container.id);return;}
@@ -77,20 +85,25 @@ function plot(container,series,config,times){
  for(const i of dayStarts)html+=`<line class="day-boundary" x1="${x(i)}" x2="${x(i)}" y1="${top}" y2="${height-bottom}" stroke="#000" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`;
  if(shortView){
   // Use a fixed cadence aligned to UTC, independent of the forecast's first hour.
-  const tickHours=[3,6,12,24].find(hours=>inner*hours/Math.max(1,n-1)>=38)??24;
-  for(let i=0;i<n;i++){const time=new Date(times[i]);if(time.getUTCHours()%tickHours!==0)continue;html+=`<text class="time-tick" x="${x(i)}" y="${height-23}" text-anchor="middle">${clock.format(time).replace(':','')}</text>`;}
+  const tickHours=[1,2,3,6,12,24].find(hours=>inner*hours/Math.max(1,n-1)>=38)??24;
+  for(let i=0;i<n;i++){const time=new Date(times[i]);if(i!==0&&i!==n-1&&(time.getUTCHours()%tickHours!==0||x(i)-left<38||width-right-x(i)<38))continue;html+=`<text class="time-tick" x="${x(i)}" y="${height-23}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${clock.format(time).replace(':','')}</text>`;}
  }
- const dayTicks=dayStarts.length&&x(dayStarts[0])-left<74?dayStarts:[0,...dayStarts];
+ const dayTicks=!state.zoom&&dayStarts.length&&x(dayStarts[0])-left<74?dayStarts:[0,...dayStarts];
  let labelEnd=-Infinity;
  for(const i of new Set(dayTicks)){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text class="date-tick" x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))}</text>`;labelEnd=labelStart+labelWidth;}
  for(const s of series){if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="white" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${s.color}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
- html+=`<line class="cursor-line" x1="${x(state.index)}" x2="${x(state.index)}" y1="${top}" y2="${height-bottom}"/>`;
- for(const s of series){const v=s.values[state.index];if(finite(v))html+=`<circle cx="${x(state.index)}" cy="${y(v)}" r="3" fill="${s.color}"/>`;}
- html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,left,inner,n});
+ html+=`<line class="cursor-line" x1="${x(index)}" x2="${x(index)}" y1="${top}" y2="${height-bottom}"/>`;
+ for(const s of series){const v=s.values[index];if(finite(v))html+=`<circle cx="${x(index)}" cy="${y(v)}" r="3" fill="${s.color}"/>`;}
+ html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,height,left,inner,top,bottom,n,start,times});
 }
 function render(){
- const models=selectedModels(),times=state.times.slice(0,state.hours);if(!times.length)return;state.index=Math.min(state.index,times.length-1);
- const time=times[state.index];for(const v of VARIABLES){const label=$('time-'+v.key);label.dateTime=time;label.textContent=date.format(new Date(time))+' UTC';}$('time-slider').max=times.length-1;$('time-slider').value=state.index;$('selected-time').textContent=date.format(new Date(time))+' UTC';$('time-slider').setAttribute('aria-valuetext',date.format(new Date(time))+' UTC');
+ if(chartZoom.active)return; // Keep the drag geometry stable while model responses arrive.
+ const models=selectedModels(),{times,start,end}=chartWindow(state);if(!times.length)return;state.index=Math.max(start,Math.min(state.index,end));
+ const index=state.index-start;
+ document.querySelectorAll('[data-reset-zoom]').forEach(button=>button.hidden=!state.zoom);
+ $('zoom-window').hidden=!state.zoom;
+ $('zoom-period').textContent=state.zoom?`Zoomed: ${date.format(new Date(times[0]))} – ${date.format(new Date(times.at(-1)))} UTC · all charts, summary and chart-window data`:'';
+ const time=times[index];for(const v of VARIABLES){const label=$('time-'+v.key);label.dateTime=time;label.textContent=date.format(new Date(time))+' UTC';}$('time-slider').min=start;$('time-slider').max=end;$('time-slider').value=state.index;$('selected-time').textContent=date.format(new Date(time))+' UTC';$('time-slider').setAttribute('aria-valuetext',date.format(new Date(time))+' UTC');
  if($('nav-maps'))$('nav-maps').href='maps.html?'+new URLSearchParams({lat:state.location.latitude,lon:state.location.longitude,time});
  const available=models.filter(m=>VARIABLES.some(v=>times.some(t=>finite(valueAt(m,v.key,t)))));
  $('models-count').textContent=`${available.length} / ${state.selected.size}`;$('models-detail').textContent=state.loading?'Forecasts are still loading':'Selected models with data in this window';
@@ -101,13 +114,13 @@ function render(){
  $('snow-max').textContent=maxSnow?`${fmt(maxSnow.value,2)} cm`:'—';$('snow-detail').textContent=maxSnow?(maxSnow.value>0?maxSnow.model:'All available snowfall values are zero'):'No snowfall data';
  $('temp-min').textContent=minTemp?`${fmt(minTemp.value)}°C`:'—';$('temp-detail').textContent=minTemp?minTemp.model:'No temperature data';
  plot($('agreement-chart'),[{values:votes.map(v=>v.percent),color:'#6ce1d6'}],{title:'Hourly snowfall model agreement',floor:0,ceiling:100,minRange:100},times);
- const vote=votes[state.index];$('agreement-detail').textContent=vote.valid?`${date.format(new Date(time))} UTC · ${vote.snow} of ${vote.valid} available forecasts indicate ≥0.1 cm snowfall (${Math.round(vote.percent)}%).`:'No eligible snowfall forecasts for the inspected hour.';
+ const vote=votes[index];$('agreement-detail').textContent=vote.valid?`${date.format(new Date(time))} UTC · ${vote.snow} of ${vote.valid} available forecasts indicate ≥0.1 cm snowfall (${Math.round(vote.percent)}%).`:'No eligible snowfall forecasts for the inspected hour.';
  for(const v of VARIABLES){
  const series=models.map(m=>({...m,values:times.map(t=>valueAt(m,v.key,t))}));
  const average=averageSeries(series,times.length);
  plot($('plot-'+v.key),[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  const current=models.filter(m=>finite(valueAt(m,v.key,time)));
- const mean=average.values[state.index],count=average.counts[state.index];
+ const mean=average.values[index],count=average.counts[index];
  const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${valueAttributes(mean,v)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
  $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${m.color}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
@@ -139,13 +152,11 @@ $('search-form').addEventListener('submit',async e=>{e.preventDefault();searchCo
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSearch();});
 document.addEventListener('click',e=>{if(!e.target.closest('#search-form'))closeSearch();});
 $('refresh').addEventListener('click',()=>loadLocation(state.location,true));
-$('horizon').addEventListener('change',e=>{state.hours=Number(e.target.value);scheduleRender();});
+$('horizon').addEventListener('change',e=>{chartZoom.cancel();state.zoom=null;state.hours=Number(e.target.value);scheduleRender();});
 $('time-slider').addEventListener('input',e=>{state.index=Number(e.target.value);scheduleRender();});
 for(const [id,filter] of [['select-all',()=>true],['select-global',m=>!m.regional],['select-none',()=>false]])$(id).addEventListener('click',()=>{state.selected=new Set(MODELS.filter(filter).map(m=>m.id));document.querySelectorAll('.model-chip input').forEach(input=>input.checked=state.selected.has(input.value));scheduleRender();});
 $('focus').addEventListener('change',e=>{const group=e.target.value;const snow=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation'];const ice=['temperature_2m','dew_point_2m','soil_temperature_0cm','relative_humidity_2m','precipitation','snow_depth','cloud_cover','wind_speed_10m','wind_gusts_10m'];const wind=['wind_speed_10m','wind_gusts_10m'];for(const v of VARIABLES){const card=$('plot-'+v.key).closest('article');const order=group==='snow'?snow:group==='wind'?wind:ice;card.hidden=group!=='all'&&!order.includes(v.key);card.style.order=group==='all'?0:order.indexOf(v.key);}scheduleRender();});
-document.addEventListener('click',e=>{const plotEl=e.target.closest('.plot');const layout=plotEl&&chartLayouts.get(plotEl.id);if(!layout)return;const x=e.clientX-plotEl.getBoundingClientRect().left;state.index=Math.max(0,Math.min(layout.n-1,Math.round((x-layout.left)/layout.inner*(layout.n-1))));scheduleRender();});
 let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(scheduleRender,120);});
 populate();await loadLocation(state.location);
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'set_forecast_location',title:'Compare forecasts at a location',description:'Load the model comparison for latitude and longitude and update the visible dashboard. Makes requests to Open-Meteo.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},async execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');await loadLocation({latitude:input.latitude,longitude:input.longitude,name:`${input.latitude.toFixed(4)}, ${input.longitude.toFixed(4)}`});return {location:state.location,modelsLoaded:state.models.size,unavailable:state.errors.size};}},{signal:lifecycle.signal});}catch(error){console.info('Optional browser tool unavailable:',error.message);}}
-
 
