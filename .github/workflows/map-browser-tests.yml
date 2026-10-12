@@ -2,16 +2,16 @@ name: Map playback browser tests
 on:
   push:
     branches: [main]
-    paths: ['maps.*', 'map-*.js', 'vendor/**', 'tests/map-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/chart-image-browser.mjs', '.github/workflows/map-browser-tests.yml']
   pull_request:
     branches: [main]
-    paths: ['maps.*', 'map-*.js', 'vendor/**', 'tests/map-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/chart-image-browser.mjs', '.github/workflows/map-browser-tests.yml']
 permissions:
   contents: read
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,3 +23,13 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Check desktop and phone controls with delayed synthetic weather transport
         run: node tests/map-browser.mjs
+      - name: Check accumulation windows and pinned previous-run panels
+        run: node tests/accumulation-history-browser.mjs
+      - name: Check chart styles and image exports
+        run: node tests/chart-image-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: map-browser-review
+          path: review-output/
+          retention-days: 7

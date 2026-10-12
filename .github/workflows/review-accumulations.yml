@@ -1,61 +1,49 @@
-name: Review accumulations and previous runs
+name: Final accumulation layout review
 on:
   push:
     branches: [review/accumulations-history-20261012]
-    paths: ['.github/workflows/review-accumulations.yml', 'review/**', 'map-accumulation*.js', 'map-previous*', 'tests/accumulation*', 'tests/previous*', 'scripts/verify_accumulation_live.mjs']
+    paths: ['.github/workflows/review-accumulations.yml', 'map-previous-runs.css', 'docs/accumulations-history-20261012.md']
 permissions:
-  contents: write
-defaults:
-  run:
-    shell: bash
+  contents: read
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Apply exact reviewed application changes
+      - name: Full regression suite on final source
         run: |
-          python review/apply.py
-          python review/fixes.py
-          git diff --check
           mkdir -p review-output
-          git diff > review-output/application.patch
-      - name: Full numerical, timing and regression tests
-        run: node --test tests/*.test.mjs | tee review-output/unit-tests.txt
-      - name: Verify numerical totals against actual UKV source grids
-        run: node scripts/verify_accumulation_live.mjs 2>&1 | tee review-output/live-numeric.txt
+          node --test tests/*.test.mjs | tee review-output/unit-tests.txt
+      - name: Check UKV published frontier and exact candidate cycles
+        run: |
+          node --input-type=module <<'JS'
+          import {writeFile} from 'node:fs/promises';
+          const base='https://openmeteo.s3.amazonaws.com/data_spatial/ukmo_uk_deterministic_2km/',out=[];
+          for(const path of ['latest.json','in-progress.json','2026/10/12/1500Z/meta.json','2026/10/12/1800Z/meta.json']){
+            const r=await fetch(base+path,{cache:'no-store',signal:AbortSignal.timeout(15000)});
+            let data;try{data=await r.json();}catch{}
+            out.push({url:base+path,status:r.status,reference_time:data?.reference_time,completed:data?.completed,first:data?.valid_times?.[0],last:data?.valid_times?.at(-1)});
+          }
+          await writeFile('review-output/ukv-frontier-check.json',JSON.stringify({checkedAt:new Date().toISOString(),results:out},null,2));console.log(out);
+          JS
       - name: Install pinned browser runner
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium
-      - name: Check accumulation panels and pinned three-run comparison
+      - name: Check final desktop and mobile history layout and controls
         run: node tests/accumulation-history-browser.mjs 2>&1 | tee review-output/history-browser.txt
-      - name: Verify real UKV raster generation and record timings
-        run: node tests/accumulation-live-browser.mjs 2>&1 | tee review-output/live-browser.txt
-      - name: Check existing playback, maps and briefing behavior
-        run: node tests/map-browser.mjs 2>&1 | tee review-output/existing-browser.txt
-      - name: Check right-click exports and existing chart styles
-        run: node tests/chart-image-browser.mjs 2>&1 | tee review-output/export-browser.txt
-      - name: Check published feeds and timing without generating imagery
-        continue-on-error: true
-        run: node scripts/check_map_feeds.mjs review-output/map-feeds.json
-      - name: Commit tested changes to the review branch only
+      - name: Record verified source identities
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add map-*.js maps.js maps.html tests/map-briefing.test.mjs tests/map-browser.mjs tests/accumulation-history-browser.mjs
-          git commit -m 'Apply verified accumulation and previous-run integration'
-          git push origin HEAD:review/accumulations-history-20261012
+          git diff --exit-code
           git rev-parse HEAD HEAD^{tree} > review-output/tested-refs.txt
           git ls-tree -r HEAD > review-output/tested-blobs.txt
-          git archive --format=zip HEAD > review-output/tested-source.zip
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: accumulation-history-review
+          name: accumulation-final-review
           path: review-output/
           retention-days: 7
