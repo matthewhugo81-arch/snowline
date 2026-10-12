@@ -1,10 +1,11 @@
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
-import {overlayGroups} from './map-overlay-specs.js?v=20261011-jet-arrows';
-import {hasFieldTime} from './map-sources.js?v=20261012-weather-composite';
+import {contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
+import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
+import {hasFieldTime} from './map-sources.js?v=20261012-chart-style';
 import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-weather-composite';
+import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-chart-style';
 
 import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261012-weather-composite';
 export {briefingSettings};
@@ -82,7 +83,7 @@ export class BriefingRenderer{
    if(preset.id==='weather')groups.push({id:'rain',source:{type:'raster',url:url('precipitation'),tileSize:512,maxzoom:10},layers:[{id:'rain-image',type:'raster',paint:{'raster-opacity':1,'raster-resampling':'nearest','raster-fade-duration':0}}]});
    const pressure=overlayGroups({field,url:main,pressureURL,contours:!!overlays.contours,isobars:true});
    for(const group of pressure)for(const layer of group.layers){
-    if(layer.type==='line'&&layer['source-layer']!=='wind-arrows')layer.paint={...layer.paint,'line-width':1.3};
+    if(layer.type==='line'&&layer['source-layer']!=='wind-arrows')layer.paint={...layer.paint,'line-width':layer.id==='contour-lines'?contourLineWidth(field,2.6,1.3):1.3};
     if(layer.type==='symbol'){layer.layout={...layer.layout,'text-size':18,'text-padding':30};layer.paint={...layer.paint,'text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1};}
    }
    groups.push(...pressure);

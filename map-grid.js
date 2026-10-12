@@ -41,7 +41,7 @@ export function visibleGridPoints(grid,width,height,unproject,project,{minSpacin
 }
 
 export function gridValueLabel(value,field){
- if(!Number.isFinite(value))return null;
+ if(!Number.isFinite(value)||Number.isFinite(field.displayMinimum)&&value<field.displayMinimum)return null;
  if(field.key==='pressure_msl'&&value>2000)value/=100;
  value=displayValue(value,field);
  const digits=field.unit==='m snow'||field.unit==='m³/m³'?3:displayUnit(field)==='mph'?0:field.unit==='m/s'||field.unit==='mm water'?1:0;

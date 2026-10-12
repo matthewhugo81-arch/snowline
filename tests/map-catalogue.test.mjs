@@ -8,8 +8,8 @@ test('300 hPa jet bands and contour thresholds agree in mph for both wind repres
  const fields=[],settings={colorScales:{}};
  extendCatalogue(fields,[{variables:['wind_speed_300hPa','wind_direction_300hPa']},{variables:['wind_u_component_300hPa','wind_v_component_300hPa']}],OM,settings);
  const field=fields[0],scale=settings.colorScales.wind_speed_300hPa;
- assert.deepEqual(displayStops(field),Array.from({length:13},(_,i)=>i*15));
- assert.deepEqual(field.contourValues,field.stops);assert.equal(field.bands,true);
+ assert.deepEqual(displayStops(field),[0,...Array.from({length:9},(_,i)=>60+i*15)]);
+ assert.deepEqual(field.contourValues,field.stops.slice(1));assert.equal(field.bands,true);
  assert.deepEqual(scale,settings.colorScales.wind_u_component_300hPa);
  for(let i=0;i<scale.breakpoints.length;i++){
   assert.deepEqual(OM.getColor(scale,scale.breakpoints[i],false),scale.colors[i]);

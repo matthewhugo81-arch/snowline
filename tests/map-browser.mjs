@@ -8,7 +8,7 @@ import {chromium} from 'playwright';
 const root=process.cwd(),types={'.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.html':'text/html','.json':'application/json','.geojson':'application/json','.wasm':'application/wasm'};
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!path.startsWith(root+sep))throw Error('Invalid path');const data=await readFile(path);res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(data);}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
+const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
 const fakeOM=`
  const fixtureScale=unit=>({unit,breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
  export const defaultOmProtocolSettings={colorScales:{temperature:fixtureScale('°C'),relative:fixtureScale('%'),wind:fixtureScale('m/s')}};
@@ -325,8 +325,8 @@ try{
    await page.locator('#map-variable').selectOption('wind_speed_300hPa');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('300 hPa wind'));
    assert.equal(await page.locator('#legend-title-a').textContent(),'mph');
-   assert.deepEqual(await page.locator('#legend-bands-a span').allTextContents(),['0','15','30','45','60','75','90','105','120','135','150','165','180+']);
-   assert.equal(await page.locator('#legend-bands-a > div').first().getAttribute('aria-label'),'0–<15 mph');
+   assert.deepEqual(await page.locator('#legend-bands-a span').allTextContents(),['60','75','90','105','120','135','150','165','180+']);
+   assert.equal(await page.locator('#legend-bands-a > div').first().getAttribute('aria-label'),'60–<75 mph');
    assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.url.includes('variable=wind_u_component_300hPa')&&r.url.includes('color_blend=false'))),'Jet shading requests discrete bands on the companion wind grid');
    await page.locator('#map-variable').selectOption('snowfall_water_equivalent');
    await page.locator('#map-variable-b').selectOption('freezing_level_height');
@@ -490,7 +490,7 @@ try{
    assert.match(await page.locator('#briefing-legend').textContent(),/mph/);
    assert.match(await page.locator('#briefing-legend').textContent(),/180\+/);
    assert.match(await page.locator('#briefing-overlay-note').textContent(),/mph/);
-   assert.equal(await page.locator('#briefing-legend .briefing-band-labels span').count(),13);
+   assert.equal(await page.locator('#briefing-legend .briefing-band-labels span').count(),9);
    assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=wind_u_component_300hPa')&&decodeURIComponent(r.url).includes('arrow_profile=jet'))),'Briefing uses the wind component pair and jet arrow profile');
    await page.locator('#briefing-preset').selectOption('upper');
    await page.locator('#briefing-count').selectOption('9');

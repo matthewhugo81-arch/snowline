@@ -1,6 +1,6 @@
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261012-weather-composite';
-import {sourceVariable} from './map-catalogue.js?v=20261012-weather-composite';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261011-briefing-overlays';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261012-chart-style';
+import {sourceVariable} from './map-catalogue.js?v=20261012-chart-style';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 
 // One clipped native grid supplies every label, including derived diagnostics.
 // There are no point-forecast API calls and no requests per labelled cell.

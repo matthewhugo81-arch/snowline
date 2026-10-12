@@ -53,7 +53,7 @@ try{
   if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').check();if(viewport.width<650)await page.locator('#mobile-return-map').click();
   await page.locator('#map-variable-b').selectOption('cloud_precipitation_mslp');await page.waitForFunction(()=>document.querySelector('#panel-label-b').textContent.includes('Cloud, precipitation'));
   await right(page.locator('#map-b .maplibregl-canvas'));await saveFile(`composite-export-${viewport.width}`);
-  await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();await page.waitForFunction(()=>!document.querySelector('#briefing-preset').disabled);
+  await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
   await page.locator('#briefing-preset').selectOption('airmass');await page.locator('#briefing-contours').check();await page.locator('#briefing-time').selectOption('0');
   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
   const bw=await page.evaluate(()=>window.fixtureLayers.filter(l=>l.id.includes('contour-lines')&&Array.isArray(l.paint?.['line-width'])).at(-1).paint['line-width']);assert.equal(bw.at(-2),2.6);assert.equal(bw.at(-1),1.3);

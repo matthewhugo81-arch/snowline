@@ -1,15 +1,16 @@
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261012-weather-composite';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261012-weather-composite';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261012-chart-style';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261012-chart-style';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-weather-composite';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-chart-style';
 import {displayStops,displayUnit} from './map-wind-units.js';
+import {chartScales} from './map-image-export.js?v=20261012-chart-style';
 
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
 
-export function createBriefing({host,models,loadModel,fields,onClose,...renderOptions}){
+export function createBriefing({host,models,loadModel,fields,imageMenu,onClose,...renderOptions}){
  host.innerHTML=`<div class="briefing-heading"><div><h2>Forecast briefing</h2><p id="briefing-run">Choose a model and chart.</p></div><div class="briefing-heading-actions"><button type="button" id="briefing-toggle-controls" class="secondary" aria-expanded="true" aria-controls="briefing-control-section">Hide controls</button><button type="button" id="briefing-close" class="secondary">Back to maps</button></div></div>
  <div id="briefing-control-section"><div class="briefing-controls">
  <label>Forecast model<select id="briefing-model"></select></label>
@@ -58,9 +59,9 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   if(preset.id==='weather'){
    title.textContent='Cloud cover';gradient.style.background='linear-gradient(to right,#414141,#ffffff)';labels.innerHTML='<span>Clear · 0%</span><span>Overcast · 100%</span>';
   }else{
-   const scale=displayStops(field),unit=displayUnit(field),min=field.temperatureBands?scale[1]:scale[0],max=scale.at(-1);
-   title.textContent=field.name+' · '+unit;
-   const stops=field.temperatureBands||field.bands?field.colors.flatMap((color,index)=>[color+' '+100*index/field.colors.length+'%',color+' '+100*(index+1)/field.colors.length+'%']):field.colors.map((color,index)=>color+' '+100*(scale[index]-min)/(max-min)+'%');
+   const colors=field.colors.slice(field.legendStart??0),scale=displayStops(field).slice(field.legendStart??0),unit=displayUnit(field),min=field.temperatureBands?scale[1]:scale[0],max=scale.at(-1);
+   title.textContent=field.name+' · '+unit+(field.legendNote?' · '+field.legendNote:'');
+   const stops=field.temperatureBands||field.bands?colors.flatMap((color,index)=>[color+' '+100*index/colors.length+'%',color+' '+100*(index+1)/colors.length+'%']):colors.map((color,index)=>color+' '+100*(scale[index]-min)/(max-min)+'%');
    gradient.style.background='linear-gradient(to right,'+stops.join(',')+')';
    if(field.bands){
     labels.classList.add('briefing-band-labels');
@@ -88,12 +89,13 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
   start=times.reduce((best,time,index)=>Math.abs(Date.parse(time)-requestedTime)<Math.abs(Date.parse(times[best])-requestedTime)?index:best,0);
   $('time').disabled=!times.length;legend();navigation();overlayNote();
  }
- function enlarge(src,time){
+ function enlarge(src,time,exportInfo){
   const title=model.name+' · '+preset.name+' · '+stamp(time);
   const [width,height]=chartSize();$('enlarged-image').width=width;$('enlarged-image').height=height;
   $('enlarged-title').textContent=title;$('enlarged-image').src=src;$('enlarged-image').alt=title;
   $('enlarged-note').textContent=briefingCaption(meta,preset,time)+'. '+preset.note;
   $('enlarged').classList.toggle('briefing-square',chartSize()[0]===chartSize()[1]);
+  imageMenu?.registerImage($('enlarged-image'),exportInfo);
   $('enlarged').showModal();$('enlarged-close').focus();
  }
  function renderPage(){
@@ -113,7 +115,8 @@ export function createBriefing({host,models,loadModel,fields,onClose,...renderOp
    title.textContent=stamp(time);caption.textContent=briefingCaption(meta,preset,time);
    button.type='button';button.className='briefing-chart';button.disabled=true;button.setAttribute('aria-label','Enlarge chart for '+stamp(time));
    placeholder.textContent='Preparing chart…';button.append(placeholder);card.append(title,caption,button);$('grid').append(card);
-   const show=src=>{const image=document.createElement('img');image.src=src;image.alt=selection.preset.name+' · '+stamp(time);image.decoding='async';button.replaceChildren(image);button.disabled=false;card.dataset.ready='true';button.onclick=()=>enlarge(src,time);loaded++;};
+   const exportInfo={title:model.name+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · Valid '+stamp(time),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
+   const show=src=>{const image=document.createElement('img');image.src=src;image.alt=selection.preset.name+' · '+stamp(time);image.decoding='async';button.replaceChildren(image);button.disabled=false;card.dataset.ready='true';imageMenu?.registerImage(image,exportInfo);button.onclick=()=>enlarge(src,time,exportInfo);loaded++;};
    const cached=images.get(key(time));if(cached)show(cached);
    cards.set(time,{show,card,placeholder});
   }
