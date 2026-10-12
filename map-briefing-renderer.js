@@ -1,19 +1,15 @@
-import {ForecastFrames} from './map-frames.js?v=20261011-retain-downloads';
+import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261011-jet-arrows';
-import {hasFieldTime} from './map-sources.js?v=20261012-menu-extrema';
+import {hasFieldTime} from './map-sources.js?v=20261012-weather-composite';
 import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-menu-extrema';
+import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-weather-composite';
+
+import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261012-weather-composite';
+export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
-export function briefingSettings(settings){
- const cloud=settings.colorScales.cloud_cover,rain=settings.colorScales.precipitation;
- return {...settings,colorScales:{...settings.colorScales,
-  cloud_cover:{...cloud,colors:cloud.colors.map((_,index)=>{const shade=Math.round(65+190*cloud.breakpoints[index]/100);return [shade,shade,shade,1];})},
-  precipitation:{...rain,colors:rain.colors.map((color,index)=>index===0?[...color.slice(0,3),0]:[...color])}
- }};
-}
 function rendered(map,signal){
  return new Promise((resolve,reject)=>{
   if(signal.aborted){reject(aborted());return;}

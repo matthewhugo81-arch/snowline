@@ -27,7 +27,7 @@ export class ForecastFrames{
   if(frame?.failed){this.discard(frame);frame=null;}
   if(!frame){
    const id=this.prefix+'-'+(++this.sequence);
-   frame={url,id,layer:id+'-image',resources:[id],layers:[id+'-image'],pending:false,loaded:false};
+   frame={url,id,layer:id+'-image',resources:[id],layers:[id+'-image'],underlays:[],pending:false,loaded:false};
    this.frames.set(url,frame);
    try{
     this.map.addSource(id,{type:'raster',url,maxzoom:10,tileSize:512,attribution:url.includes('/ensemble-data/')?'Weather: <a href="map-credits.html#ensembles">NOAA / ECMWF</a>':'Weather © Open-Meteo'});
@@ -40,6 +40,7 @@ export class ForecastFrames{
       // Hidden future labels must not displace the current map's place labels.
       if(layer.type==='symbol')layer.layout={...layer.layout,'text-ignore-placement':true};
       this.map.addLayer(layer,this.firstLayer());frame.layers.push(layer.id);
+      if(group.placement==='underlay')frame.underlays.push(layer.id);
      }
     }
    }catch(error){this.discard(frame);throw error;}
@@ -101,7 +102,8 @@ export class ForecastFrames{
   this.map.setPaintProperty(frame.layer,'raster-opacity',opacity);
   this.map.setPaintProperty(frame.layer,'raster-resampling',resampling);
   this.map.moveLayer(frame.layer,this.rasterBefore);
-  for(const id of frame.layers.slice(1))this.map.moveLayer(id,this.overlayBefore);
+  for(const id of frame.underlays){this.map.setPaintProperty(id,'raster-opacity',opacity);this.map.moveLayer(id,frame.layer);}
+  for(const id of frame.layers.slice(1))if(!frame.underlays.includes(id))this.map.moveLayer(id,this.overlayBefore);
   if(this.retired.has(previous))this.discard(previous);
   return true;
  }

@@ -218,3 +218,8 @@
  .time-heading button{padding:2px 6px}
  #play-map{min-width:54px;padding:7px 5px}
 }
+
+/* Combined cloud and precipitation need both scales; keep comparison maps aligned. */
+@media(min-width:651px){
+ .map-canvases:has(.layer-legend .legend-gradient:not([hidden]) ~ .legend-bands:not([hidden])) .layer-legend{height:84px;min-height:84px}
+}

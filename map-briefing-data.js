@@ -1,6 +1,6 @@
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261012-menu-extrema';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261012-weather-composite';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable} from './map-catalogue.js?v=20261012-menu-extrema';
+import {sourceVariable} from './map-catalogue.js?v=20261012-weather-composite';
 
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, rain & pressure',field:'cloud_cover',required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
