@@ -118,12 +118,21 @@ try{
    assert.equal(await page.locator('.map-error:visible').count(),0);
    const compositeLabels=await page.locator('.map-panel-label').allTextContents();
    assert.equal(compositeLabels[0].split('Valid ')[1],compositeLabels[1].split('Valid ')[1]);
+   const legendLayout=await page.evaluate(()=>{
+    const bounds=id=>{const r=document.getElementById(id).getBoundingClientRect();return {height:r.height,bottom:r.bottom,top:r.top};};
+    const legend=document.getElementById('legend-bands-b').closest('.layer-legend').getBoundingClientRect();
+    return {legendBottom:legend.bottom,bands:bounds('legend-bands-b'),a:bounds('map-a'),b:bounds('map-b')};
+   });
+   assert.ok(legendLayout.bands.bottom<=legendLayout.legendBottom,'Both cloud and rainfall scales fit inside the legend');
+   if(viewport.width>1050)assert.equal(legendLayout.a.height,legendLayout.b.height,'Comparison imagery stays aligned with a combined legend');
    await page.screenshot({path:'review-output/composite-'+viewport.width+'.png',fullPage:true});
    await page.locator('#map-variable-b').selectOption('precipitation');
    await page.locator('#map-mslp-a').check();
    await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.locator('#map-variable').selectOption('temperature_2m');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   if(viewport.width>650)assert.equal(await page.locator('#legend-bands-a').evaluate(el=>el.closest('.layer-legend').getBoundingClientRect().height),58,'Ordinary layers retain the compact legend');
+   if(process.env.SNOWLINE_COMPOSITE_SMOKE==='1'){console.log(JSON.stringify({viewport,compositeSmokePassed:true}));await page.close();continue;}
    const bitmapRoundTrip=await page.evaluate(async()=>{
     const {ForecastTileCache}=await import('./map-tile-cache.js');
     let calls=0;
