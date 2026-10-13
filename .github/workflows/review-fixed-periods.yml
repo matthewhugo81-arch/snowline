@@ -35,6 +35,11 @@ jobs:
           assert all(n.startswith(('map-','maps.','tests/','docs/','.github/workflows/map-browser-tests.yml')) for n in names)
           subprocess.run(['git','apply','--check','/tmp/fixed-periods.patch'],check=True)
           subprocess.run(['git','apply','/tmp/fixed-periods.patch'],check=True)
+          # fitBounds adds 18 px padding: actual -70.00175..40.00175 degrees.
+          p=Path('tests/accumulation-periods-browser.mjs')
+          s=p.read_text()
+          assert 'b[0]>-70&&b[2]<40' in s
+          p.write_text(s.replace('b[0]>-70&&b[2]<40','b[0]>-71&&b[2]<41'))
           Path('review-output/changed-files.json').write_text(json.dumps(names))
           PY
           git diff --check
