@@ -1,7 +1,9 @@
 name: Map feed health
 on:
-  # Check only after the atomic publisher has finished. A push or timer
-  # can race the in-progress upload and report a run that is about to deploy.
+  # Post-publish checks are authoritative. Independent checks at 00/30
+  # protect against a stalled publisher while avoiding the usual build window.
+  schedule:
+    - cron: '0,30 * * * *'
   workflow_dispatch:
   workflow_run:
     workflows: ['Publish Snowline and ensemble maps']
