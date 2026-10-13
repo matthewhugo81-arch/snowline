@@ -353,9 +353,11 @@ try{
    await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6,{},{timeout:60000});
    assert.equal(await page.locator('#briefing-model').inputValue(),'gfs_global');
+   await page.locator('#briefing-preset').selectOption('weather');
+   await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6,{},{timeout:60000});
    await page.waitForFunction(()=>document.querySelector('#briefing-model option:checked').textContent.includes('00Z'));
    assert.equal(await page.locator('#briefing-model option:checked').textContent(),await page.locator('#map-model option:checked').textContent());
-   assert.deepEqual(await page.locator('#briefing-model optgroup').evaluateAll(groups=>groups.map(g=>g.label)),['Short-term models','Medium-term models']);
+   assert.deepEqual(await page.locator('#briefing-model optgroup').evaluateAll(groups=>groups.map(g=>g.label)),['Short-term models','Medium-term models','Ensemble models']);
    assert.equal(await page.locator('#briefing-area').inputValue(),'uk');
    assert.equal(await page.locator('#briefing-grid canvas').count(),0);
    assert.equal(await page.locator('.briefing-renderer canvas').count(),1);
@@ -457,7 +459,18 @@ try{
    await page.waitForFunction(()=>document.getElementById('briefing-run').textContent.includes('UKV')&&document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
    assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
-   assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather','temperature','dew-point','precipitation_total_6h','precipitation_total_12h','precipitation_total_18h','precipitation_total_24h','precipitation_total_36h','precipitation_total_48h'],'UKV includes surface temperature and derived dew point, without unsupported diagnostics');
+   const ukvChoices=await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value));
+   for(const key of ['weather','temperature','dew-point','cloud_cover','relative_humidity_2m','precipitation','precipitation_total_48h'])assert.ok(ukvChoices.includes(key),'Full UKV catalogue includes '+key);
+   assert.ok(!ukvChoices.includes('theta-w'),'Unsupported diagnostics remain unavailable');
+   for(const field of ['cloud_cover','precipitation']){
+    await page.locator('#briefing-preset').selectOption(field);
+    await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid .briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
+    const palettes=await page.evaluate(()=>window.fixturePalettes.filter(p=>p.url.includes('briefing_style=20261013-catalogue-field')));
+    assert.ok(palettes.length>0);
+    assert.deepEqual(palettes.at(-1).cloud,[38,60,85,1],'Standalone cloud keeps the main map palette');
+    assert.deepEqual(palettes.at(-1).rain,[255,255,255,1],'Standalone precipitation keeps its opaque dry band');
+    if(field==='precipitation')assert.match(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),/1 h precipitation/);
+   }
    for(const selectedModel of [main]){
     await page.evaluate(()=>{window.fixtureRequests=[];window.fixtureGridReads=[];});
     await page.locator('#briefing-model').selectOption(selectedModel);
@@ -523,6 +536,7 @@ try{
    }
    await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset option[value="temperature-max"]'));
+   assert.equal(await page.locator('#briefing-preset').inputValue(),'temperature-min','Chart selection carries from main maps to briefing');
    for(const statistic of ['max','min']){
     await page.locator('#briefing-preset').selectOption('temperature-'+statistic);
     await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length>=6,{},{timeout:60000});

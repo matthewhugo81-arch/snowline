@@ -1,10 +1,10 @@
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-map-appearance';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-chart-catalogue';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-map-appearance';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-map-appearance';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-chart-catalogue';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-chart-catalogue';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-accum-history';
@@ -31,8 +31,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html">Data and map credits</a>.</p>
  <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong><button id="briefing-enlarged-close" class="secondary">Close chart</button></div><img id="briefing-enlarged-image" alt=""><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
  const $=id=>host.querySelector('#briefing-'+id);
- const choices=models.filter(model=>!model.ensemble);
- for(const [label,items] of [['Short-term models',choices.filter(model=>model.regional)],['Medium-term models',choices.filter(model=>!model.regional)]] ){
+ const choices=models;
+ for(const [label,items] of [['Short-term models',choices.filter(model=>model.regional)],['Medium-term models',choices.filter(model=>!model.regional&&!model.ensemble)],['Ensemble models',choices.filter(model=>model.ensemble)]] ){
   if(!items.length)continue;
   const group=document.createElement('optgroup');group.label=label;
   for(const model of items)group.append(option(model.id,model.name));
@@ -43,7 +43,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  $('area').append(option('current','Current map area'));
  for(const preset of BRIEFING_PRESETS)$('preset').append(option(preset.id,preset.name));
  const images=new BriefingImages();
- let renderer,active=false,generation=0,controller,work=Promise.resolve(),model,meta,preset,times=[],start=0,interval='3',currentBounds,requestedTime,requestedStart=null;
+ let renderer,active=false,generation=0,controller,work=Promise.resolve(),model,meta,preset,times=[],start=0,interval='3',currentBounds,requestedTime,requestedStart=null,requestedChart=null,presets=[];
  const count=()=>Number($('count').value);
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
@@ -86,7 +86,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   }
  }
  function timeline(){
-  preset=BRIEFING_PRESETS.find(item=>item.id===$('preset').value);
+  preset=presets.find(item=>item.id===$('preset').value);
   const native=briefingTimes(meta,preset,model,interval),hours=accumulationHours(preset.field);
   const regional=forecastInterval([model],interval).shortRange;
   configurePeriodInterval($('interval'),hours,interval,regional);
@@ -167,10 +167,10 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   try{
    const data=await loadModel(model.id,force);if(token!==generation||!active)return;meta=data;
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:model.id,meta}}));
-   const available=briefingPresets(meta),previous=$('preset').value;
-   $('preset').replaceChildren(...available.map(item=>option(item.id,item.name)));
+   const available=presets=briefingPresets(meta,fields),previous=requestedChart??$('preset').value;
+   requestedChart=null;briefingOptions($('preset'),available);
    if(!available.length)throw Error('This run does not supply the fields for these briefing charts. Choose another model.');
-   $('preset').value=available.some(item=>item.id===previous)?previous:available[0].id;
+   $('preset').value=(available.find(item=>item.id===previous||item.key===previous)??available[0]).id;
    $('run').textContent=model.name+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
    controlsDisabled(false);timeline();renderPage();
   }catch(error){if(token===generation){meta=null;$('run').textContent=model.name;$('status').textContent=error.message;controlsDisabled(true);$('retry').hidden=false;}}
@@ -187,8 +187,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:selected,meta:next}}));
    if(runSignature(next)!==runSignature(previous)){
     rememberTime();meta=next;
-    const available=briefingPresets(meta),selection=$('preset').value;
-    $('preset').replaceChildren(...available.map(item=>option(item.id,item.name)));
+    const available=presets=briefingPresets(meta,fields),selection=$('preset').value;
+    briefingOptions($('preset'),available);
     if(!available.length){cancel();times=[];controlsDisabled(true);$('grid').replaceChildren();$('run').textContent=model.name+' · initialized '+runLabel(meta)+' · Updating';$('status').textContent='New run arriving; awaiting the fields for this chart.';return;}
     $('preset').value=available.some(item=>item.id===selection)?selection:available[0].id;
     controlsDisabled(false);timeline();renderPage();
@@ -228,8 +228,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(historyMode){
    active=false;cancel();renderer?.destroy();renderer=null;
    history??=createPreviousRunAnalysis({host:host.querySelector('#previous-run-view'),models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose:close,getBackground,onBackgroundChange,...renderOptions});
-   history.open({model:model?.id??$('model').value,time:times[start]??new Date(requestedTime).toISOString(),periodStart:accumulationHours(preset?.field)&&times[start]?periodStart(times[start],accumulationHours(preset.field)):null,preset:accumulationHours(preset?.field)?preset.id:null,area:$('area').value,bounds:currentBounds});
-  }else{history?.close();$('background').value=getBackground();active=true;configure(true);}
+   history.open({model:model?.id??$('model').value,time:times[start]??new Date(requestedTime).toISOString(),periodStart:accumulationHours(preset?.field)&&times[start]?periodStart(times[start],accumulationHours(preset.field)):null,preset:preset?.id,area:$('area').value,bounds:currentBounds});
+  }else{const selection=history?.selection();history?.close();if(selection){$('model').value=selection.model;requestedChart=selection.preset;requestedTime=Date.parse(selection.time)||requestedTime;}$('background').value=getBackground();active=true;configure(true);}
  }
  $('sequence-mode').addEventListener('click',()=>{if($('sequence').hidden)mode(false);});
  $('history-mode').addEventListener('click',()=>{if(!$('sequence').hidden)mode(true);});
@@ -244,7 +244,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  window.addEventListener('pagehide',()=>{clearInterval(refreshTimer);cancel();images.clear();renderer?.destroy();renderer=null;});
  return {open(selection){$('background').value=getBackground();
   history?.close();$('sequence').hidden=false;$('sequence-mode').setAttribute('aria-pressed','true');$('history-mode').setAttribute('aria-pressed','false');
-  active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=null;
+  active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=null;requestedChart=selection.field??selection.preset??null;
   $('model').value=choices.some(item=>item.id===selection.model)?selection.model:choices[0].id;
   $('area').value=selection.area??'uk';$('close').focus({preventScroll:true});configure();
  },close};

@@ -3,9 +3,9 @@ import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-three-run-charts';
-import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-map-appearance';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-map-appearance';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-chart-catalogue';
+import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-chart-catalogue';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-chart-catalogue';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261013-map-appearance';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
@@ -32,8 +32,8 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <div id="previous-grid" class="previous-grid"></div>
  <p class="small-note">Recent run availability depends on the provider archive. No model cycles or missing hours are substituted. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth.</p>
  <dialog id="previous-enlarged"><div class="briefing-heading"><strong id="previous-enlarged-title"></strong><button type="button" class="secondary" id="previous-enlarged-close">Close chart</button></div><img id="previous-enlarged-image" alt=""><p id="previous-enlarged-note" class="small-note"></p><p class="small-note">Snowline · Weather: Open-Meteo / model providers · OpenFreeMap / OpenStreetMap · Natural Earth</p></dialog>`;
- const $=name=>host.querySelector('#previous-'+name),choices=models.filter(m=>!m.ensemble&&m.id!==UKV_PREVIOUS).map(m=>m.id===UKV?{...m,name:'UKV'}:m);
- for(const [label,items]of [['Short-term models',choices.filter(m=>m.regional)],['Medium-term models',choices.filter(m=>!m.regional)]]){const group=document.createElement('optgroup');group.label=label;for(const m of items)group.append(option(m.id,m.name));$('model').append(group);}
+ const $=name=>host.querySelector('#previous-'+name),choices=models.filter(m=>m.id!==UKV_PREVIOUS).map(m=>m.id===UKV?{...m,name:'UKV'}:m);
+ for(const [label,items]of [['Short-term models',choices.filter(m=>m.regional)],['Medium-term models',choices.filter(m=>!m.regional&&!m.ensemble)],['Ensemble models',choices.filter(m=>m.ensemble)]]){const group=document.createElement('optgroup');group.label=label;for(const m of items)group.append(option(m.id,m.name));$('model').append(group);}
  for(const area of BRIEFING_AREAS)$('area').append(option(area.id,area.name));$('area').append(option('current','Current map area'));
  const cards=Array.from({length:3},(_,i)=>{
   const card=document.createElement('article');card.className='briefing-card';
@@ -44,11 +44,11 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   return {card,select,title,caption,button};
  });
  document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));
- let active=false,generation=0,controller,renderController,renderer,work=Promise.resolve(),model,runs=[],times=[],index=0,requestedTime=Date.now(),currentBounds,requestedStart=null,interval='3',historyCheckFailed=false;
+ let active=false,generation=0,controller,renderController,renderer,work=Promise.resolve(),model,runs=[],times=[],index=0,requestedTime=Date.now(),currentBounds,requestedStart=null,interval='3',historyCheckFailed=false,presets=[];
  const runCount=()=>3;
  const visibleCards=()=>cards.slice(0,runCount());
  const images=new BriefingImages(18),selected=()=>visibleCards().map(c=>runs.find(meta=>meta.reference_time===c.select.value)).filter(Boolean);
- const preset=()=>BRIEFING_PRESETS.find(p=>p.id===$('preset').value);
+ const preset=()=>presets.find(p=>p.id===$('preset').value);
  const area=()=>BRIEFING_AREAS.find(a=>a.id===$('area').value);
  const bounds=()=>area()?.bounds??currentBounds,size=()=>area()?.size??[960,660];
  function cancel(){generation++;controller?.abort();renderController?.abort();renderer?.cancel();}
@@ -66,7 +66,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  }
  function configureTimeline(){
   renderController?.abort();renderer?.cancel();const chosen=selected(),previous=$('preset').value;
-  const available=previousRunPresets(chosen,runCount());$('preset').replaceChildren(...available.map(p=>option(p.id,p.name)));$('preset').disabled=!available.length;
+  const available=presets=previousRunPresets(chosen,runCount(),fields);briefingOptions($('preset'),available);$('preset').disabled=!available.length;
   $('preset').value=available.some(p=>p.id===previous)?previous:available[0]?.id??'';
   const hours=accumulationHours(preset()?.field),native=previousRunTimes(chosen,preset(),model,interval);
   configurePeriodInterval($('interval'),hours,interval,!!model?.regional);
@@ -145,7 +145,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
     c.select.replaceChildren(...runs.map(meta=>option(meta.reference_time,runLabel(meta)+' · '+runAvailability(meta))));c.select.value=runs[Math.max(0,runCount()-1-i)]?.reference_time??'';
    }
    $('status').textContent=model.name+' · '+(model.id===UKV?'Latest main run and two previous completed main runs · checks every minute.':runs.length+' published runs found in the previous 48 hours. Runs are pinned until you change them.')+(archive.unavailable.length?' '+archive.unavailable.length+' archive cycles unavailable.':'')+(archive.errors.length?' '+archive.errors.length+' archive checks failed; use the run-check button to retry.':'');
-   disable(false);if(runs.length<runCount()){$('progress').textContent='Fewer than '+runCount()+' verified runs are available. No substitute runs have been used.';return;}
+   disable(false);if(runs.length<runCount()){$('preset').replaceChildren();presets=[];$('preset').disabled=true;$('legend').replaceChildren();$('note').textContent=archive.notice??'';$('progress').textContent=archive.notice??'Fewer than '+runCount()+' verified runs are available. No substitute runs have been used.';return;}
    configureTimeline();
   }catch(error){if(token===generation&&active){$('status').textContent=error.message;$('refresh').disabled=false;$('progress').textContent='Archive unavailable. The main maps and forecast sequence are unchanged.';}}
  }
@@ -176,5 +176,5 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden){renderController?.abort();renderer?.cancel();}else if(runs.length>=runCount())render();});
  const close=()=>{active=false;cancel();renderer?.destroy();renderer=null;host.hidden=true;if($('enlarged').open)$('enlarged').close();};
  window.addEventListener('pagehide',()=>{close();images.clear();});
- return {open(selection){$('background').value=getBackground();active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();requestedStart=selection.periodStart??null;if(selection.preset)$('preset').replaceChildren(option(selection.preset,selection.preset));$('model').value=isUKVChoice(selection.model)?UKV:choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value=selection.area??'uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},close};
+ return {open(selection){$('background').value=getBackground();active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();requestedStart=selection.periodStart??null;if(selection.preset)$('preset').replaceChildren(option(selection.preset,selection.preset));$('model').value=isUKVChoice(selection.model)?UKV:choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value=selection.area??'uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},selection:()=>({model:model?.id,preset:preset()?.id,time:times[index]}),close};
 }
