@@ -21,6 +21,10 @@ try{
   const context=await browser.newContext({viewport,deviceScaleFactor:1}),page=await context.newPage(),errors=[],requests=[];let newer=false;
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{localStorage.setItem('snowline-terrain','false');window.fixtureDelay=5;});
+  await page.route('**/map-image-export.js*',async r=>{
+   const source=await readFile('map-image-export.js','utf8');
+   await r.fulfill({contentType:'text/javascript',body:source.replace('registerImage(image,info){','registerImage(image,info){image.dataset.fixtureExport=JSON.stringify(info);').replace('registerMap(map,getInfo,before){','registerMap(map,getInfo,before){window.fixtureMapInfo??={};window.fixtureMapInfo[map.getContainer().id]=getInfo;')});
+  });
   await page.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
   await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   // Use the real local coastline to visually check the requested North Atlantic crop.
@@ -37,11 +41,29 @@ try{
   try{
    await page.goto(origin+'/maps.html?time=2026-10-13T12:00:00Z');
    await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   await page.evaluate(async()=>{
+    const {Map}=await import('/vendor/maplibre-gl.mjs');const fit=Map.prototype.fitBounds;window.fixtureFits=[];
+    Map.prototype.fitBounds=function(bounds,options){window.fixtureFits.push({map:this.getContainer().id,bounds});return fit.call(this,bounds,options);};
+   });
+   if(viewport.width<650)await page.locator('#mobile-map-settings').click();
+   await page.locator('#map-area').selectOption('nw-europe');
+   await page.locator('#compare-maps').check();
+   await page.waitForFunction(()=>window.fixtureFits.some(f=>f.map==='map-b'));
+   assert.ok((await page.evaluate(()=>window.fixtureFits.filter(f=>['map-a','map-b'].includes(f.map)))).every(f=>JSON.stringify(f.bounds)===JSON.stringify([[-25,43],[23,68]])),'Both normal-map panels use the NW Europe preset');
+   await page.locator('#compare-maps').uncheck();
+   if(viewport.width<650)await page.locator('#mobile-return-map').click();
+   await page.locator('#map-variable').selectOption(key(24));
+   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('VALID 12 Oct 12:00 to 13 Oct 12:00 UTC'));
+   const normalTitle=await page.locator('#panel-label-a').textContent();
+   assert.equal((normalTitle.match(/VALID/g)||[]).length,1);assert.equal((normalTitle.match(/24 h/g)||[]).length,1);assert.ok(!normalTitle.includes('Valid Tue'));
+   assert.equal(await page.evaluate(()=>window.fixtureMapInfo['map-a']().title),normalTitle,'Saved normal chart uses the same period');
+   await page.screenshot({path:`review-output/nw-europe-normal-${viewport.width}.png`,fullPage:true});
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
    const readySequence=()=>page.waitForFunction(()=>{const cs=[...document.querySelectorAll('#briefing-grid .briefing-card')];return cs.length>0&&cs.every(c=>c.dataset.ready==='true');},{},{timeout:30000});
    const readyHistory=()=>page.waitForFunction(()=>{const cards=[...document.querySelectorAll('#previous-grid .briefing-card:not([hidden])')];return cards.length>0&&cards.every(c=>c.dataset.ready==='true');},{},{timeout:30000});
    const ends=()=>page.locator('#briefing-grid .briefing-card').evaluateAll(cs=>cs.map(c=>c.dataset.time));
+   assert.equal(await page.locator('#briefing-area').inputValue(),'nw-europe','Chosen map area carries into briefing');
    await page.locator('#briefing-preset').selectOption(key(24));
    await page.locator('#briefing-time').selectOption('2026-10-12T12:00:00.000Z');await readySequence();
    assert.equal(await page.locator('#briefing-time-heading').textContent(),'Period start · UTC');
@@ -51,6 +73,17 @@ try{
    assert.match(await page.locator('#briefing-grid h3').first().textContent(),/12 Oct.*12:00.*13 Oct.*12:00/);
    assert.match(await page.locator('#briefing-note').textContent(),/do not overlap/);
    assert.equal(await page.locator('#briefing-next').isDisabled(),true);
+   const expectedPeriod='VALID 12 Oct 12:00 to 13 Oct 12:00 UTC';
+   assert.equal(await page.locator('#briefing-grid h3').first().textContent(),expectedPeriod);
+   assert.equal(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),'T+024');
+   const exported=JSON.parse(await page.locator('#briefing-grid img').first().getAttribute('data-fixture-export'));
+   assert.ok(exported.title.endsWith(expectedPeriod));assert.equal(exported.subtitle,'T+024');
+   const sequenceNW=await page.evaluate(()=>window.fixtureBounds);
+   assert.ok(sequenceNW[0]>-28&&sequenceNW[2]<26&&sequenceNW[1]>40&&sequenceNW[3]<70,JSON.stringify(sequenceNW));
+   await page.locator('#briefing-grid img').first().click();
+   assert.equal(await page.locator('#briefing-enlarged-title').textContent(),exported.title);
+   await page.screenshot({path:`review-output/nw-europe-enlarged-${viewport.width}.png`,fullPage:true});
+   await page.locator('#briefing-enlarged-close').click();
    await page.screenshot({path:`review-output/fixed-24h-${viewport.width}.png`,fullPage:true});
    await page.locator('#briefing-area').selectOption('atlantic');await readySequence();
    const checkAtlantic=async()=>{const b=await page.evaluate(()=>window.fixtureBounds);assert.ok(b[0]>-71&&b[2]<41&&b[1]>30&&b[3]<76,JSON.stringify(b));return b;};
@@ -78,7 +111,18 @@ try{
    assert.deepEqual(await page.locator('#briefing-grid img').evaluateAll(imgs=>imgs.map(i=>i.src)),sources);
    await page.locator('#briefing-toggle-controls').click();
    assert.equal(await page.evaluate(()=>window.fixtureRequests.length),rasterBefore,'Hide/show does not request any imagery');
+   await page.locator('#briefing-area').selectOption('nw-europe');await readySequence();
    await page.locator('#briefing-history-mode').click();await readyHistory();
+   assert.equal(await page.locator('#previous-area').inputValue(),'nw-europe');
+   assert.deepEqual(await page.evaluate(()=>window.fixtureBounds),sequenceNW,'Both briefing modes render exactly the same NW Europe extent');
+   const historyExport=JSON.parse(await page.locator('#previous-grid img').first().getAttribute('data-fixture-export'));
+   assert.ok(historyExport.title.endsWith(expectedPeriod));assert.match(historyExport.subtitle,/^T\+\d+$/);
+   const captions=await page.locator('#previous-grid .briefing-card:not([hidden])>p').allTextContents();
+   assert.ok(captions.every(c=>c.startsWith(expectedPeriod+' · T+')));
+   await page.locator('#previous-grid img').first().click();
+   assert.equal(await page.locator('#previous-enlarged-title').textContent(),historyExport.title);
+   await page.locator('#previous-enlarged-close').click();
+   await page.screenshot({path:`review-output/nw-europe-history-${viewport.width}.png`,fullPage:true});
    assert.equal(await page.locator('#previous-preset').inputValue(),key(24));
    assert.equal(await page.locator('#previous-run-view #previous-time').inputValue(),'2026-10-12T12:00:00.000Z');
    assert.equal(await page.locator('#previous-time-heading').textContent(),'Shared period start · UTC');

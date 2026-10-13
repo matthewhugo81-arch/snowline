@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval} from '../map-accumulation-periods.js';
 import {briefingTimes,BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingPage} from '../map-briefing-data.js';
 import {previousRunTimes} from '../map-previous-run-data.js';
+import {forecastValidity} from '../map-validity.js';
 import {ACCUMULATION_HOURS} from '../map-accumulation.js';
 const HOUR=3600000,zero=Date.UTC(2026,9,12);
 const time=h=>new Date(zero+h*HOUR).toISOString();
@@ -50,7 +51,8 @@ test('three different initializations share one absolute period rather than thre
  const result=fixedAccumulationPeriods(common,24,time(13));
  assert.deepEqual(result.times,[37,61,85,109].map(time));
  const captions=runs.map(m=>briefingCaption(m,p,result.times[0]));
- assert.equal(new Set(captions.map(c=>c.split(' · 24 h · ')[1])).size,1);
+ assert.equal(forecastValidity(p.field,result.times[0]),'VALID 12 Oct 13:00 to 13 Oct 13:00 UTC');
+ assert.ok(captions.every(c=>/^T\+\d+$/.test(c)),'Lead times do not repeat the valid period');
  assert.equal(new Set(captions.map(c=>c.split(' · ')[0])).size,3);
 });
 test('fixed-interval label is disabled, ordinary global and regional choices restore without carrying over a rainfall duration',()=>{

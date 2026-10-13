@@ -1,8 +1,9 @@
+import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-ukv-retention';
-import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-ukv-retention';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-nw-europe-periods';
+import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-nw-europe-periods';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-ukv-retention';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261012-accum-history';
@@ -95,14 +96,14 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   let loaded=0,failed=0;const started=performance.now();
   const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+runCount()+' charts ready'+(failed?' · '+failed+' unavailable':loaded===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(accumulationHours(p.field)?' · Shared period: '+accumulationPeriod(p.field,time):' · Shared valid time: '+utc(time));};
   const show=(c,src,meta)=>{
-   const description=model.name+' · Run '+runLabel(meta)+' · '+p.name+' · Valid '+utc(time),subtitle=briefingCaption(meta,p,time);
+   const description=model.name+' · Run '+runLabel(meta)+' · '+p.name+' · '+forecastValidity(p.field,time),subtitle=briefingCaption(meta,p,time);
    const info={title:description,subtitle,scales:chartScales(fields.find(f=>f.key===p.field),subtitle,p.id==='weather')};
    const img=document.createElement('img');img.src=src;img.alt=description;img.decoding='async';c.button.replaceChildren(img);c.button.disabled=false;c.card.dataset.ready='true';imageMenu?.registerImage(img,info);
    c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();};loaded++;
   };
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;
-   c.title.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'');c.caption.textContent='Valid '+utc(time)+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
+   c.title.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'');c.caption.textContent=forecastValidity(p.field,time)+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
    const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays),cached=images.get(key);if(cached)show(c,cached,meta);
    return {c,meta,key,cached};
   });progress();
@@ -171,5 +172,5 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden){renderController?.abort();renderer?.cancel();}else if(runs.length>=runCount())render();});
  const close=()=>{active=false;cancel();renderer?.destroy();renderer=null;host.hidden=true;if($('enlarged').open)$('enlarged').close();};
  window.addEventListener('pagehide',()=>{close();images.clear();});
- return {open(selection){active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();requestedStart=selection.periodStart??null;if(selection.preset)$('preset').replaceChildren(option(selection.preset,selection.preset));$('model').value=isUKVChoice(selection.model)?UKV:choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value='uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},close};
+ return {open(selection){active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();requestedStart=selection.periodStart??null;if(selection.preset)$('preset').replaceChildren(option(selection.preset,selection.preset));$('model').value=isUKVChoice(selection.model)?UKV:choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value=selection.area??'uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},close};
 }
