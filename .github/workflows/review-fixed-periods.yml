@@ -1,0 +1,80 @@
+name: Verify fixed rainfall periods and North Atlantic view
+on:
+  push:
+    branches: [review/fixed-periods-atlantic-20261013]
+permissions:
+  contents: write
+concurrency:
+  group: review-fixed-periods
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply exact reviewed presentation changes
+        run: |
+          mkdir -p review-output
+          python - <<'PY'
+          from pathlib import Path
+          import base64,zlib,hashlib,subprocess,json
+          payload=''.join(p.read_text().strip() for p in sorted(Path('review').glob('fixed-periods.part*')))
+          patch=zlib.decompress(base64.b64decode(payload,validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='1841518bc5b2d61a94cdd205fa9c9a32b9b0448db5c48654cdf9bd8d2da4111d'
+          Path('/tmp/fixed-periods.patch').write_bytes(patch)
+          names=[line.split('\t')[2] for line in subprocess.check_output(['git','apply','--numstat','/tmp/fixed-periods.patch'],text=True).splitlines()]
+          assert all(n.startswith(('map-','maps.','tests/','docs/','.github/workflows/map-browser-tests.yml')) for n in names)
+          subprocess.run(['git','apply','--check','/tmp/fixed-periods.patch'],check=True)
+          subprocess.run(['git','apply','/tmp/fixed-periods.patch'],check=True)
+          Path('review-output/changed-files.json').write_text(json.dumps(names))
+          PY
+          git diff --check
+      - name: Numerical and timing regression suite
+        run: node --test tests/*.test.mjs | tee review-output/node-tests.txt
+      - name: Install pinned browser test runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Fixed rainfall periods and Atlantic extent on desktop and mobile
+        run: node tests/accumulation-periods-browser.mjs 2>&1 | tee review-output/fixed-periods-browser.txt
+      - name: Existing history controls and exact-window image exports
+        run: node tests/accumulation-history-browser.mjs 2>&1 | tee review-output/history-browser.txt
+      - name: Live 48-hour IFS totals, full basemap and tighter Atlantic rendering
+        run: node tests/fixed-periods-live-browser.mjs 2>&1 | tee review-output/live-periods-browser.txt
+      - name: Existing chart styling, left-click, PNG and clipboard
+        run: node tests/chart-image-browser.mjs 2>&1 | tee review-output/chart-image-browser.txt
+      - name: Existing map playback and forecast briefing
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/map-browser.txt
+      - name: Check published feed times and download response
+        continue-on-error: true
+        run: node scripts/check_map_feeds.mjs 2>&1 | tee review-output/feed-health.txt
+      - name: Preserve tested source on review branch only
+        run: |
+          python - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          names=json.loads(Path('review-output/changed-files.json').read_text())
+          subprocess.run(['git','add','--',*names],check=True)
+          Path('review-output/tested-blobs.txt').write_text(subprocess.check_output(['git','ls-files','-s','--',*names],text=True))
+          Path('review-output/verified.patch').write_bytes(subprocess.check_output(['git','diff','--cached','--binary']))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Verify fixed-period rainfall and tighter North Atlantic presentation'
+          git rev-parse HEAD > review-output/tested-commit.txt
+          git push origin HEAD:review/fixed-periods-atlantic-20261013
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-fixed-periods-atlantic
+          path: review-output/
+          retention-days: 7
