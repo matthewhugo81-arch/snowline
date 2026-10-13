@@ -118,7 +118,8 @@ try{
    const historyExport=JSON.parse(await page.locator('#previous-grid img').first().getAttribute('data-fixture-export'));
    assert.ok(historyExport.title.endsWith(expectedPeriod));assert.match(historyExport.subtitle,/^T\+\d+$/);
    const captions=await page.locator('#previous-grid .briefing-card:not([hidden])>p').allTextContents();
-   assert.ok(captions.every(c=>c.startsWith(expectedPeriod+' · T+')));
+   assert.ok(captions.every(c=>/^Run .* · T\+\d+$/.test(c)));
+   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden]) h3').allTextContents(),Array(2).fill(expectedPeriod));
    await page.locator('#previous-grid img').first().click();
    assert.equal(await page.locator('#previous-enlarged-title').textContent(),historyExport.title);
    await page.locator('#previous-enlarged-close').click();

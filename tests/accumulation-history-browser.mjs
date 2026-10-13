@@ -78,7 +78,8 @@ try{
    await page.locator('#previous-forward').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===2);
    const advanced=await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time));assert.equal(new Set(advanced).size,1);assert.notEqual(advanced[0],initial[0].time);
    await page.locator('#previous-preset').selectOption(key(24));await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===2);
-   const captions=await page.locator('#previous-grid .briefing-card:not([hidden])>p').allTextContents();assert.ok(captions.every(c=>/^VALID .* to .* UTC · T\+\d+$/.test(c)));assert.equal(new Set(captions.map(c=>c.split(' · T+')[0])).size,1,'Both total windows have matching UTC endpoints');
+   const headings=await page.locator('#previous-grid .briefing-card:not([hidden]) h3').allTextContents();assert.ok(headings.every(c=>/^VALID .* to .* UTC$/.test(c)));assert.equal(new Set(headings).size,1,'Both total windows have matching UTC endpoints');
+   const captions=await page.locator('#previous-grid .briefing-card:not([hidden])>p').allTextContents();assert.ok(captions.every(c=>/^Run .* · T\+\d+$/.test(c)));
    const pinned=await page.locator('#previous-grid .briefing-card:not([hidden]) select').evaluateAll(ss=>ss.map(s=>s.value));
    assert.equal(await page.locator('#previous-new').isVisible(),false);
    const exportImage=page.locator('#previous-grid img').first();await exportImage.scrollIntoViewIfNeeded();
