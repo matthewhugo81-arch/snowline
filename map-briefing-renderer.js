@@ -1,4 +1,5 @@
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
+import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-hide-uk-label';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
@@ -46,6 +47,7 @@ export class BriefingRenderer{
    const timer=setTimeout(()=>reject(Error('The chart map could not start. Try again.')),30000);
    this.cancelReady=()=>{clearTimeout(timer);reject(aborted());};
    this.map.once('load',()=>{clearTimeout(timer);
+    hideUKCountryLabel(this.map);
     for(const layer of this.map.getStyle().layers){
      if(['transportation','transportation_name'].includes(layer['source-layer'])||(layer.type==='symbol'&&!layer.id.startsWith('label_country_')))this.map.setLayoutProperty(layer.id,'visibility','none');
      if(layer.id.startsWith('label_country_'))this.map.setLayoutProperty(layer.id,'text-size',18);
