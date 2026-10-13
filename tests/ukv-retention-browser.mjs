@@ -10,7 +10,7 @@ const root=process.cwd(),types={'.js':'text/javascript','.mjs':'text/javascript'
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!path.startsWith(root+sep))throw Error('Invalid path');res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(await readFile(path));}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
-const oldTests=(await readFile('tests/map-browser.mjs','utf8')).replaceAll('\r\n','\n'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\nconst geo=/)[1]).replace("window.fixtureRequests=[];","window.fixtureRequests=[];window.fixtureDelivered=[];").replace("if(!params.url.startsWith('om://fixture/'))","window.fixtureDelivered.push({url:params.url,type:params.type});if(!params.url.startsWith('om://fixture/'))");
+const oldTests=(await readFile('tests/map-browser.mjs','utf8')).replaceAll('\r\n','\n'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\nconst geo=/)[1]);
 const geo={type:'FeatureCollection',features:[]},style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'background',type:'background',paint:{'background-color':'#fff'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222'}}]};
 const UKV='ukmo_uk_deterministic_2km',previous=UKV+'_previous';
 const run=(h,complete=true,horizon=54)=>({reference_time:new Date(Date.UTC(2026,9,13,h)).toISOString(),completed:complete,variables:['temperature_2m','relative_humidity_2m','precipitation','cloud_cover','pressure_msl'],valid_times:Array.from({length:horizon+1},(_,i)=>new Date(Date.UTC(2026,9,13,h+i)).toISOString())});
@@ -23,11 +23,13 @@ try{
   await page.addInitScript(()=>{
    localStorage.setItem('snowline-terrain','false');window.fixtureDelay=5;
    const interval=window.setInterval,timeout=window.setTimeout,clear=window.clearTimeout,now=Date.now;
-   window.fixtureRefreshers=[];window.fixtureMenuChecks=new Map();window.fixtureClock=0;Date.now=()=>now()+window.fixtureClock;
+   window.fixtureShownFrames=[];window.fixtureRefreshers=[];window.fixtureMenuChecks=new Map();window.fixtureClock=0;Date.now=()=>now()+window.fixtureClock;
    window.setInterval=(fn,ms,...args)=>{if(ms===60000)window.fixtureRefreshers.push(fn);return interval(fn,ms,...args);};
    window.setTimeout=(fn,ms,...args)=>{const id=timeout(fn,ms,...args);if(ms===60000)window.fixtureMenuChecks.set(id,fn);return id;};
    window.clearTimeout=id=>{window.fixtureMenuChecks.delete(id);clear(id);};
   });
+  // Observe promoted raster/overlay sources, excluding obsolete background downloads.
+  await page.route('**/map-frames.js*',async r=>{const code=await readFile(resolve(root,'map-frames.js'),'utf8');return r.fulfill({contentType:'text/javascript',body:code.replace('this.current=frame;',"this.current=frame;window.fixtureShownFrames.push({url:frame.url,sources:frame.resources.map(id=>this.map.getStyle().sources[id]?.url).filter(Boolean)});")});});
   await page.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
   await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
@@ -44,10 +46,15 @@ try{
    return r.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{})});
   });
   const ready=()=>page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid')&&document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:40000});
-  const tick=()=>page.evaluate(async()=>{window.fixtureClock+=61000;await Promise.all(window.fixtureRefreshers.map(fn=>fn()));for(const fn of [...window.fixtureMenuChecks.values()])fn();});
+  const tick=async()=>{
+   // Finish each metadata queue before advancing the next simulated minute.
+   await page.waitForFunction(()=>window.fixtureMenuChecks.size>0);
+   await page.evaluate(async()=>{window.fixtureClock+=61000;await Promise.all(window.fixtureRefreshers.map(fn=>fn()));for(const fn of [...window.fixtureMenuChecks.values()])fn();});
+   await page.waitForFunction(()=>window.fixtureMenuChecks.size>0);
+  };
   const checkChoices=async id=>assert.deepEqual(await page.locator('#'+id+' option').evaluateAll(options=>options.filter(o=>o.value.startsWith('ukmo_uk_deterministic_2km')).map(o=>o.value)),[UKV,previous]);
   const assertCycleOnly=async cycle=>{
-   const requests=await page.evaluate(()=>window.fixtureDelivered.filter(r=>r.type==='json').map(r=>decodeURIComponent(r.url)));
+   const requests=await page.evaluate(()=>window.fixtureShownFrames.flatMap(frame=>frame.sources).map(decodeURIComponent));
    assert.ok(requests.length);assert.ok(requests.every(url=>url.includes('/'+cycle+'00Z/')),requests.slice(-3).join('\n'));
   };
   try{
@@ -57,7 +64,7 @@ try{
    assert.equal(await page.locator('#map-time').getAttribute('max'),'8');
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
    assert.ok(metadata.filter(u=>u.endsWith('/meta.json')).every(u=>u.includes('/0000Z/')),'Only one previous main run is read');
-   await page.locator('#map-model').evaluate((el,value)=>{window.fixtureDelivered=[];el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},previous);await ready();
+   await page.locator('#map-model').evaluate((el,value)=>{window.fixtureShownFrames=[];el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},previous);await ready();
    assert.match(await page.locator('#panel-label-a').textContent(),/previous completed.*0000Z/);assert.equal(await page.locator('#map-time').getAttribute('max'),'54');await assertCycleOnly('00');
    await page.locator('#map-time').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
    assert.match(await page.locator('#panel-label-a').textContent(),/14 Oct.*16:00 UTC/);
@@ -68,6 +75,8 @@ try{
    assert.match(await page.locator('#panel-label-a').textContent(),/0000Z/,'Completion alone does not retire the previous run');
    phase=2;await tick();await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('0300Z'));
    assert.equal(await page.locator('#map-model').inputValue(),previous);await checkChoices('map-model');
+   // Menu metadata has its own bounded queue; a selected map can finish first.
+   await page.waitForFunction(()=>document.querySelector('#map-model option[value="ukmo_uk_deterministic_2km"]').textContent.includes('06Z · updating'));
    assert.match(await page.locator('#map-model option[value="'+UKV+'"]').textContent(),/06Z · updating/);
    // Both comparison panels use their own cycles at identical hourly valid times.
    if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').check();if(viewport.width<650)await page.locator('#mobile-return-map').click();
@@ -79,7 +88,7 @@ try{
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid .briefing-card[data-ready="true"]').length===6,{},{timeout:40000});await checkChoices('briefing-model');
    assert.equal(await page.locator('#briefing-model').inputValue(),previous);assert.match(await page.locator('#briefing-run').textContent(),/0300Z/);
-   await page.locator('#briefing-model').evaluate((el,value)=>{window.fixtureDelivered=[];el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},UKV);await page.waitForFunction(()=>document.querySelector('#briefing-run').textContent.includes('0600Z')&&document.querySelectorAll('#briefing-grid .briefing-card[data-ready="true"]').length===6);
+   await page.locator('#briefing-model').evaluate((el,value)=>{window.fixtureShownFrames=[];el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},UKV);await page.waitForFunction(()=>document.querySelector('#briefing-run').textContent.includes('0600Z')&&document.querySelectorAll('#briefing-grid .briefing-card[data-ready="true"]').length===6);
    assert.match(await page.locator('#briefing-run').textContent(),/Updating · to T\+8 h/);await assertCycleOnly('06');
    await page.locator('#briefing-model').selectOption(previous);await page.waitForFunction(()=>document.querySelector('#briefing-run').textContent.includes('0300Z'));
    // 06Z stays incomplete: 09Z must retain completed 03Z, never partial 06Z.
