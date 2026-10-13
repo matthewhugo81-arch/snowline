@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261012-accum-history';
+import {hasFieldTime} from './map-sources.js?v=20261013-operational-feeds';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

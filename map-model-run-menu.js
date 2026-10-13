@@ -13,7 +13,7 @@ export function formatModelRun(meta) {
 export function modelOptionLabel(model, result) {
   const run = formatModelRun(result?.meta);
   const label = run
-    ? run + (result.error ? ' · check failed' : result.meta.completed === false ? ' · updating' : '')
+    ? run + (result.error ? ' · check failed' : result.meta.freshnessWarning ? ' · refresh overdue' : result.meta.completed === false ? ' · updating' : '')
     : result?.error ? 'run unavailable' : 'checking…';
   return `${model.name} (${label})`;
 }

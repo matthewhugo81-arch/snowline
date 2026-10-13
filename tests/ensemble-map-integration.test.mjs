@@ -14,7 +14,7 @@ const fixture={completed:true,reference_time:t(0),variables:[probability],valid_
 
 test('GEFS and ECMWF ENS use their own spatial domains and only published fields',async()=>{
  for(const id of ensembles){
-  assert.equal(MAP_MODELS.find(m=>m.id===id)?.ensemble,true);
+  assert.equal(MAP_MODELS.some(m=>m.id===id),false,'Probability-only products must not be offered or polled by the map menu');
   assert.equal(MODELS.some(m=>m.id===id),false,'Spatial IDs must not leak into location-chart requests');
   assert.ok(OM.domainOptions.some(domain=>domain.value===id),'Renderer supports the ensemble grid');
   const meta=await loadSpatialModel(id,async url=>{

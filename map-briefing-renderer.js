@@ -4,7 +4,7 @@ import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261012-accum-history';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261013-operational-feeds';
 import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261012-accum-history';

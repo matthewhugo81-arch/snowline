@@ -1,5 +1,6 @@
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261012-accum-history';
-import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261012-accum-history';
+import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-fixed-periods';
+import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-fixed-periods';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261012-accum-speed';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261012-accum-history';
@@ -16,7 +17,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <label>Forecast model<select id="previous-model"></select></label>
  <label>Chart<select id="previous-preset" disabled></select></label>
  <label>Area<select id="previous-area"></select></label>
- <label>Shared valid time · UTC<select id="previous-time" disabled></select></label>
+ <label><span id="previous-time-heading">Shared valid time · UTC</span><select id="previous-time" disabled></select></label>
  <label>Forecast interval<select id="previous-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
  <button type="button" class="secondary" id="previous-refresh">Load latest three runs</button></div>
  <div class="briefing-overlays"><label class="check-row"><input type="checkbox" id="previous-contours"> Contours</label><label class="check-row"><input type="checkbox" id="previous-grid-values"> Grid values</label><span class="small-note">Same area, chart, colour scale and valid time. Each panel retains its own initialization and lead time.</span></div>
@@ -39,14 +40,14 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   return {card,select,title,caption,button};
  });
  document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));
- let active=false,generation=0,controller,renderController,renderer,work=Promise.resolve(),model,runs=[],times=[],index=0,requestedTime=Date.now(),currentBounds;
+ let active=false,generation=0,controller,renderController,renderer,work=Promise.resolve(),model,runs=[],times=[],index=0,requestedTime=Date.now(),currentBounds,requestedStart=null,interval='3';
  const images=new BriefingImages(18),selected=()=>cards.map(c=>runs.find(meta=>meta.reference_time===c.select.value)).filter(Boolean);
  const preset=()=>BRIEFING_PRESETS.find(p=>p.id===$('preset').value);
  const area=()=>BRIEFING_AREAS.find(a=>a.id===$('area').value);
  const bounds=()=>area()?.bounds??currentBounds,size=()=>area()?.size??[960,660];
  function cancel(){generation++;controller?.abort();renderController?.abort();renderer?.cancel();}
  function disable(value){for(const id of ['preset','time','back','forward','refresh'])$(id).disabled=value;for(const c of cards)c.select.disabled=value;}
- function navigation(){const empty=!times.length;$('back').disabled=empty||index===0;$('forward').disabled=empty||index===times.length-1;$('time').disabled=empty;$('time').value=String(index);}
+ function navigation(){const empty=!times.length;$('back').disabled=empty||index===0;$('forward').disabled=empty||index===times.length-1;$('time').disabled=empty;$('time').value=accumulationHours(preset()?.field)&&times[index]?periodStart(times[index],accumulationHours(preset().field)):String(index);}
  function legend(){
   const p=preset(),field=fields.find(f=>f.key===p?.field);$('legend').replaceChildren();if(!p||!field)return;
   for(const scale of chartScales(field,'',p.id==='weather')){
@@ -61,11 +62,19 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   renderController?.abort();renderer?.cancel();const chosen=selected(),previous=$('preset').value;
   const available=previousRunPresets(chosen);$('preset').replaceChildren(...available.map(p=>option(p.id,p.name)));$('preset').disabled=!available.length;
   $('preset').value=available.some(p=>p.id===previous)?previous:available[0]?.id??'';
-  times=previousRunTimes(chosen,preset(),model,$('interval').value);
-  $('interval').disabled=!!model?.regional;if(model?.regional)$('interval').value='native';
-  $('time').replaceChildren(...times.map((time,i)=>option(String(i),utc(time))));
-  index=times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(times[best])-requestedTime)?i:best,0);
-  $('note').textContent=preset()?.note??'Choose three distinct runs that supply the same chart.';
+  const hours=accumulationHours(preset()?.field),native=previousRunTimes(chosen,preset(),model,interval);
+  configurePeriodInterval($('interval'),hours,interval,!!model?.regional);
+  $('time-heading').textContent=hours?'Shared period start · UTC':'Shared valid time · UTC';
+  $('back').textContent=hours?'Earlier period':'Earlier valid time';$('forward').textContent=hours?'Later period':'Later valid time';
+  if(hours){
+   const periods=fixedAccumulationPeriods(native,hours,requestedStart??requestedTime);
+   times=periods.times;index=periods.index;requestedStart=periods.start??requestedStart;
+   $('time').replaceChildren(...periods.starts.map(time=>option(time,utc(time))));
+  }else{
+   times=native;$('time').replaceChildren(...times.map((time,i)=>option(String(i),utc(time))));
+   index=times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(times[best])-requestedTime)?i:best,0);
+  }
+  $('note').textContent=hours?fixedPeriodNote(hours)+' All three runs cover the identical start/end period.':preset()?.note??'Choose three distinct runs that supply the same chart.';
   legend();navigation();render();
  }
  function render(){
@@ -77,10 +86,10 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    for(const c of cards){c.title.textContent='No comparable chart';c.caption.textContent='';c.button.replaceChildren('No common valid time or chart for the selected runs.');c.button.disabled=true;delete c.card.dataset.ready;}
    $('progress').textContent='Choose three different runs with overlapping coverage. No missing data is substituted.';return;
   }
-  requestedTime=Date.parse(time);navigation();
+  requestedTime=Date.parse(time);if(accumulationHours(p.field))requestedStart=periodStart(time,accumulationHours(p.field));navigation();
   const opts={model:model.id,preset:p,bounds:[...bounds()],size:[...size()],overlays:{contours:$('contours').checked,grid:$('grid-values').checked}};
   let loaded=0,failed=0;const started=performance.now();
-  const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/3 charts ready'+(failed?' · '+failed+' unavailable':loaded===3?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+' · Shared valid time: '+utc(time);};
+  const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/3 charts ready'+(failed?' · '+failed+' unavailable':loaded===3?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(accumulationHours(p.field)?' · Shared period: '+accumulationPeriod(p.field,time):' · Shared valid time: '+utc(time));};
   const show=(c,src,meta)=>{
    const description=model.name+' · Run '+runLabel(meta)+' · '+p.name+' · Valid '+utc(time),subtitle=briefingCaption(meta,p,time);
    const info={title:description,subtitle,scales:chartScales(fields.find(f=>f.key===p.field),subtitle,p.id==='weather')};
@@ -129,9 +138,9 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   }catch(error){if(token===generation&&active){$('status').textContent=error.message;$('refresh').disabled=false;$('progress').textContent='Archive unavailable. The main maps and forecast sequence are unchanged.';}}
  }
  $('model').addEventListener('change',loadLatest);$('refresh').addEventListener('click',loadLatest);
- $('preset').addEventListener('change',configureTimeline);$('interval').addEventListener('change',configureTimeline);
+ $('preset').addEventListener('change',configureTimeline);$('interval').addEventListener('change',()=>{interval=$('interval').value;configureTimeline();});
  for(const name of ['area','contours','grid-values'])$(name).addEventListener('change',render);
- $('time').addEventListener('change',()=>{index=Number($('time').value);render();});
+ $('time').addEventListener('change',()=>{if(accumulationHours(preset()?.field)){requestedStart=$('time').value;configureTimeline();}else{index=Number($('time').value);render();}});
  $('back').addEventListener('click',()=>{index=Math.max(0,index-1);render();});$('forward').addEventListener('click',()=>{index=Math.min(times.length-1,index+1);render();});$('retry').addEventListener('click',render);
  $('toggle-controls').addEventListener('click',()=>{
   const hidden=!$('control-section').hidden;$('control-section').hidden=hidden;
@@ -145,5 +154,5 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden){renderController?.abort();renderer?.cancel();}else if(runs.length>=3)render();});
  const close=()=>{active=false;cancel();renderer?.destroy();renderer=null;host.hidden=true;if($('enlarged').open)$('enlarged').close();};
  window.addEventListener('pagehide',()=>{close();images.clear();});
- return {open(selection){active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();$('model').value=choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value='uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},close};
+ return {open(selection){active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();requestedStart=selection.periodStart??null;if(selection.preset)$('preset').replaceChildren(option(selection.preset,selection.preset));$('model').value=choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value='uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},close};
 }

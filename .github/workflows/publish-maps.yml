@@ -3,24 +3,23 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '2-57/5 * * * *'
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: snowline-pages
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -40,15 +39,28 @@ jobs:
           path: ensemble-data
           key: ensemble-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ensemble-grids-v1-
-      - name: Prepare newly available ensemble hours
-        run: python scripts/build_ensembles.py --workers 4 --max-new-frames 128
+      - name: Prepare both ensemble feeds independently and concurrently
+        shell: bash
+        run: |
+          python scripts/build_ensembles.py --model gefs --workers 4 --max-new-frames 128 &
+          gefs=$!
+          python scripts/build_ensembles.py --model ecmwf --workers 4 --max-new-frames 128 &
+          ecmwf=$!
+          failed=0
+          wait "$gefs" || failed=1
+          wait "$ecmwf" || failed=1
+          exit "$failed"
+      - name: Record source-to-publication health without changing model timestamps
+        continue-on-error: true
+        run: python scripts/check_ensemble_freshness.py --local-root ensemble-data --output ensemble-data/health.json
       - name: Assemble site without source-control or test files
         run: |
           mkdir _site
           git archive HEAD | tar -x -C _site
-          rm -rf _site/.github _site/tests _site/scripts
+          rm -rf _site/.github _site/tests _site/scripts _site/review
           cp -a ensemble-data _site/
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
+          git rev-parse HEAD > _site/site-revision.txt
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

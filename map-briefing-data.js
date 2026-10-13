@@ -1,5 +1,5 @@
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261012-accum-history';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-operational-feeds';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
 
@@ -18,12 +18,15 @@ export const BRIEFING_PRESETS=[
 export const BRIEFING_AREAS=[
  {id:'uk',name:'UK & Ireland',bounds:[-12,48,5,61.5],size:[960,960]},
  {id:'europe',name:'Europe',bounds:[-25,32,35,72]},
- {id:'atlantic',name:'North Atlantic',bounds:[-80,20,30,78]}
+ // Tighter synoptic region: Greenland/Iceland to Europe, without the subtropical Atlantic.
+ {id:'atlantic',name:'North Atlantic',bounds:[-65,35,35,73],size:[960,660]}
 ];
 export function briefingPresets(meta){return BRIEFING_PRESETS.filter(preset=>preset.required.every(key=>sourceVariable(meta,key)));}
 export function briefingTimes(meta,preset,model,interval='3'){
  const native=[...new Map((meta?.valid_times??[]).filter(time=>Number.isFinite(Date.parse(time))&&preset.required.every(key=>hasFieldTime(meta,key,time))).map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
- return intervalForecastTimes(native,forecastInterval([model],interval).hours);
+ // Accumulation start choices use every complete native window. The view
+ // spaces rendered charts by the total duration AFTER choosing its UTC start.
+ return accumulationHours(preset.field)?native:intervalForecastTimes(native,forecastInterval([model],interval).hours);
 }
 export function briefingPage(times,start,count=6){return times.slice(Math.max(0,start),Math.max(0,start)+count);}
 export function briefingCaption(meta,preset,time){

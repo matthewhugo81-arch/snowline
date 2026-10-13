@@ -21,3 +21,14 @@ export function ensembleField(key){
   note:spread?'Standard deviation of ensemble members, in '+d.unit+'. Higher values indicate greater disagreement; this is not a probability or a forecast anomaly.':'Official ensemble mean: the average of the contributing members, which smooths individual weather features.',
   group:spread?'Ensemble spread':'Ensemble mean'};
 }
+
+// Publication health never changes the initialization time of actual pixels.
+export function ensembleFreshnessWarning(meta,health,now=Date.now()){
+ const checked=Date.parse(health?.checked_at),row=health?.models?.find(r=>r.model===meta?.domain);
+ if(Number.isFinite(checked)&&now-checked>45*60000)return 'Ensemble publication check overdue';
+ if(row?.status==='check-failed')return 'Official ensemble source check failed; showing verified data';
+ if(row?.source_reference&&Date.parse(row.source_reference)>Date.parse(meta?.reference_time))return 'Newer official ensemble run awaits publication';
+ const age=now-Date.parse(meta?.reference_time),limit=meta?.domain==='snowline_gefs_ensemble'?12:20;
+ if(age>limit*3600000)return 'Ensemble initialization age exceeds the '+limit+' h review threshold';
+ return null;
+}
