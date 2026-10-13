@@ -1,0 +1,65 @@
+name: Review UKV and ensemble feed timing
+on:
+  push:
+    branches: [review/ukv-ensemble-freshness-20261013]
+    paths: ['.github/workflows/review-feed-audit.yml']
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare live pointers, cycle metadata and official statistics indexes
+        run: |
+          python - <<'PY'
+          from urllib.request import urlopen, Request
+          from concurrent.futures import ThreadPoolExecutor
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
+          import json,time
+          now=datetime.now(timezone.utc)
+          base='https://openmeteo.s3.amazonaws.com/data_spatial/'
+          site='https://matthewhugo81-arch.github.io/snowline/ensemble-data/'
+          jobs=[]
+          for model in ['ukmo_uk_deterministic_2km','ncep_gefs025','ncep_gefs05','ecmwf_ifs025_ensemble','ncep_hgefs025_ensemble_mean']:
+              for pointer in ['latest.json','in-progress.json']:
+                  jobs.append((model+'/'+pointer,base+model+'/'+pointer,'meta'))
+          top=now.replace(hour=now.hour//3*3,minute=0,second=0,microsecond=0)
+          for i in range(5):
+              run=top-timedelta(hours=3*i)
+              path=run.strftime('%Y/%m/%d/%H00Z/meta.json')
+              jobs.append(('UKV '+run.isoformat(),base+'ukmo_uk_deterministic_2km/'+path,'meta'))
+          for model in ['snowline_gefs_ensemble','snowline_ecmwf_ensemble']:
+              jobs.append((model,site+model+'/latest.json','meta'))
+          date=now.strftime('%Y%m%d')
+          for cycle in ['00','06']:
+              for stat in ['geavg','gespr']:
+                  jobs.append((f'GEFS {cycle} {stat}',f'https://noaa-gefs-pds.s3.amazonaws.com/gefs.{date}/{cycle}/atmos/pgrb2ap5/{stat}.t{cycle}z.pgrb2a.0p50.f003.idx','text'))
+          jobs.append(('ECMWF 00 ep index',f'https://data.ecmwf.int/forecasts/{date}/00z/ifs/0p25/enfo/{date}000000-240h-enfo-ep.index','index'))
+          def check(job):
+              label,url,kind=job;t=time.monotonic()
+              try:
+                  with urlopen(Request(url,headers={'Cache-Control':'no-cache','User-Agent':'Snowline-feed-review'}),timeout=20) as response:
+                      raw=response.read();row={'label':label,'url':url,'status':response.status,'ms':round((time.monotonic()-t)*1000),'last_modified':response.headers.get('Last-Modified')}
+                  if kind=='meta':
+                      m=json.loads(raw);row.update({k:v for k,v in m.items() if k not in ['valid_times','variables']})
+                      row['frames']=len(m.get('valid_times',[]));row['first']=m.get('valid_times',[None])[0];row['last']=m.get('valid_times',[None])[-1];row['variables']=m.get('variables',[])
+                  elif kind=='index':
+                      records=[json.loads(line) for line in raw.decode().splitlines()];row['steps']=sorted({int(r['step']) for r in records if r.get('type') in ['em','es']});row['records']=len(records)
+                  else: row['sample']=raw.decode()[:300]
+                  return row
+              except Exception as e:return {'label':label,'url':url,'error':str(e),'ms':round((time.monotonic()-t)*1000)}
+          with ThreadPoolExecutor(max_workers=5) as pool: rows=list(pool.map(check,jobs))
+          Path('review').mkdir(exist_ok=True)
+          Path('review/feed-audit.json').write_text(json.dumps({'checked_at':now.isoformat(),'results':rows},indent=2)+'\n')
+          print(json.dumps({'checked_at':now.isoformat(),'results':rows},indent=2))
+          PY
+      - name: Preserve audit on review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add review/feed-audit.json
+          git commit -m 'Record live UKV and ensemble source timing audit'
+          git push origin HEAD:review/ukv-ensemble-freshness-20261013
