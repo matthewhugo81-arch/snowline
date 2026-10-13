@@ -1,4 +1,4 @@
-import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
+import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
 import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-ukv-retention';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
@@ -15,12 +15,7 @@ export const BRIEFING_PRESETS=[
  {id:'theta-w',name:'850 hPa theta-w & pressure',field:'wet_bulb_potential_temperature_850hPa',required:['wet_bulb_potential_temperature_850hPa','pressure_msl'],note:'Derived 850 hPa wet-bulb potential temperature (theta-w), in °C at 1000 hPa, with MSLP isobars every 4 hPa.'},
  ...[300,400].map(level=>({id:'vorticity-'+level,name:level+' hPa relative vorticity & pressure',field:'relative_vorticity_'+level+'hPa',required:['relative_vorticity_'+level+'hPa','pressure_msl'],note:'Derived '+level+' hPa relative vorticity (10⁻⁵ s⁻¹), with MSLP isobars every 4 hPa. Yellow through red = positive (anticlockwise); purple highlights 35–40 and above. Cyan = negative (clockwise). Smoothed over approximately 20 km (Gaussian standard deviation) to reduce grid-scale striping.'}))
 ];
-export const BRIEFING_AREAS=[
- {id:'uk',name:'UK & Ireland',bounds:[-12,48,5,61.5],size:[960,960]},
- {id:'europe',name:'Europe',bounds:[-25,32,35,72]},
- // Tighter synoptic region: Greenland/Iceland to Europe, without the subtropical Atlantic.
- {id:'atlantic',name:'North Atlantic',bounds:[-65,35,35,73],size:[960,660]}
-];
+export {MAP_AREAS as BRIEFING_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 export function briefingPresets(meta){return BRIEFING_PRESETS.filter(preset=>preset.required.every(key=>sourceVariable(meta,key)));}
 export function briefingTimes(meta,preset,model,interval='3'){
  const native=[...new Map((meta?.valid_times??[]).filter(time=>Number.isFinite(Date.parse(time))&&preset.required.every(key=>hasFieldTime(meta,key,time))).map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
@@ -32,7 +27,7 @@ export function briefingPage(times,start,count=6){return times.slice(Math.max(0,
 export function briefingCaption(meta,preset,time){
  const lead=(Date.parse(time)-Date.parse(meta.reference_time))/3600000;
  const period=preset.id==='weather'?fieldIntervalHours(meta,'precipitation',time):null;
- return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h precipitation ending at this time':'')+(accumulationHours(preset.field)?' · '+accumulationPeriod(preset.field,time):'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
+ return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h precipitation ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
 export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid]);}
 

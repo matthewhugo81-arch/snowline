@@ -1,7 +1,8 @@
+import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-ukv-retention';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-nw-europe-periods';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-ukv-retention';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-nw-europe-periods';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-ukv-retention';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
@@ -102,10 +103,10 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   }
   $('time').disabled=!times.length;legend();navigation();overlayNote();
  }
- function periodTitle(time){const hours=accumulationHours(preset.field);return stamp(periodStart(time,hours))+' → '+stamp(time);}
+ function periodTitle(time){return forecastValidity(preset.field,time);}
  function rememberTime(){if(times[start]){requestedTime=Date.parse(times[start]);const hours=accumulationHours(preset?.field);if(hours)requestedStart=periodStart(times[start],hours);}}
  function enlarge(src,time,exportInfo){
-  const title=model.name+' · '+preset.name+' · '+(accumulationHours(preset.field)?periodTitle(time):stamp(time));
+  const title=exportInfo.title;
   const [width,height]=chartSize();$('enlarged-image').width=width;$('enlarged-image').height=height;
   $('enlarged-title').textContent=title;$('enlarged-image').src=src;$('enlarged-image').alt=title;
   $('enlarged-note').textContent=briefingCaption(meta,preset,time)+'. '+(accumulationHours(preset.field)?fixedPeriodNote(accumulationHours(preset.field)):preset.note);
@@ -128,10 +129,10 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    const card=document.createElement('article'),title=document.createElement('h3'),caption=document.createElement('p'),button=document.createElement('button'),placeholder=document.createElement('span');
    card.className='briefing-card';card.dataset.time=time;
    title.textContent=accumulationHours(preset.field)?periodTitle(time):stamp(time);caption.textContent=briefingCaption(meta,preset,time);
-   button.type='button';button.className='briefing-chart';button.disabled=true;button.setAttribute('aria-label','Enlarge chart for '+stamp(time));
+   button.type='button';button.className='briefing-chart';button.disabled=true;button.setAttribute('aria-label','Enlarge chart · '+forecastValidity(preset.field,time));
    placeholder.textContent='Preparing chart…';button.append(placeholder);card.append(title,caption,button);$('grid').append(card);
-   const exportInfo={title:model.name+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · Valid '+stamp(time),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
-   const show=src=>{const image=document.createElement('img');image.src=src;image.alt=selection.preset.name+' · '+stamp(time);image.decoding='async';button.replaceChildren(image);button.disabled=false;card.dataset.ready='true';imageMenu?.registerImage(image,exportInfo);button.onclick=()=>enlarge(src,time,exportInfo);loaded++;};
+   const exportInfo={title:model.name+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · '+forecastValidity(selection.preset.field,time),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
+   const show=src=>{const image=document.createElement('img');image.src=src;image.alt=exportInfo.title;image.decoding='async';button.replaceChildren(image);button.disabled=false;card.dataset.ready='true';imageMenu?.registerImage(image,exportInfo);button.onclick=()=>enlarge(src,time,exportInfo);loaded++;};
    const cached=images.get(key(time));if(cached)show(cached);
    cards.set(time,{show,card,placeholder});
   }
@@ -224,7 +225,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(historyMode){
    active=false;cancel();renderer?.destroy();renderer=null;
    history??=createPreviousRunAnalysis({host:host.querySelector('#previous-run-view'),models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose:close,...renderOptions});
-   history.open({model:model?.id??$('model').value,time:times[start]??new Date(requestedTime).toISOString(),periodStart:accumulationHours(preset?.field)&&times[start]?periodStart(times[start],accumulationHours(preset.field)):null,preset:accumulationHours(preset?.field)?preset.id:null,bounds:currentBounds});
+   history.open({model:model?.id??$('model').value,time:times[start]??new Date(requestedTime).toISOString(),periodStart:accumulationHours(preset?.field)&&times[start]?periodStart(times[start],accumulationHours(preset.field)):null,preset:accumulationHours(preset?.field)?preset.id:null,area:$('area').value,bounds:currentBounds});
   }else{history?.close();active=true;configure(true);}
  }
  $('sequence-mode').addEventListener('click',()=>{if($('sequence').hidden)mode(false);});
@@ -242,6 +243,6 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   history?.close();$('sequence').hidden=false;$('sequence-mode').setAttribute('aria-pressed','true');$('history-mode').setAttribute('aria-pressed','false');
   active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=null;
   $('model').value=choices.some(item=>item.id===selection.model)?selection.model:choices[0].id;
-  $('area').value='uk';$('close').focus({preventScroll:true});configure();
+  $('area').value=selection.area??'uk';$('close').focus({preventScroll:true});configure();
  },close};
 }
