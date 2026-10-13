@@ -1,4 +1,4 @@
-import {previousCompletedUKV} from './map-ukv-runs.js?v=20261013-ukv-retention';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261013-nw-europe-periods';
 import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-ukv-retention';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
@@ -11,10 +11,20 @@ export function runCandidates(model,reference,lookbackHours=48){
  for(let delta=cadence;delta<=lookbackHours;delta+=cadence){const time=new Date(init-delta*HOUR).toISOString();if(model===UKV_NOWCAST&&cycleFamily(time)!=='nowcast')continue;out.push(time);}
  return out;
 }
-export async function discoverPreviousRuns({model,latest,load,signal,lookbackHours=48,concurrency=3,loadRun=loadSpatialRun}){
+export async function discoverPreviousRuns({model,latest,load,signal,lookbackHours=48,concurrency=3,loadRun=loadSpatialRun,retainedRuns=[]}){
  if(model===UKV){
   const result=await previousCompletedUKV(latest,load,loadRun,latest.previousCompletedRun,{lookbackHours,signal});
-  return {runs:[latest,...(result.previous?[result.previous]:[])],unavailable:[],errors:result.warnings.map(message=>({message}))};
+  const runs=[latest,...(result.previous?[result.previous]:[])],warnings=[...result.warnings];
+  if(result.previous){
+   const remaining=lookbackHours-(Date.parse(latest.reference_time)-Date.parse(result.previous.reference_time))/HOUR;
+   if(remaining>=3){
+    const retained=retainedRuns.filter(run=>completedUKV(run)&&Date.parse(run.reference_time)<Date.parse(result.previous.reference_time)&&Date.parse(run.reference_time)>=Date.parse(latest.reference_time)-lookbackHours*HOUR).sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0];
+    const older=await previousCompletedUKV(result.previous,load,loadRun,retained,{lookbackHours:remaining,signal});
+    if(older.previous)runs.push(older.previous);
+    warnings.push(...older.warnings);
+   }
+  }
+  return {runs,unavailable:[],errors:warnings.map(message=>({message}))};
  }
  const candidates=runCandidates(model,latest.reference_time,lookbackHours),runs=[latest],unavailable=[],errors=[];let index=0;
  async function worker(){
@@ -34,7 +44,7 @@ export function previousRunPresets(runs,count=3){
  return BRIEFING_PRESETS.filter(p=>sets.every(set=>set.has(p.id)));
 }
 export function previousRunTimes(runs,preset,model,interval='3'){
- if(runs.length!==(model?.id===UKV?2:3)||!preset||new Set(runs.map(m=>Date.parse(m.reference_time))).size!==runs.length)return [];
+ if(runs.length!==3||!preset||new Set(runs.map(m=>Date.parse(m.reference_time))).size!==runs.length)return [];
  const series=runs.map(meta=>briefingTimes(meta,preset,model,interval)),sets=series.slice(1).map(times=>new Set(times.map(Date.parse)));
  return series[0].filter(time=>sets.every(set=>set.has(Date.parse(time)))&&(preset.id!=='weather'||new Set(runs.map(meta=>fieldIntervalHours(meta,'precipitation',time))).size===1));
 }

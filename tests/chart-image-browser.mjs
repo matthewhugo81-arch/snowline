@@ -11,6 +11,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
 const oldTests=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\nconst geo=/)[1]);
 const geo={type:'FeatureCollection',features:[]},style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'background',type:'background',paint:{'background-color':'#ffffff'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222222'}}]};
+const coast={type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[[-3,53],[-3,57]]}};
 const UKV='ukmo_uk_deterministic_2km',meta={completed:true,reference_time:'2026-10-12T06:00:00Z',variables:['temperature_2m','temperature_850hPa','relative_humidity_2m','precipitation','cloud_cover','pressure_msl',...['300','200'].flatMap(l=>['wind_speed_'+l+'hPa','wind_direction_'+l+'hPa'])],valid_times:Array.from({length:10},(_,i)=>new Date(Date.UTC(2026,9,12,6+i)).toISOString())};
 await mkdir('review-output',{recursive:true});
 try{
@@ -20,12 +21,12 @@ try{
   await page.addInitScript(()=>{localStorage.setItem('snowline-terrain','false');window.fixtureDelay=5;});
   await page.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
   await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
-  await page.route('**/coastline.geojson',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
+  await page.route('**/coastline.geojson',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(coast)}));
   await page.route('https://openmeteo.s3.amazonaws.com/**',r=>{const u=r.request().url(),ok=u.includes('/'+UKV+'/')&&(u.endsWith('latest.json')||u.endsWith('in-progress.json')||u.includes('/0600Z/meta.json'));return r.fulfill({status:ok?200:404,contentType:'application/json',body:JSON.stringify(ok?meta:{error:true})});});
   await page.route('**/ensemble-data/*/latest.json',r=>r.fulfill({status:404,contentType:'application/json',body:'{}'}));
   await page.goto(origin+'/maps.html?time=2026-10-12T07:00:00Z');
   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
-  await page.evaluate(async()=>{const {Map}=await import('/vendor/maplibre-gl.mjs');window.fixtureLayers=[];const original=Map.prototype.addLayer;Map.prototype.addLayer=function(layer,before){window.fixtureLayers.push(structuredClone(layer));return original.call(this,layer,before);};});
+  await page.evaluate(async()=>{const {Map}=await import('/vendor/maplibre-gl.mjs');window.fixtureLayers=[];const original=Map.prototype.addLayer;Map.prototype.addLayer=function(layer,before){window.fixtureLayers.push(structuredClone(layer));if(layer.id==='briefing-coast')window.fixtureChartMap=this;return original.call(this,layer,before);};});
   const map=page.locator('#map-a .maplibregl-canvas'),menu=page.locator('.chart-image-menu'),copy=menu.getByRole('menuitem',{name:'Copy image'}),save=menu.getByRole('menuitem',{name:'Save image'});
   const right=async(target=map)=>{
    // Settle test-driven page scrolling before contextmenu: the actual menu
@@ -71,6 +72,12 @@ try{
   await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
   await page.locator('#briefing-preset').selectOption('airmass');await page.locator('#briefing-contours').check();await page.locator('#briefing-time').selectOption('0');
   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+  // Verify exported pixels contain the coastline above an opaque weather raster.
+  const coastPixel=await page.locator('.briefing-card img').first().evaluate(async img=>{
+   await img.decode();const map=window.fixtureChartMap,point=map.project([-3,55]),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+   const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0);const x=Math.round(point.x*canvas.width/map.getCanvas().clientWidth),y=Math.round(point.y*canvas.height/map.getCanvas().clientHeight);
+   const pixels=ctx.getImageData(x-2,y-2,5,5).data;return Array.from({length:25},(_,i)=>Array.from(pixels.slice(i*4,i*4+3))).some(rgb=>rgb.every(v=>v<60));
+  });assert.equal(coastPixel,true,'Dark coastline remains visible above chart weather');
   const bw=await page.evaluate(()=>window.fixtureLayers.filter(l=>l.id.includes('contour-lines')&&Array.isArray(l.paint?.['line-width'])).at(-1).paint['line-width']);assert.equal(bw.at(-2),2.6);assert.equal(bw.at(-1),1.3);
   const image=page.locator('.briefing-card img').first();await right(image);await saveFile(`briefing-850-${viewport.width}`);await image.click();await page.locator('#briefing-enlarged[open]').waitFor();await right(page.locator('#briefing-enlarged-image'));assert.equal(await menu.evaluate(e=>e.closest('dialog')?.id),'briefing-enlarged');await saveFile(`enlarged-850-${viewport.width}`);await page.locator('#briefing-enlarged-close').click();
   await page.locator('#briefing-preset').selectOption('jet');await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});assert.deepEqual(await page.locator('#briefing-legend .briefing-band-labels span').allTextContents(),['60','75','90','105','120','135','150','165','180+']);

@@ -2,9 +2,9 @@ import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-nw-europe-periods';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-three-run-charts';
 import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-nw-europe-periods';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-hide-uk-label';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-three-run-charts';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261012-accum-history';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
@@ -31,7 +31,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <div id="previous-grid" class="previous-grid"></div>
  <p class="small-note">Recent run availability depends on the provider archive. No model cycles or missing hours are substituted. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth.</p>
  <dialog id="previous-enlarged"><div class="briefing-heading"><strong id="previous-enlarged-title"></strong><button type="button" class="secondary" id="previous-enlarged-close">Close chart</button></div><img id="previous-enlarged-image" alt=""><p id="previous-enlarged-note" class="small-note"></p><p class="small-note">Snowline · Weather: Open-Meteo / model providers · OpenFreeMap / OpenStreetMap · Natural Earth</p></dialog>`;
- const $=name=>host.querySelector('#previous-'+name),choices=models.filter(m=>!m.ensemble&&m.id!==UKV_PREVIOUS);
+ const $=name=>host.querySelector('#previous-'+name),choices=models.filter(m=>!m.ensemble&&m.id!==UKV_PREVIOUS).map(m=>m.id===UKV?{...m,name:'UKV'}:m);
  for(const [label,items]of [['Short-term models',choices.filter(m=>m.regional)],['Medium-term models',choices.filter(m=>!m.regional)]]){const group=document.createElement('optgroup');group.label=label;for(const m of items)group.append(option(m.id,m.name));$('model').append(group);}
  for(const area of BRIEFING_AREAS)$('area').append(option(area.id,area.name));$('area').append(option('current','Current map area'));
  const cards=Array.from({length:3},(_,i)=>{
@@ -43,8 +43,8 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   return {card,select,title,caption,button};
  });
  document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));
- let active=false,generation=0,controller,renderController,renderer,work=Promise.resolve(),model,runs=[],times=[],index=0,requestedTime=Date.now(),currentBounds,requestedStart=null,interval='3';
- const runCount=()=>model?.id===UKV?2:3;
+ let active=false,generation=0,controller,renderController,renderer,work=Promise.resolve(),model,runs=[],times=[],index=0,requestedTime=Date.now(),currentBounds,requestedStart=null,interval='3',historyCheckFailed=false;
+ const runCount=()=>3;
  const visibleCards=()=>cards.slice(0,runCount());
  const images=new BriefingImages(18),selected=()=>visibleCards().map(c=>runs.find(meta=>meta.reference_time===c.select.value)).filter(Boolean);
  const preset=()=>BRIEFING_PRESETS.find(p=>p.id===$('preset').value);
@@ -103,7 +103,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   };
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;
-   c.title.textContent=forecastValidity(p.field,time);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
+   c.title.textContent=model.name+' · '+forecastValidity(p.field,time);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
    const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays),cached=images.get(key);if(cached)show(c,cached,meta);
    return {c,meta,key,cached};
   });progress();
@@ -129,6 +129,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  }
  async function loadLatest(){
   cancel();const token=generation;controller=new AbortController();const signal=controller.signal;disable(true);$('new').hidden=true;
+  const previousModel=model?.id,retainedRuns=runs;
   model=choices.find(m=>m.id===$('model').value);
   cards.forEach((c,i)=>{c.card.hidden=i>=runCount();});
   $('grid').style.setProperty('--previous-columns',runCount());
@@ -137,11 +138,11 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   for(const c of cards){c.select.replaceChildren();c.button.replaceChildren('Checking archived runs…');c.button.disabled=true;delete c.card.dataset.ready;}
   try{
    const latest=await loadModel(model.id,true);if(token!==generation||!active)return;
-   const archive=await discoverPreviousRuns({model:model.id,latest,load:loadJSON,loadRun,signal});if(token!==generation||!active)return;runs=archive.runs;
+   const archive=await discoverPreviousRuns({model:model.id,latest,load:loadJSON,loadRun,signal,retainedRuns:previousModel===model.id?retainedRuns:[]});if(token!==generation||!active)return;runs=archive.runs;historyCheckFailed=archive.errors.length>0;
    for(const [i,c]of cards.entries()){
     c.select.replaceChildren(...runs.map(meta=>option(meta.reference_time,runLabel(meta)+' · '+runAvailability(meta))));c.select.value=runs[Math.max(0,runCount()-1-i)]?.reference_time??'';
    }
-   $('status').textContent=model.name+' · '+(model.id===UKV?'Latest main run and one previous completed main run · checks every minute.':runs.length+' published runs found in the previous 48 hours. Runs are pinned until you change them.')+(archive.unavailable.length?' '+archive.unavailable.length+' archive cycles unavailable.':'')+(archive.errors.length?' '+archive.errors.length+' archive checks failed; use Load latest three runs to retry.':'');
+   $('status').textContent=model.name+' · '+(model.id===UKV?'Latest main run and two previous completed main runs · checks every minute.':runs.length+' published runs found in the previous 48 hours. Runs are pinned until you change them.')+(archive.unavailable.length?' '+archive.unavailable.length+' archive cycles unavailable.':'')+(archive.errors.length?' '+archive.errors.length+' archive checks failed; use the run-check button to retry.':'');
    disable(false);if(runs.length<runCount()){$('progress').textContent='Fewer than '+runCount()+' verified runs are available. No substitute runs have been used.';return;}
    configureTimeline();
   }catch(error){if(token===generation&&active){$('status').textContent=error.message;$('refresh').disabled=false;$('progress').textContent='Archive unavailable. The main maps and forecast sequence are unchanged.';}}
@@ -164,7 +165,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   if(model.id===UKV){
    const incoming=event.detail.meta,retained=incoming.previousCompletedRun;
    const signature=items=>JSON.stringify(items.map(m=>[m.reference_time,m.completed,m.valid_times]));
-   if(ukvRefreshing||signature(runs)===signature([incoming,...(retained?[retained]:[])]))return;
+   if(ukvRefreshing||(runs.length===3&&!historyCheckFailed&&signature(runs.slice(0,2))===signature([incoming,...(retained?[retained]:[])])))return;
    ukvRefreshing=true;try{await loadLatest();}finally{ukvRefreshing=false;}
   }else if(newerRunAvailable(selected(),event.detail.meta))$('new').hidden=false;
  };

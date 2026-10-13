@@ -90,14 +90,40 @@ test('both choices coalesce a check and use exact-cycle URLs, with no cross-cycl
  assert.match(modelOptionLabel(MAP_RUN_CHOICES.find(m=>m.id===UKV),{meta:latest}),/03Z · updating/);
  assert.match(modelOptionLabel(MAP_RUN_CHOICES.find(m=>m.id===UKV_PREVIOUS),{meta:previous}),/previous completed.*00Z/);
 });
-test('history exposes exactly the same UKV pair and compares only overlapping valid times',async()=>{
+test('history independently finds three UKV runs and compares only overlapping valid times',async()=>{
  const latest={...run(3,false,8),previousCompletedRun:run(0)},a=archive(records(run(0),run(-3))),result=await discoverPreviousRuns({model:UKV,latest,loadRun:a.loadRun});
- assert.deepEqual(result.runs.map(m=>m.reference_time),[run(3).reference_time,run(0).reference_time]);assert.equal(a.calls.length,0);
+ assert.deepEqual(result.runs.map(m=>m.reference_time),[3,0,-3].map(h=>run(h).reference_time));assert.deepEqual(a.calls,[run(-3).reference_time]);
  const weather=BRIEFING_PRESETS.find(p=>p.id==='weather');
- assert.ok(previousRunPresets(result.runs,2).some(p=>p.id==='weather'));
+ assert.ok(previousRunPresets(result.runs).some(p=>p.id==='weather'));
  const times=previousRunTimes(result.runs,weather,{id:UKV,regional:true});
  assert.equal(times.length,8);assert.equal(times[1],run(3).valid_times[2]);
- assert.deepEqual(previousRunTimes([latest,latest],weather,{id:UKV}),[]);
+ assert.deepEqual(previousRunTimes([latest,latest,latest],weather,{id:UKV}),[]);
+});
+
+test('three-run UKV history skips incomplete cycles and shares one 48-hour search budget',async()=>{
+ const a=archive(records(run(0,false),run(-3),run(-6,false),run(-9)));
+ const result=await discoverPreviousRuns({model:UKV,latest:run(3,false,8),loadRun:a.loadRun});
+ assert.deepEqual(result.runs.map(m=>m.reference_time),[3,-3,-9].map(h=>run(h).reference_time));
+ const b=archive(records(run(-42),run(-48)));
+ const bounded=await discoverPreviousRuns({model:UKV,latest:run(3),loadRun:b.loadRun,retainedRuns:[run(-48)]});
+ assert.deepEqual(bounded.runs.map(m=>m.reference_time),[3,-42].map(h=>run(h).reference_time));
+ assert.equal(b.calls.length,16);assert.ok(b.calls.every(ref=>Date.parse(ref)>=origin-45*hour));
+});
+
+test('history keeps a verified third run on a failed check, then advances on recovery',async()=>{
+ const a=archive(new Map([[origin-3*hour,Error('Temporary archive error')]]));
+ const latest={...run(3,false,8),previousCompletedRun:run(0)};
+ let result=await discoverPreviousRuns({model:UKV,latest,loadRun:a.loadRun,retainedRuns:[run(-6)]});
+ assert.deepEqual(result.runs.map(m=>m.reference_time),[3,0,-6].map(h=>run(h).reference_time));assert.equal(result.errors.length,1);
+ result=await discoverPreviousRuns({model:UKV,latest,loadRun:archive(records(run(-3))).loadRun,retainedRuns:result.runs});
+ assert.deepEqual(result.runs.map(m=>m.reference_time),[3,0,-3].map(h=>run(h).reference_time));assert.equal(result.errors.length,0);
+});
+
+test('an incomplete former latest cannot displace a verified history fallback during rollover',async()=>{
+ const a=archive(new Map([[origin+6*hour,Error('Temporary archive error')]]));
+ const latest={...run(12,false,8),previousCompletedRun:run(9)};
+ const result=await discoverPreviousRuns({model:UKV,latest,loadRun:a.loadRun,retainedRuns:[run(6,false,8),run(3),run(0)]});
+ assert.deepEqual(result.runs.map(m=>m.reference_time),[12,9,3].map(h=>run(h).reference_time));assert.equal(result.errors.length,1);
 });
 test('a fresh page rediscovers its completed fallback from the provider archive',async()=>{
  const latest=run(3,false,8),prior=run(0),calls=[];

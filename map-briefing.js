@@ -1,9 +1,9 @@
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-hide-uk-label';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-three-run-charts';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-nw-europe-periods';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-hide-uk-label';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-three-run-charts';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-accum-history';
@@ -128,7 +128,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   for(const time of visible){
    const card=document.createElement('article'),title=document.createElement('h3'),caption=document.createElement('p'),button=document.createElement('button'),placeholder=document.createElement('span');
    card.className='briefing-card';card.dataset.time=time;
-   title.textContent=accumulationHours(preset.field)?periodTitle(time):stamp(time);caption.textContent=briefingCaption(meta,preset,time);
+   title.textContent=model.name+' · '+(accumulationHours(preset.field)?periodTitle(time):stamp(time));caption.textContent=briefingCaption(meta,preset,time);
    button.type='button';button.className='briefing-chart';button.disabled=true;button.setAttribute('aria-label','Enlarge chart · '+forecastValidity(preset.field,time));
    placeholder.textContent='Preparing chart…';button.append(placeholder);card.append(title,caption,button);$('grid').append(card);
    const exportInfo={title:model.name+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · '+forecastValidity(selection.preset.field,time),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
