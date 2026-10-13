@@ -49,6 +49,7 @@ test('rain captions retain the source accumulation period rather than the displa
 test('chart cache separates model, run, area, preset and time and releases old images',()=>{
  const a=briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3));
  assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,660],{},'streets'),'Different map backgrounds cannot reuse the same image');
+ for(const appearance of [{opacity:.5},{terrain:false},{roads:true}])assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,660],{},'light',appearance),'Changed appearance cannot reuse stale imagery');
  for(const overlays of [{contours:true},{grid:true},{contours:true,grid:true}])assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,660],overlays),'Overlay variants must never reuse plain images');
  assert.equal(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,660],{contours:false,grid:false}));
  assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,960]),'Different chart shapes cannot reuse the same image');
@@ -72,7 +73,7 @@ test('briefing values use one clipped regular, projected or Gaussian grid and th
   const labels=await briefingValueLabels({OM:backend,settings:{domainOptions:OM.domainOptions},meta:{...primary,sources:[primary,source]},field:{key:'temperature_850hPa',unit:'°C'},time:time(3),bounds:[-10,49,2,61],width:960,height:960,unproject:([x,y])=>({lng:-10+x/80,lat:61-y/80}),project:([lng,lat])=>({x:(lng+10)*80,y:(61-lat)*80}),signal:controller.signal});
   assert.equal(calls.length,1);assert.match(calls[0].url,new RegExp('/'+source.domain+'/'));assert.match(calls[0].url,/2026-10-11T0300.om$/);
   assert.equal(calls[0].variable,'temperature_850hPa');assert.equal(calls[0].signal,controller.signal);
-  assert.ok(labels.length>40&&labels.length<=100);
+  assert.ok(labels.length>40&&labels.length<=540);
   const native=OM.GridFactory.create(config),indexValues=new Proxy({},{get:(_,key)=>Number(key)});
   for(const label of labels){const index=native.getInterpolatedValue(indexValues,61-label.y/80,-10+label.x/80,'nearest');assert.equal(label.value,index);assert.equal(label.label,String(index));}
  }

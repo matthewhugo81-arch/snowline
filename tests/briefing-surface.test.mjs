@@ -62,7 +62,7 @@ test('briefing renderer installs UKV dew-point derivation for its own reader and
  class MapStub{
   once(name,callback){if(name==='load')queueMicrotask(callback);}
   getStyle(){return {layers:[]};}
-  addSource(){} addLayer(){} remove(){}
+  getSource(){} getLayer(){} addSource(){} addLayer(){} remove(){}
  }
  const settings={...OM.defaultOmProtocolSettings,colorScales:{...OM.defaultOmProtocolSettings.colorScales,cloud_cover:{breakpoints:[0,100],colors:[[0,0,0,1],[255,255,255,1]]},precipitation:{breakpoints:[0,1],colors:[[255,255,255,1],[0,0,255,1]]}}};
  const renderer=new BriefingRenderer({maplibre:{Map:MapStub,addProtocol(){},removeProtocol(){}},OM,settings,fields:[],createURL(){}});

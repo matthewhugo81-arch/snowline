@@ -1,3 +1,4 @@
+import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
 import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-ukv-retention';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
@@ -5,7 +6,7 @@ import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
 
 export const BRIEFING_PRESETS=[
- {id:'weather',name:'Cloud, rain & pressure',field:'cloud_cover',required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
+ {id:'weather',name:'Cloud, precipitation & MSLP',field:WEATHER_COMPOSITE,required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
  {id:'temperature',name:'2 m air temperature & pressure',field:'temperature_2m',required:['temperature_2m','pressure_msl'],note:'2 m air temperature in °C at the chart valid time, with MSLP isobars every 4 hPa. This is instantaneous air temperature, not a maximum or minimum.'},
  {id:'dew-point',name:'2 m dew point & pressure',field:'dew_point_2m',required:['dew_point_2m','pressure_msl'],note:'2 m dew point in °C at the chart valid time, with MSLP isobars every 4 hPa. UKMO dew point is calculated from matching 2 m temperature and relative humidity on the same grid, run and valid time when no native dew-point field is supplied.'},
  ...['max','min'].map(statistic=>({id:'temperature-'+statistic,name:'2 m '+(statistic==='max'?'maximum':'minimum')+' temperature & pressure',field:'temperature_2m_'+statistic,required:['temperature_2m_'+statistic,'pressure_msl'],note:'Native-period '+(statistic==='max'?'maximum':'minimum')+' 2 m air temperature, not a daily extreme, with MSLP isobars every 4 hPa. The reporting period ends at the chart time; its duration is not supplied in the spatial metadata.'})),
@@ -51,7 +52,7 @@ export function briefingCaption(meta,preset,time){
  const period=['precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
  return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
-export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={},background='light'){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid,background]);}
+export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={},background='light',appearance={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid,background,appearanceKey(appearance)]);}
 
 // Bound retained chart images; a visit to another model must not accumulate
 // hundreds of decoded images or unreleased blob URLs.

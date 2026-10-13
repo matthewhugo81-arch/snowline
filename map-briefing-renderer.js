@@ -1,18 +1,17 @@
+import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rasterResampling,gridLabelLayer} from './map-appearance.js?v=20261013-shared-appearance';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-hide-uk-label';
-import {backgroundStyle,hideProtectedAreas} from './map-backgrounds.js?v=20261013-map-appearance';
+import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
-import {contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
 import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261013-ukv-retention';
 import {installDewPoint} from './map-dew-point.js';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261013-ukv-retention';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261013-shared-appearance';
 
-import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261013-map-appearance';
+import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
@@ -20,7 +19,7 @@ function rendered(map,signal){
  return new Promise((resolve,reject)=>{
   if(signal.aborted){reject(aborted());return;}
   const finish=error=>{clearTimeout(timer);map.off('render',check);signal.removeEventListener('abort',cancel);error?reject(error):resolve();};
-  const check=()=>{if(map.areTilesLoaded()&&map.isSourceLoaded('briefing-coast'))finish();};
+  const check=()=>{if(map.areTilesLoaded()&&map.isSourceLoaded('coastline'))finish();};
   const cancel=()=>finish(aborted());
   const timer=setTimeout(()=>finish(Error('The chart background could not finish loading.')),30000);
   signal.addEventListener('abort',cancel,{once:true});map.on('render',check);map.triggerRepaint();
@@ -30,8 +29,8 @@ function rendered(map,signal){
 // One renderer produces reusable PNGs. Six/nine visible panels are plain images,
 // not six/nine live maps, worker pools and independent download queues.
 export class BriefingRenderer{
- constructor({maplibre,OM,settings,fields,createURL,background='light'}){
-  Object.assign(this,{maplibre,OM,fields,createURL,background});this.baseSettings=settings;this.settings=briefingSettings(settings);
+ constructor({maplibre,OM,settings,fields,createURL,background='light',appearance={}}){
+  Object.assign(this,{maplibre,OM,fields,createURL,background});this.appearance=mapAppearance(appearance);this.appearanceKey=appearanceKey(appearance);this.baseSettings=settings;this.settings=briefingSettings(settings);
   installDiagnostics(OM,this.settings);
   installDewPoint(OM,this.settings);
   installEnsembleTransport(OM,this.settings);
@@ -50,20 +49,8 @@ export class BriefingRenderer{
    const timer=setTimeout(()=>reject(Error('The chart map could not start. Try again.')),30000);
    this.cancelReady=()=>{clearTimeout(timer);reject(aborted());};
    this.map.once('load',()=>{clearTimeout(timer);
-    hideUKCountryLabel(this.map);hideProtectedAreas(this.map);
-    for(const layer of this.map.getStyle().layers){
-     if(['transportation','transportation_name'].includes(layer['source-layer'])||(layer.type==='symbol'&&!layer.id.startsWith('label_country_')))this.map.setLayoutProperty(layer.id,'visibility','none');
-     if(layer.id.startsWith('label_country_'))this.map.setLayoutProperty(layer.id,'text-size',18);
-    }
-    const lines=this.map.getStyle().layers.filter(layer=>['line','symbol'].includes(layer.type));
-    for(const layer of lines)this.map.moveLayer(layer.id);
-    this.rasterBefore=lines[0]?.id;this.overlayBefore=lines.find(layer=>layer.type==='symbol')?.id;
-    this.map.addSource('briefing-coast',{type:'geojson',data:'coastline.geojson'});
-    // A narrow pale edge keeps the coastline visible on dark cloud/rain;
-    // the dark centre remains clear over white cloud, including ICON charts.
-    const coast={type:'line',source:'briefing-coast',layout:{'line-join':'round','line-cap':'round'}};
-    this.map.addLayer({...coast,id:'briefing-coast-halo',paint:{'line-color':'rgba(255,255,255,0.8)','line-width':2.8}},this.overlayBefore);
-    this.map.addLayer({...coast,id:'briefing-coast',paint:{'line-color':'#111','line-width':1.5}},this.overlayBefore);
+    applyMapAppearance(this.map,this.appearance);
+    Object.assign(this,orderForecastBasemap(this.map));
     resolve();
    });
   });
@@ -77,6 +64,8 @@ export class BriefingRenderer{
   const weather=preset.id==='weather';
   this.settings.colorScales=(weather?briefingSettings(this.baseSettings):this.baseSettings).colorScales;
   this.frames?.clear();
+  if(this.map.getLayer('briefing-grid-labels'))this.map.removeLayer('briefing-grid-labels');
+  if(this.map.getSource('briefing-grid-values'))this.map.removeSource('briefing-grid-values');
   const view=JSON.stringify([bounds,size]);
   if(this.area!==view){
    this.area=view;
@@ -91,17 +80,10 @@ export class BriefingRenderer{
   const field=this.fields.find(field=>field.key===preset.field);
   if(!field||!preset.required.every(key=>hasFieldTime(meta,key,time)))throw Error('This chart is unavailable for the selected time.');
   const main=url(preset.field),pressureURL=hasFieldTime(meta,'pressure_msl',time)?url('pressure_msl'):null;
-  const decorate=()=>{
-   const groups=[];
-   if(preset.id==='weather')groups.push({id:'rain',source:{type:'raster',url:url('precipitation'),tileSize:512,maxzoom:10},layers:[{id:'rain-image',type:'raster',paint:{'raster-opacity':1,'raster-resampling':'nearest','raster-fade-duration':0}}]});
-   const pressure=overlayGroups({field,url:main,pressureURL,contours:!!overlays.contours,isobars:true});
-   for(const group of pressure)for(const layer of group.layers){
-    if(layer.type==='line'&&layer['source-layer']!=='wind-arrows')layer.paint={...layer.paint,'line-width':layer.id==='contour-lines'?contourLineWidth(field,2.6,1.3):1.3};
-    if(layer.type==='symbol'){layer.layout={...layer.layout,'text-size':18,'text-padding':30};layer.paint={...layer.paint,'text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1};}
-   }
-   groups.push(...pressure);
-   return groups;
-  };
+  const decorate=()=>[
+   ...(weather?[compositeUnderlay(url('cloud_cover'))]:[]),
+   ...overlayGroups({field,url:main,pressureURL,contours:!!overlays.contours,isobars:true})
+  ];
   const frames=this.frames=new ForecastFrames(this.map,'briefing-frame',{timeout:accumulationHours(preset.field)?120000:25000,decorate,rasterBefore:this.rasterBefore,overlayBefore:this.overlayBefore,isActive:()=>!signal.aborted});
   const cancel=()=>frames.clear();signal.addEventListener('abort',cancel,{once:true});
   const dataURL=fieldDataURL(meta,preset.field,time);
@@ -110,16 +92,15 @@ export class BriefingRenderer{
    const frame=await frames.acquire(main,()=>!signal.aborted);
    if(signal.aborted)throw aborted();
    if(!frame)throw Error('Chart could not load. Use Retry charts.');
-   frames.show(frame,1,field.categorical||field.bands||field.temperatureBands?'nearest':'linear');
-   // All raster fills belong below coast/place labels; pressure lines above.
-   if(preset.id==='weather')this.map.moveLayer(frame.id+'-rain-image',this.rasterBefore);
+   frames.show(frame,this.appearance.opacity,rasterResampling(field));
    await rendered(this.map,signal);
    let canvas=this.map.getCanvas();
    if(overlays.grid){
     const labels=await briefingValueLabels({OM:this.OM,settings:this.settings,meta,field,time,bounds:clip,width:size[0],height:size[1],unproject:point=>this.map.unproject(point),project:point=>this.map.project(point),signal});
     if(signal.aborted)throw aborted();
-    const output=document.createElement('canvas');output.width=canvas.width;output.height=canvas.height;
-    output.getContext('2d').drawImage(canvas,0,0);drawBriefingValues(output,labels,...size);canvas=output;
+    this.map.addSource('briefing-grid-values',{type:'geojson',data:{type:'FeatureCollection',features:labels.map(({lon,lat,label,value})=>({type:'Feature',properties:{label,value},geometry:{type:'Point',coordinates:[lon,lat]}}))}});
+    this.map.addLayer(gridLabelLayer('briefing-grid-labels','briefing-grid-values'));
+    await rendered(this.map,signal);
    }
    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
    if(signal.aborted)throw aborted();

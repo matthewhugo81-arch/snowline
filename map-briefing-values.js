@@ -9,7 +9,7 @@ export async function briefingValueLabels({OM,settings,meta,field,time,bounds,wi
  const source=fieldSource(meta,field.key,time),domain=settings.domainOptions.find(item=>item.value===source?.domain);
  if(!domain)throw Error('Grid values are unavailable for this model grid.');
  const grid=OM.GridFactory.create(domain.grid);
- const points=visibleGridPoints(grid,width,height,unproject,project,{minSpacing:96,maxPoints:100});
+ const points=visibleGridPoints(grid,width,height,unproject,project);
  if(!points.length)return [];
  const ranges=OM.getRanges(domain.grid,bounds),sampleGrid=OM.GridFactory.create(domain.grid,ranges);
  const reader=OM.getProtocolInstance(settings).omFileReader;
@@ -18,15 +18,6 @@ export async function briefingValueLabels({OM,settings,meta,field,time,bounds,wi
  return points.flatMap(point=>{
   const value=sampleGrid.getInterpolatedValue(data.values,point.lat,point.lon,'nearest'),label=gridValueLabel(value,field);
   if(label===null)return [];
-  const {x,y}=project([point.lon,point.lat]);return [{x,y,label,value}];
+  const {x,y}=project([point.lon,point.lat]);return [{x,y,lon:point.lon,lat:point.lat,label,value}];
  });
-}
-
-export function drawBriefingValues(canvas,labels,width,height){
- const context=canvas.getContext('2d');
- context.save();context.scale(canvas.width/width,canvas.height/height);
- context.font='600 20px Arial, sans-serif';context.textAlign='center';context.textBaseline='middle';
- context.lineJoin='round';context.lineWidth=4;context.strokeStyle='rgba(255,255,255,0.94)';context.fillStyle='#101820';
- for(const {x,y,label}of labels){context.strokeText(label,x,y);context.fillText(label,x,y);}
- context.restore();
 }

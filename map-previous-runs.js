@@ -1,11 +1,12 @@
+import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-chart-catalogue';
-import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-chart-catalogue';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-chart-catalogue';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-shared-appearance';
+import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-shared-appearance';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-shared-appearance';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261013-map-appearance';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
@@ -15,7 +16,7 @@ function option(value,label){const el=document.createElement('option');el.value=
 
 // Separate controller: no changes to the forecast-sequence state or main maps.
 // Runs remain pinned until the user explicitly chooses/reloads them.
-export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose,getBackground=()=>'light',onBackgroundChange=()=>{},...renderOptions}){
+export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose,getAppearance=()=>({}),getBackground=()=>'light',onBackgroundChange=()=>{},...renderOptions}){
  host.innerHTML=`<div class="briefing-heading"><div><h2>Previous Run Analysis</h2><p id="previous-status" role="status">Choose a model to compare three runs.</p></div><div class="briefing-heading-actions"><button type="button" class="secondary" id="previous-toggle-controls" aria-expanded="true" aria-controls="previous-control-section">Hide controls</button><button type="button" class="secondary" id="previous-close">Back to maps</button></div></div>
  <div id="previous-control-section"><div class="previous-controls">
  <label>Forecast model<select id="previous-model"></select></label>
@@ -93,7 +94,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    $('progress').textContent='Choose '+runCount()+' different runs with overlapping coverage. No missing data is substituted.';return;
   }
   requestedTime=Date.parse(time);if(accumulationHours(p.field))requestedStart=periodStart(time,accumulationHours(p.field));navigation();
-  const opts={model:model.id,preset:p,bounds:[...bounds()],size:[...size()],background:$('background').value,overlays:{contours:$('contours').checked,grid:$('grid-values').checked}};
+  const opts={model:model.id,preset:p,bounds:[...bounds()],size:[...size()],background:$('background').value,appearance:getAppearance(),overlays:{contours:$('contours').checked,grid:$('grid-values').checked}};
   let loaded=0,failed=0;const started=performance.now();
   const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+runCount()+' charts ready'+(failed?' · '+failed+' unavailable':loaded===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(accumulationHours(p.field)?' · Shared period: '+accumulationPeriod(p.field,time):' · Shared valid time: '+utc(time));};
   const show=(c,src,meta)=>{
@@ -105,12 +106,12 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;
    c.title.textContent=model.name+' · '+forecastValidity(p.field,time);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
-   const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays,opts.background),cached=images.get(key);if(cached)show(c,cached,meta);
+   const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays,opts.background,opts.appearance),cached=images.get(key);if(cached)show(c,cached,meta);
    return {c,meta,key,cached};
   });progress();
   work=work.catch(()=>{}).then(async()=>{
-   if(signal.aborted)return;if(renderer&&renderer.background!==opts.background){renderer.destroy();renderer=null;}
-   renderer??=new BriefingRenderer({...renderOptions,fields,background:opts.background});
+   if(signal.aborted)return;if(renderer&&(renderer.background!==opts.background||renderer.appearanceKey!==appearanceKey(opts.appearance))){renderer.destroy();renderer=null;}
+   renderer??=new BriefingRenderer({...renderOptions,fields,background:opts.background,appearance:opts.appearance});
    for(const item of tasks){
     if(signal.aborted||!active)return;if(item.cached)continue;
     try{const src=await renderer.render({...opts,meta:item.meta,time,signal,onProgress:({done,total})=>{
@@ -124,7 +125,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    const next=times[index+1];if(failed||!next||accumulationHours(p.field))return;
    for(const meta of chosen){
     if(signal.aborted||!active||document.hidden)return;
-    const key=briefingKey(model.id,meta,p,opts.bounds,next,opts.size,opts.overlays,opts.background);if(images.get(key))continue;
+    const key=briefingKey(model.id,meta,p,opts.bounds,next,opts.size,opts.overlays,opts.background,opts.appearance);if(images.get(key))continue;
     try{const src=await renderer.render({...opts,meta,time:next,signal});if(signal.aborted){URL.revokeObjectURL(src);return;}images.set(key,src);}catch{if(signal.aborted)return;}
    }
   }).catch(error=>{if(token===generation)$('progress').textContent=error.message;});
