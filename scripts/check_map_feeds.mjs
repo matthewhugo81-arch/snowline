@@ -48,4 +48,9 @@ const lines=['## Snowline map feed health',report.checkedAt,'',report.scope,'','
 for(const result of results){const problems=result.error??result.warnings?.join(' ')??'';lines.push(`| ${result.name} | ${result.reference_time??'unverified'} | ${result.horizonHours??'—'} h | ${result.metadataMs??'—'} ms | ${problems||'OK'} |`);if(problems)console.warn('::warning title=Map feed review::'+result.name+': '+problems);}
 if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');
 console.log(lines.join('\n'));
-if(results.some(r=>r.error||r.warnings?.length))process.exitCode=1;
+// Source publication age and expected missing hours remain review warnings.
+// Only fail this transport job on unverified model metadata, impossible
+// initialization timestamps, or a genuinely unreadable forecast byte range.
+// Official ensemble run/horizon freshness is checked separately in Python.
+const isCritical=r=>r.error||r.warnings?.some(w=>w==='Initialization is in the future.'||w.startsWith('Forecast byte-range check failed:'));
+if(results.some(isCritical))process.exitCode=1;
