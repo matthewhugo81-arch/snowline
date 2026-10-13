@@ -118,6 +118,13 @@ test('history keeps a verified third run on a failed check, then advances on rec
  result=await discoverPreviousRuns({model:UKV,latest,loadRun:archive(records(run(-3))).loadRun,retainedRuns:result.runs});
  assert.deepEqual(result.runs.map(m=>m.reference_time),[3,0,-3].map(h=>run(h).reference_time));assert.equal(result.errors.length,0);
 });
+
+test('an incomplete former latest cannot displace a verified history fallback during rollover',async()=>{
+ const a=archive(new Map([[origin+6*hour,Error('Temporary archive error')]]));
+ const latest={...run(12,false,8),previousCompletedRun:run(9)};
+ const result=await discoverPreviousRuns({model:UKV,latest,loadRun:a.loadRun,retainedRuns:[run(6,false,8),run(3),run(0)]});
+ assert.deepEqual(result.runs.map(m=>m.reference_time),[12,9,3].map(h=>run(h).reference_time));assert.equal(result.errors.length,1);
+});
 test('a fresh page rediscovers its completed fallback from the provider archive',async()=>{
  const latest=run(3,false,8),prior=run(0),calls=[];
  const load=async url=>{calls.push(url);if(url.endsWith('/latest.json'))return prior;if(url.endsWith('/in-progress.json'))return latest;if(url.includes('/0000Z/meta.json'))return prior;throw missing();};

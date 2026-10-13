@@ -1,4 +1,4 @@
-import {previousCompletedUKV} from './map-ukv-runs.js?v=20261013-ukv-retention';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261013-nw-europe-periods';
 import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-ukv-retention';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
@@ -18,7 +18,7 @@ export async function discoverPreviousRuns({model,latest,load,signal,lookbackHou
   if(result.previous){
    const remaining=lookbackHours-(Date.parse(latest.reference_time)-Date.parse(result.previous.reference_time))/HOUR;
    if(remaining>=3){
-    const retained=retainedRuns.filter(run=>Date.parse(run.reference_time)<Date.parse(result.previous.reference_time)&&Date.parse(run.reference_time)>=Date.parse(latest.reference_time)-lookbackHours*HOUR).sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0];
+    const retained=retainedRuns.filter(run=>completedUKV(run)&&Date.parse(run.reference_time)<Date.parse(result.previous.reference_time)&&Date.parse(run.reference_time)>=Date.parse(latest.reference_time)-lookbackHours*HOUR).sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0];
     const older=await previousCompletedUKV(result.previous,load,loadRun,retained,{lookbackHours:remaining,signal});
     if(older.previous)runs.push(older.previous);
     warnings.push(...older.warnings);
