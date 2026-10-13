@@ -2,10 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes} from '../map-panels.js';
 import {combineSources} from '../map-sources.js';
+import {UKV} from '../ukv-run-selection.js';
+import {UKV_PREVIOUS} from '../map-ukv-runs.js';
 
 const t=hour=>`2026-10-09T${String(hour).padStart(2,'0')}:00:00Z`;
 const ukv={reference_time:t(6),variables:['temperature_2m','precipitation'],valid_times:[t(6),t(7),t(8)]};
 const comparison=()=>({model:'ukv',modelB:'ukv',field:'temperature_2m',fieldB:'precipitation',compare:true,metas:{ukv}});
+
+test('latest/previous UKV comparisons preserve the entire completed horizon in either panel',()=>{
+ const previous={...ukv,valid_times:Array.from({length:55},(_,h)=>new Date(Date.parse(t(6))+h*3600000).toISOString())};
+ const latest={...ukv,reference_time:t(9),completed:false,valid_times:[t(9),t(10),t(11)]};
+ const state={model:UKV_PREVIOUS,modelB:UKV,field:'temperature_2m',fieldB:'temperature_2m',compare:true,metas:{[UKV_PREVIOUS]:previous,[UKV]:latest}};
+ assert.equal(panelForecastTimes(state).length,55);assert.equal(panelForecastTimes(state).at(-1),'2026-10-11T12:00:00.000Z');
+ [state.model,state.modelB]=[state.modelB,state.model];assert.equal(panelForecastTimes(state).length,55);
+ state.field=state.fieldB='precipitation';assert.equal(panelForecastTimes(state).length,54);assert.equal(Date.parse(panelForecastTimes(state)[0]),Date.parse(t(7)));
+ // When the latest grows beyond the fallback, its additional hours also survive.
+ latest.valid_times.push('2026-10-11T13:00:00Z');assert.equal(panelForecastTimes(state).length,55);
+ state.compare=false;assert.equal(panelForecastTimes(state).length,3);
+});
 
 test('same-model comparison preserves two separate weather fields and loads one model run',()=>{
  const state=comparison();

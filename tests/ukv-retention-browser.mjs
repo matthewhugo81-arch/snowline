@@ -18,7 +18,7 @@ await mkdir('review-output',{recursive:true});
 try{
  for(const viewport of [{width:1280,height:900},{width:390,height:844}]){
   const context=await browser.newContext({viewport,timezoneId:'America/Los_Angeles'}),page=await context.newPage(),errors=[],metadata=[];
-  let phase=0,offline=false;
+  let phase=0,offline=false,partialHorizon=8;
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{
    localStorage.setItem('snowline-terrain','false');window.fixtureDelay=5;
@@ -29,7 +29,7 @@ try{
    window.clearTimeout=id=>{window.fixtureMenuChecks.delete(id);clear(id);};
   });
   // Observe promoted raster/overlay sources, excluding obsolete background downloads.
-  await page.route('**/map-frames.js*',async r=>{const code=await readFile(resolve(root,'map-frames.js'),'utf8');return r.fulfill({contentType:'text/javascript',body:code.replace('this.current=frame;',"this.current=frame;window.fixtureShownFrames.push({url:frame.url,sources:frame.resources.map(id=>this.map.getStyle().sources[id]?.url).filter(Boolean)});")});});
+  await page.route('**/map-frames.js*',async r=>{const code=await readFile(resolve(root,'map-frames.js'),'utf8');return r.fulfill({contentType:'text/javascript',body:code.replace('this.frames=new Map();', 'this.frames=new Map();(window.fixtureCaches??=new Map()).set(prefix,this);').replace('this.current=frame;',"this.current=frame;window.fixtureShownFrames.push({url:frame.url,sources:frame.resources.map(id=>this.map.getStyle().sources[id]?.url).filter(Boolean)});")});});
   await page.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
   await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
   await page.route('**/coastline.geojson',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(geo)}));
@@ -38,7 +38,7 @@ try{
    const url=r.request().url();metadata.push(url);
    if(!url.includes('/'+UKV+'/'))return r.fulfill({status:404,body:'{}'});
    if(offline)return r.fulfill({status:503,body:'{}'});
-   const latest=phase<2?run(3,phase===1,phase===1?54:8):phase===2?run(6,false,8):phase===3?run(9,false,8):run(12,false,8);
+   const latest=phase<2?run(3,phase===1,phase===1?54:partialHorizon):phase===2?run(6,false,8):phase===3?run(9,false,8):run(12,false,8);
    const records=new Map([[-3,run(-3)],[0,run(0)],[3,phase?run(3):latest],[6,run(6,false,8)],[9,run(9,phase===4,phase===4?54:8)],[12,run(12,false,8)]]);
    let meta;if(url.endsWith('/latest.json'))meta=phase<2?run(0):phase<4?run(3):run(9);
    else if(url.endsWith('/in-progress.json'))meta=latest;
@@ -69,6 +69,35 @@ try{
    await page.locator('#map-time').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
    assert.match(await page.locator('#panel-label-a').textContent(),/14 Oct.*16:00 UTC/);
    await page.screenshot({path:`review-output/ukv-fallback-${viewport.width}.png`,fullPage:true});
+   // A partially published latest must not truncate the completed fallback.
+   if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').check();if(viewport.width<650)await page.locator('#mobile-return-map').click();
+   await page.locator('#map-model-b').selectOption(UKV);await page.locator('#map-variable-b').selectOption('temperature_2m');await ready();
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'54');
+   assert.match(await page.locator('#panel-label-a').textContent(),/14 Oct.*16:00 UTC/);
+   assert.match(await page.locator('#map-error-b').textContent(),/Not yet published/);assert.ok(await page.locator('#map-error-b').isVisible());
+   assert.equal(await page.locator('#preload-status').getAttribute('data-total'),'64');
+   assert.equal(await page.evaluate(()=>window.fixtureCaches.get('frame-b').current),null,'Unpublished panel must not show the previous weather');
+   await page.locator('#play-map').click();await page.waitForFunction(()=>Number(document.querySelector('#map-time').value)>40);await page.locator('#play-map').click();
+   await page.locator('#map-time').evaluate(el=>{el.value='54';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   assert.match(await page.locator('#panel-label-a').textContent(),/15 Oct.*06:00 UTC/);
+   await page.screenshot({path:`review-output/ukv-full-comparison-${viewport.width}.png`,fullPage:true});
+   // New hours inside the existing shared range must refresh missing slots even
+   // with pressure overlays off (the overall timeline itself has not changed).
+   await page.locator('#map-time').evaluate(el=>{el.value='11';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   await page.locator('#map-mslp-b').uncheck();await ready();
+   await page.locator('#map-time').evaluate(el=>{el.value='54';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   partialHorizon=40;await tick();await ready();
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'54');
+   await page.locator('#map-time').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   assert.ok(!await page.locator('#map-error-b').isVisible());assert.equal(await page.evaluate(()=>!!window.fixtureCaches.get('frame-b').current),true);
+   assert.equal(await page.locator('#preload-status').getAttribute('data-total'),'96');
+   // The same behaviour applies with latest on the left, and before its start.
+   await page.locator('#map-model').selectOption(UKV);await ready();await page.locator('#map-model-b').selectOption(previous);await ready();
+   await page.locator('#map-time').evaluate(el=>{el.value='54';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   assert.ok(await page.locator('#map-error-a').isVisible());assert.ok(!await page.locator('#map-error-b').isVisible());
+   await page.locator('#map-time').evaluate(el=>{el.value='0';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   assert.match(await page.locator('#map-error-a').textContent(),/No forecast/);
+   partialHorizon=8;
    // A fresh page must rediscover the same pair, without session-only history.
    await page.reload();await ready();await page.locator('#map-model').selectOption(previous);await ready();
    phase=1;await tick();await page.waitForFunction(()=>document.querySelector('#map-model option[value="ukmo_uk_deterministic_2km"]').textContent.includes('03Z')&&!document.querySelector('#map-model option[value="ukmo_uk_deterministic_2km"]').textContent.includes('updating'));

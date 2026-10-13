@@ -107,6 +107,11 @@ export class ForecastFrames{
   if(this.retired.has(previous))this.discard(previous);
   return true;
  }
+ hide(){
+  const frame=this.current;if(!frame)return;
+  this.cover(frame);this.current=null;
+  if(this.retired.has(frame))this.discard(frame);
+ }
  cover(frame){
   // Only weather layers move. The basemap is ordered once, not every hour.
   for(const id of frame.layers){const first=this.firstLayer();if(first!==id)this.map.moveLayer(id,first);}
