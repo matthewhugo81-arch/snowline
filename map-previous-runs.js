@@ -145,7 +145,11 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
     c.select.replaceChildren(...runs.map(meta=>option(meta.reference_time,runLabel(meta)+' · '+runAvailability(meta))));c.select.value=runs[Math.max(0,runCount()-1-i)]?.reference_time??'';
    }
    $('status').textContent=model.name+' · '+(model.id===UKV?'Latest main run and two previous completed main runs · checks every minute.':runs.length+' published runs found in the previous 48 hours. Runs are pinned until you change them.')+(archive.unavailable.length?' '+archive.unavailable.length+' archive cycles unavailable.':'')+(archive.errors.length?' '+archive.errors.length+' archive checks failed; use the run-check button to retry.':'');
-   disable(false);if(runs.length<runCount()){$('preset').replaceChildren();presets=[];$('preset').disabled=true;$('legend').replaceChildren();$('note').textContent=archive.notice??'';$('progress').textContent=archive.notice??'Fewer than '+runCount()+' verified runs are available. No substitute runs have been used.';return;}
+   disable(false);if(runs.length<runCount()){
+    $('preset').replaceChildren();presets=[];$('preset').disabled=true;$('legend').replaceChildren();navigation();
+    for(const c of cards){c.title.textContent=model.name+' · Comparison unavailable';c.caption.textContent='';c.button.replaceChildren('Three archived runs are needed for this comparison.');}
+    $('note').textContent=archive.notice??'';$('progress').textContent=archive.notice??'Fewer than '+runCount()+' verified runs are available. No substitute runs have been used.';return;
+   }
    configureTimeline();
   }catch(error){if(token===generation&&active){$('status').textContent=error.message;$('refresh').disabled=false;$('progress').textContent='Archive unavailable. The main maps and forecast sequence are unchanged.';}}
  }
