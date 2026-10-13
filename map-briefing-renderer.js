@@ -5,11 +5,11 @@ import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accu
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261013-ukv-retention';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261013-mogreps';
 import {installDewPoint} from './map-dew-point.js';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261013-shared-appearance';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261013-mogreps';
 
 import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
 export {briefingSettings};

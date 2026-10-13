@@ -1,5 +1,5 @@
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261013-ukv-retention';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261013-mogreps';
 import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 

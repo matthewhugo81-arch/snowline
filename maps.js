@@ -15,19 +15,19 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261013-ukv-full-timeline';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261013-mogreps';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261013-ukv-retention';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261013-mogreps';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261012-accum-history';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261013-ukv-retention';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261013-ukv-retention';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261013-mogreps';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261013-mogreps';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
@@ -74,6 +74,9 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
  if(params.type==='json'&&params.url.includes('/ensemble-data/')){
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
   result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html">Open-Meteo</a>';
+ }
+ if(params.type==='json'&&/\/ukmo_(global_ensemble_20km|uk_ensemble_2km)\//.test(params.url)){
+  result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
 },{onLimit:()=>updatePreloadStatus()});
@@ -411,7 +414,7 @@ function setLegend(){
   }
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
-  let note=f.note,interval=accumulationPeriod(field,state.times[state.index])||f.legendNote||'';
+  let note=f.note+(state.metas[model]?.ensembleNote?' '+state.metas[model].ensembleNote:''),interval=accumulationPeriod(field,state.times[state.index])||f.legendNote||'';
   if([WEATHER_COMPOSITE,'precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
    const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
    interval=hours?hours+' h ending at valid time':'Period unavailable';
@@ -592,7 +595,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261013-shared-appearance');
+   const {createBriefing}=await import('./map-briefing.js?v=20261013-mogreps');
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

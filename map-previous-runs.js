@@ -1,12 +1,12 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
-import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-ukv-retention';
+import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-mogreps';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-shared-appearance';
-import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-shared-appearance';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-shared-appearance';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-mogreps';
+import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-mogreps';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-mogreps';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261013-map-appearance';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
@@ -34,7 +34,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <p class="small-note">Recent run availability depends on the provider archive. No model cycles or missing hours are substituted. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth.</p>
  <dialog id="previous-enlarged"><div class="briefing-heading"><strong id="previous-enlarged-title"></strong><button type="button" class="secondary" id="previous-enlarged-close">Close chart</button></div><img id="previous-enlarged-image" alt=""><p id="previous-enlarged-note" class="small-note"></p><p class="small-note">Snowline · Weather: Open-Meteo / model providers · OpenFreeMap / OpenStreetMap · Natural Earth</p></dialog>`;
  const $=name=>host.querySelector('#previous-'+name),choices=models.filter(m=>m.id!==UKV_PREVIOUS).map(m=>m.id===UKV?{...m,name:'UKV'}:m);
- for(const [label,items]of [['Short-term models',choices.filter(m=>m.regional)],['Medium-term models',choices.filter(m=>!m.regional&&!m.ensemble)],['Ensemble models',choices.filter(m=>m.ensemble)]]){const group=document.createElement('optgroup');group.label=label;for(const m of items)group.append(option(m.id,m.name));$('model').append(group);}
+ for(const [label,items]of [['Short-term models',choices.filter(m=>m.regional&&!m.ensemble)],['Medium-term models',choices.filter(m=>!m.regional&&!m.ensemble)],['Ensemble models',choices.filter(m=>m.ensemble)]]){const group=document.createElement('optgroup');group.label=label;for(const m of items)group.append(option(m.id,m.name));$('model').append(group);}
  for(const area of BRIEFING_AREAS)$('area').append(option(area.id,area.name));$('area').append(option('current','Current map area'));
  const cards=Array.from({length:3},(_,i)=>{
   const card=document.createElement('article');card.className='briefing-card';

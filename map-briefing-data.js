@@ -1,6 +1,6 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-ukv-retention';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-mogreps';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261012-accum-history';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
@@ -28,7 +28,7 @@ export function briefingPresets(meta,fields){
   const pressure=!!sourceVariable(meta,'pressure_msl');
   const preset=named?{...named,required:named.id==='weather'?named.required:[named.field],...(!pressure?{name:field.name,note:field.note}:{})}:
    {id:field.key,name:field.name,field:field.key,required:[field.key],note:field.note};
-  return {...preset,key:field.key,group:variableGroup(field.key)};
+  return {...preset,note:preset.note+(meta?.ensembleNote?' '+meta.ensembleNote:''),key:field.key,group:variableGroup(field.key)};
  });
 }
 export function briefingOptions(select,presets){

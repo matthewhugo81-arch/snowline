@@ -4,6 +4,7 @@ import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=2026
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
 import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
 import {ENSEMBLE_DOMAINS,ensembleFreshnessWarning} from './map-ensemble.js?v=20261013-operational-feeds';
+import {MOGREPS_MODELS} from './map-mogreps.js';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
@@ -11,6 +12,7 @@ const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_s
 // Companion data must come from the selected primary run, never a different cycle.
 const companions={gfs_global:['ncep_gfs025']};
 for(const domain of ['ncep_gefs025','ncep_gefs05','ecmwf_ifs025_ensemble'])domains[domain]=domain;
+for(const model of MOGREPS_MODELS)domains[model.id]=model.id;
 const ownEnsembles=new Set(ENSEMBLE_DOMAINS.map(d=>d.value));
 for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
@@ -79,7 +81,7 @@ export async function loadSpatialModel(model,load){
    return null;
   }
  }));
- return {...combineSources(primary,other.filter(Boolean)),sourceWarnings:warnings,freshnessWarning};
+ return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning};
 }
 
 // Deliberate historical selection never falls back to latest.json or a different
@@ -99,5 +101,5 @@ export async function loadSpatialRun(model,referenceTime,load){
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
   catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}
  }));
- return {...combineSources(primary,other.filter(Boolean)),sourceWarnings:warnings};
+ return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings};
 }

@@ -1,13 +1,13 @@
-import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261013-ukv-retention';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261013-chart-catalogue';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261013-mogreps';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261013-mogreps';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
-import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-ukv-retention';
+import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-mogreps';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
  if(!Number.isInteger(lookbackHours)||lookbackHours<1||lookbackHours>48)throw Error('Archive search is limited to 48 hours.');
  const init=Date.parse(reference);if(!Number.isFinite(init)||init%HOUR)throw Error('Invalid model initialization.');
- const cadence=model===UKV?3:model===UKV_NOWCAST||model==='knmi_harmonie_arome_europe'?1:['icon_eu','meteofrance_arome_france'].includes(model)?3:model==='gem_global'?12:6;
+ const cadence=model===UKV?3:model===UKV_NOWCAST||['knmi_harmonie_arome_europe','ukmo_uk_ensemble_2km'].includes(model)?1:['icon_eu','meteofrance_arome_france'].includes(model)?3:model==='gem_global'?12:6;
  const out=[];
  for(let delta=cadence;delta<=lookbackHours;delta+=cadence){const time=new Date(init-delta*HOUR).toISOString();if(model===UKV_NOWCAST&&cycleFamily(time)!=='nowcast')continue;out.push(time);}
  return out;
