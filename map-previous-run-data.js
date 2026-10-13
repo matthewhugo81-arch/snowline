@@ -1,5 +1,6 @@
-import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261013-fixed-periods';
-import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-operational-feeds';
+import {previousCompletedUKV} from './map-ukv-runs.js?v=20261013-ukv-retention';
+import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261013-ukv-retention';
+import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-ukv-retention';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
@@ -11,6 +12,10 @@ export function runCandidates(model,reference,lookbackHours=48){
  return out;
 }
 export async function discoverPreviousRuns({model,latest,load,signal,lookbackHours=48,concurrency=3,loadRun=loadSpatialRun}){
+ if(model===UKV){
+  const result=await previousCompletedUKV(latest,load,loadRun,latest.previousCompletedRun,{lookbackHours,signal});
+  return {runs:[latest,...(result.previous?[result.previous]:[])],unavailable:[],errors:result.warnings.map(message=>({message}))};
+ }
  const candidates=runCandidates(model,latest.reference_time,lookbackHours),runs=[latest],unavailable=[],errors=[];let index=0;
  async function worker(){
   while(index<candidates.length&&!signal?.aborted){
@@ -23,13 +28,13 @@ export async function discoverPreviousRuns({model,latest,load,signal,lookbackHou
  const unique=[...new Map(runs.map(meta=>[Date.parse(meta.reference_time),meta])).values()].sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time));
  return {runs:unique,unavailable,errors};
 }
-export function previousRunPresets(runs){
- if(runs.length!==3||new Set(runs.map(meta=>Date.parse(meta.reference_time))).size!==3)return [];
+export function previousRunPresets(runs,count=3){
+ if(runs.length!==count||new Set(runs.map(meta=>Date.parse(meta.reference_time))).size!==count)return [];
  const sets=runs.map(meta=>new Set(briefingPresets(meta).map(p=>p.id)));
  return BRIEFING_PRESETS.filter(p=>sets.every(set=>set.has(p.id)));
 }
 export function previousRunTimes(runs,preset,model,interval='3'){
- if(runs.length!==3||!preset)return [];
+ if(runs.length!==(model?.id===UKV?2:3)||!preset||new Set(runs.map(m=>Date.parse(m.reference_time))).size!==runs.length)return [];
  const series=runs.map(meta=>briefingTimes(meta,preset,model,interval)),sets=series.slice(1).map(times=>new Set(times.map(Date.parse)));
  return series[0].filter(time=>sets.every(set=>set.has(Date.parse(time)))&&(preset.id!=='weather'||new Set(runs.map(meta=>fieldIntervalHours(meta,'precipitation',time))).size===1));
 }

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {formatModelRun, modelOptionLabel, installModelRunMenu} from '../map-model-run-menu.js';
+import {UKV_PREVIOUS} from '../map-ukv-runs.js';
 
 const ifs = {id: 'ecmwf_ifs', name: 'IFS 9 km'};
 const main = {id: 'ukmo_uk_deterministic_2km', name: 'UKV'};
@@ -51,6 +52,15 @@ test('never invents a cycle from missing or malformed metadata', () => {
 test('marks an incoming run and a failed refresh without hiding the verified date', () => {
   assert.equal(modelOptionLabel(ifs, {meta: run('2026-10-12T06:00:00Z', false)}), 'IFS 9 km (12 Oct · 06Z · updating)');
   assert.equal(modelOptionLabel(ifs, {meta: run('2026-10-11T18:00:00Z'), error: 'offline'}), 'IFS 9 km (11 Oct · 18Z · check failed)');
+});
+
+test('previous UKV is selectable only after verification and retains its UTC label through failed checks',async t=>{
+ const previous={id:UKV_PREVIOUS,name:'UKV · previous completed'};let fail=true;
+ const {menu,root}=setup(t,{models:[previous],loadModel:async()=>{if(fail)throw Error('offline');return run('2026-10-13T01:00:00+01:00');}});
+ await menu.refresh();const option=root.elements['map-model'].options[0];
+ assert.equal(option.disabled,true);assert.match(option.textContent,/run unavailable/);
+ fail=false;await menu.refresh();assert.equal(option.disabled,false);assert.match(option.textContent,/13 Oct · 00Z/);
+ fail=true;await menu.refresh();assert.equal(option.disabled,false);assert.match(option.textContent,/00Z · check failed/);
 });
 
 test('updates all options in both panels without changing names, values, order or selections', async t => {

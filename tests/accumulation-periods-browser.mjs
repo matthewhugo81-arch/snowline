@@ -40,7 +40,7 @@ try{
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
    const readySequence=()=>page.waitForFunction(()=>{const cs=[...document.querySelectorAll('#briefing-grid .briefing-card')];return cs.length>0&&cs.every(c=>c.dataset.ready==='true');},{},{timeout:30000});
-   const readyHistory=()=>page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:30000});
+   const readyHistory=()=>page.waitForFunction(()=>{const cards=[...document.querySelectorAll('#previous-grid .briefing-card:not([hidden])')];return cards.length>0&&cards.every(c=>c.dataset.ready==='true');},{},{timeout:30000});
    const ends=()=>page.locator('#briefing-grid .briefing-card').evaluateAll(cs=>cs.map(c=>c.dataset.time));
    await page.locator('#briefing-preset').selectOption(key(24));
    await page.locator('#briefing-time').selectOption('2026-10-12T12:00:00.000Z');await readySequence();
@@ -82,9 +82,9 @@ try{
    assert.equal(await page.locator('#previous-preset').inputValue(),key(24));
    assert.equal(await page.locator('#previous-run-view #previous-time').inputValue(),'2026-10-12T12:00:00.000Z');
    assert.equal(await page.locator('#previous-time-heading').textContent(),'Shared period start · UTC');
-   assert.deepEqual(await page.locator('#previous-grid .briefing-card').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(3).fill('2026-10-13T12:00:00.000Z'));
+   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(2).fill('2026-10-13T12:00:00.000Z'));
    await page.locator('#previous-forward').click();await readyHistory();
-   assert.deepEqual(await page.locator('#previous-grid .briefing-card').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(3).fill('2026-10-14T12:00:00.000Z'));
+   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(2).fill('2026-10-14T12:00:00.000Z'));
    assert.equal(await page.locator('#previous-forward').isDisabled(),true);
    await page.locator('#previous-back').click();await readyHistory();
    await page.locator('#previous-area').selectOption('atlantic');await readyHistory();

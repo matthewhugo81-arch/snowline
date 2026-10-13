@@ -19,7 +19,7 @@ test('archived loading requests the exact cycle and never falls back to latest',
  await assert.rejects(loadSpatialRun(nowcast,m.reference_time,async()=>m),/family/);
 });
 test('failed metadata checks are distinguished from expired or unpublished cycles',async()=>{
- const latest=meta(),result=await discoverPreviousRuns({model:main,latest,lookbackHours:12,loadRun:async(model,time)=>{
+ const latest=meta(),result=await discoverPreviousRuns({model:'icon_eu',latest,lookbackHours:12,loadRun:async(model,time)=>{
   const hour=new Date(time).getUTCHours();if(hour===6)throw Object.assign(Error('Gone'),{status:404});if(hour===3)throw Error('Timeout');return meta((Date.parse(time)-Date.parse(ref))/3600000);
  }});
  assert.deepEqual(result.runs.map(m=>new Date(m.reference_time).getUTCHours()),[12,9,0]);assert.equal(result.unavailable.length,1);assert.equal(result.errors.length,1);

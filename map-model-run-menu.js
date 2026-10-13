@@ -1,4 +1,5 @@
-// Decorate native model options only: model IDs, selections and map loading stay unchanged.
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261013-ukv-retention';
+// Decorate native model options only: model IDs and selections stay unchanged.
 const runDate = new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short', timeZone: 'UTC'});
 
 export function formatModelRun(meta) {
@@ -44,6 +45,7 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
         const model = knownModels.get(option.value);
         if (!model) continue;
         const result = results.get(model.id);
+        if(model.id===UKV_PREVIOUS)option.disabled=!result?.meta;
         const text = modelOptionLabel(model, result);
         if (option.textContent !== text) option.textContent = text;
         const run = formatModelRun(result?.meta);
@@ -63,8 +65,8 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
   }
 
   async function collect(force) {
-    // Metadata only, with a bounded queue. UKV main/nowcast share identical JSON
-    // requests within this check, but the existing loader selects each family separately.
+    // Metadata only, with a bounded queue. UKV latest/previous run choices
+    // share the same verified pair and identical JSON requests within this check.
     const requests = new Map();
     const load = url => {
       if (!requests.has(url)) requests.set(url, Promise.resolve().then(() => loadJSON(url, {force})));

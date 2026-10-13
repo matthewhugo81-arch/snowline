@@ -215,8 +215,8 @@ try{
    const main='ukmo_uk_deterministic_2km',nowcast=main+'_nowcast';
    assert.equal(await page.locator('#map-model').inputValue(),main);
    assert.match(await page.locator('#panel-label-a').textContent(),/0600Z/);
-   assert.equal(metadata.some(url=>url.includes('/0300Z/')),false,'Do not fetch an older longer main cycle');
-   assert.deepEqual(await page.locator('#map-model option').evaluateAll(os=>os.filter(o=>o.value.startsWith('ukmo_uk_deterministic_2km')).map(o=>o.value)),[main]);
+   assert.equal(metadata.some(url=>url.includes('/0300Z/')),true,'Verify precisely one previous completed main cycle');
+   assert.deepEqual(await page.locator('#map-model option').evaluateAll(os=>os.filter(o=>o.value.startsWith('ukmo_uk_deterministic_2km')).map(o=>o.value)),[main,main+'_previous']);
    assert.equal(await page.locator('#map-model-b option[value="'+nowcast+'"]').count(),0);
    await page.locator('#map-model-b').selectOption(main);
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('0600Z'));
