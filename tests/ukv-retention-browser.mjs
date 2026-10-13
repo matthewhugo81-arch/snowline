@@ -83,7 +83,10 @@ try{
    await page.screenshot({path:`review-output/ukv-full-comparison-${viewport.width}.png`,fullPage:true});
    // New hours inside the existing shared range must refresh missing slots even
    // with pressure overlays off (the overall timeline itself has not changed).
-   await page.locator('#map-mslp-b').uncheck();partialHorizon=40;await tick();await ready();
+   await page.locator('#map-time').evaluate(el=>{el.value='11';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   await page.locator('#map-mslp-b').uncheck();await ready();
+   await page.locator('#map-time').evaluate(el=>{el.value='54';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
+   partialHorizon=40;await tick();await ready();
    assert.equal(await page.locator('#map-time').getAttribute('max'),'54');
    await page.locator('#map-time').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('change',{bubbles:true}));});await ready();
    assert.ok(!await page.locator('#map-error-b').isVisible());assert.equal(await page.evaluate(()=>!!window.fixtureCaches.get('frame-b').current),true);
