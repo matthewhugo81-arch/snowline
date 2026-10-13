@@ -2,10 +2,10 @@ name: Map playback browser tests
 on:
   push:
     branches: [main]
-    paths: ['maps.*', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', '.github/workflows/map-browser-tests.yml']
   pull_request:
     branches: [main]
-    paths: ['maps.*', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', '.github/workflows/map-browser-tests.yml']
 permissions:
   contents: read
 jobs:
@@ -27,6 +27,8 @@ jobs:
         run: node tests/accumulation-history-browser.mjs
       - name: Check fixed rainfall periods and North Atlantic framing
         run: node tests/accumulation-periods-browser.mjs
+      - name: Check UKV completed fallback, rollover and exact-cycle loading
+        run: node tests/ukv-retention-browser.mjs
       - name: Check chart styles and image exports
         run: node tests/chart-image-browser.mjs
       - uses: actions/upload-artifact@v4

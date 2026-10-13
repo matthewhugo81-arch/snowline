@@ -12,19 +12,19 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261012-accum-history';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261013-ukv-retention';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialModel,loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261013-operational-feeds';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261013-ukv-retention';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {ukvCoverageText} from './ukv-run-info.js?v=20261011-live-runs';
+import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261012-accum-history';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_MODELS as MODELS} from './map-models.js?v=20261013-operational-feeds';
-import {ukvRunFamily} from './ukv-run-selection.js?v=20261011-live-runs';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261013-ukv-retention';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
@@ -423,7 +423,7 @@ function setLegend(){
   el('field-availability').textContent=modelName(model)+' · '+f.name;
   const meta=state.metas[model],source=fieldSource(meta,field);
   if(meta&&source){const end=field===WEATHER_COMPOSITE?meta.valid_times.filter(time=>hasFieldTime(meta,field,time)).at(-1):source.valid_times.at(-1);el('run').textContent='Initialized '+runLabel(meta)+(end?' · layer data ends '+stamp(end)+' UTC':' · awaiting common forecast times');}
-  if(meta&&source&&ukvRunFamily(model))el('run').textContent+=' · '+ukvCoverageText(meta,ukvRunFamily(model));
+  if(meta&&source&&meta.runFamily)el('run').textContent+=' · '+ukvCoverageText(meta,meta.runFamily);
   const step=f.contourLabel??(field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds');
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
  }
@@ -468,7 +468,7 @@ function metadataLoader(force){
 }
 function showRunUpdates(message=''){
  const pairs=panelModelIds(state).filter(id=>state.metas[id]).map(id=>[id,state.metas[id]]);
- $('ukv-run-note').textContent='Newest published cycle for each selected model: '+pairs.map(([id,meta])=>modelName(id)+' '+runLabel(meta)+(meta.selectionWarnings?.length?' · '+meta.selectionWarnings.join(' '):'')).join(' · ');
+ $('ukv-run-note').textContent='Selected model runs: '+pairs.map(([id,meta])=>modelName(id)+' '+runLabel(meta)+(meta.selectionWarnings?.length?' · '+meta.selectionWarnings.join(' '):'')).join(' · ');
  $('run-update-status').textContent=message||pairs.map(([id,meta])=>modelName(id)+' · '+runLabel(meta)+' · '+runAvailability(meta)+(meta.sourceWarnings?.length?' · '+meta.sourceWarnings.join(' '):'')).join(' | ')+' · Checks every minute.';
 }
 let checkingLiveRuns=false;
@@ -579,7 +579,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261013-fixed-periods');
+   const {createBriefing}=await import('./map-briefing.js?v=20261013-ukv-retention');
    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

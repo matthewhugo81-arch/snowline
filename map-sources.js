@@ -91,6 +91,8 @@ export async function loadSpatialRun(model,referenceTime,load){
  const family=ukvRunFamily(model);
  if(family&&((new Date(reference).getUTCHours()%3===0?'main':'nowcast')!==family))throw Error('Archived UKV run is in a different run family.');
  const base=SPATIAL_BASE+domain+'/',data=await load(base+runPath(referenceTime)+'meta.json');
+ if(model===UKV&&Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
+  throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
  const primary={...data,domain,baseURL:SPATIAL_BASE,runFamily:family},warnings=[];
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
