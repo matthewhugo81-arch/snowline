@@ -72,7 +72,9 @@ try{
   await right(page.locator('#map-b .maplibregl-canvas'));await saveFile(`composite-export-${viewport.width}`);
   if(viewport.width<650)await page.locator('#mobile-map-settings').click();
   await page.getByText('Map appearance',{exact:true}).click();
-  await page.locator('#map-opacity').fill('60');await page.locator('#map-opacity').dispatchEvent('input');
+  assert.equal(await page.locator('#map-opacity').inputValue(),'80');
+  for(let step=0;step<20;step++)await page.locator('#map-opacity').press('ArrowLeft');
+  assert.equal(await page.locator('#map-opacity').inputValue(),'60');
   if(viewport.width<650)await page.locator('#mobile-return-map').click();
   await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
   await page.locator('#briefing-preset').selectOption('airmass');await page.locator('#briefing-contours').check();await page.locator('#briefing-time').selectOption('0');
