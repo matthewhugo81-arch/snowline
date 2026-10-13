@@ -9,7 +9,7 @@ const meta={reference_time:time(0),domain:'ncep_gfs013',variables:['cloud_cover'
 test('composite makes dry precipitation transparent and 100% cloud white without changing interactive scales',()=>{
  const settings={colorScales:{cloud_cover:{breakpoints:[0,50,100],colors:[[1,2,3,1],[4,5,6,1],[7,8,9,1]]},precipitation:{breakpoints:[0,.5,1],colors:[[255,255,255,1],[0,0,255,1],[0,255,0,1]]}}};
  const original=structuredClone(settings),composite=briefingSettings(settings);
- assert.deepEqual(composite.colorScales.cloud_cover.colors,[[65,65,65,1],[160,160,160,1],[255,255,255,1]]);
+ assert.deepEqual(composite.colorScales.cloud_cover.colors,[[255,255,255,0],[255,255,255,.5],[255,255,255,1]]);
  assert.equal(composite.colorScales.precipitation.colors[0][3],0);assert.equal(composite.colorScales.precipitation.colors[1][3],1);
  assert.deepEqual(settings,original);
 });

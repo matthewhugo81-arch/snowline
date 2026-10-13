@@ -9,17 +9,17 @@ export function compositeMeta(meta){
 }
 export function compositeField(precipitationScale){
  return {key:WEATHER_COMPOSITE,name:'Cloud, precipitation & MSLP',unit:'mm water',...precipitationScale,
-  note:'Satellite-style modelled total cloud cover, not satellite observations: dark = clear, white = overcast. Coloured shading is TOTAL precipitation, including the water equivalent of snow, over the stated native interval. Below 0.5 mm the cloud remains visible; this does not imply zero precipitation. MSLP isobars every 4 hPa. All components use the same model run and valid time. Optional contours, grid values and clicked values refer to precipitation in mm water.'};
+  note:'Modelled total cloud cover, not satellite observations: white shading increases with cloud cover over blue-grey sea and neutral land. Coloured shading is TOTAL precipitation, including the water equivalent of snow, over the stated native interval. Below 0.5 mm the cloud remains visible; this does not imply zero precipitation. MSLP isobars every 4 hPa. All components use the same model run and valid time. Optional contours, grid values and clicked values refer to precipitation in mm water.'};
 }
 export function compositeSettings(settings){
  const cloud=settings.colorScales.cloud_cover,rain=settings.colorScales.precipitation;
  return {...settings,colorScales:{...settings.colorScales,
-  cloud_cover:{...cloud,colors:cloud.colors.map((_,index)=>{const shade=Math.round(65+190*cloud.breakpoints[index]/100);return [shade,shade,shade,1];})},
+  cloud_cover:{...cloud,colors:cloud.colors.map((_,index)=>[255,255,255,Math.max(0,Math.min(1,cloud.breakpoints[index]/100))])},
   precipitation:{...rain,colors:rain.colors.map((color,index)=>index===0?[...color.slice(0,3),0]:[...color])}
  }};
 }
 // The flag stays in TileJSON templates and worker/cache keys, not the data-file URL.
-export const compositeURL=url=>url+'&weather_composite=1';
+export const compositeURL=url=>url+'&weather_composite=1&cloud_style=20261013-land-sea';
 export const isCompositeURL=url=>/[?&]weather_composite=1(?:[&/]|$)/.test(url);
 export function compositeUnderlay(url){
  return {id:'cloud',placement:'underlay',source:{type:'raster',url,tileSize:512,maxzoom:10},

@@ -48,12 +48,12 @@ test('composite and comparison timelines intersect every field, excluding analys
  assert.equal(fieldIntervalHours(meta('ecmwf_ifs',COMPOSITE_FIELDS,[0,3,6]),KEY,time(6)),3);
 });
 
-test('combined palette matches the briefing while preserving ordinary cloud and precipitation colours',()=>{
+test('white cloud opacity follows cover and matches the briefing while preserving ordinary cloud and precipitation colours',()=>{
  const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),1];
  const settings={colorScales:{cloud_cover:{breakpoints:CLOUD_COVER_SCALE.stops,colors:CLOUD_COVER_SCALE.colors.map(rgba)},precipitation:{type:'breakpoint',breakpoints:PRECIPITATION_SCALE.stops,colors:PRECIPITATION_SCALE.colors.map(rgba)}}};
  const before=JSON.stringify(settings),styled=compositeSettings(settings);
  assert.equal(JSON.stringify(settings),before);
- assert.deepEqual(styled.colorScales.cloud_cover.colors[0],[65,65,65,1]);
+ assert.deepEqual(styled.colorScales.cloud_cover.colors[0],[255,255,255,0]);
  assert.deepEqual(styled.colorScales.cloud_cover.colors.at(-1),[255,255,255,1]);
  assert.equal(styled.colorScales.precipitation.colors[0][3],0);
  assert.equal(OM.getColor(styled.colorScales.precipitation,.499,false)[3],0);

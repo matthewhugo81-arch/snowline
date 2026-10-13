@@ -1,13 +1,14 @@
+import {cloudLegendRows} from './map-weather-background.js?v=20261013-land-sea';
 import {displayStops,displayUnit} from './map-wind-units.js';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-accum-history';
-import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261012-weather-composite';
+import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-land-sea';
 const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';
 const FONT='Arial, sans-serif';
 // Detached descriptors prevent later model/run changes relabelling a saved image.
 export function chartScales(field,interval='',weather=false){
  if(!field)return [];
  if(weather||field.key===WEATHER_COMPOSITE)return [
-  {name:'Modelled total cloud cover (not satellite observations)',colors:['#414141','#ffffff'],labels:['Clear · 0%','Overcast · 100%'],bands:false},
+  {name:'Modelled total cloud cover (not satellite observations)',colors:cloudLegendRows()[0],rows:cloudLegendRows(),labels:['Clear · 0%','Overcast · 100%'],bands:false},
   {name:'Total precipitation · mm water'+(interval?' · '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm: cloud remains visible; not necessarily dry.'}
  ];
  const offset=field.legendStart??0,stops=displayStops(field).slice(offset),colors=field.colors.slice(offset);
@@ -57,7 +58,7 @@ export async function composeChartImage({image,width,title,subtitle='',scales=[]
   y+=8;ctx.fillStyle='#0e2034';ctx.font='600 11px '+FONT;for(const line of scale.names){ctx.fillText(line,pad,y);y+=15;}
   const w=width-pad*2,n=scale.colors.length;
   if(scale.bands||scale.discrete){for(let i=0;i<n;i++){ctx.fillStyle=scale.colors[i];ctx.fillRect(pad+w*i/n,y,w/n+.2,12);}}
-  else{const gradient=ctx.createLinearGradient(pad,0,pad+w,0);scale.colors.forEach((c,i)=>gradient.addColorStop(scale.positions?.[i]??(n===1?0:i/(n-1)),c));ctx.fillStyle=gradient;ctx.fillRect(pad,y,w,12);}
+  else{const rows=scale.rows??[scale.colors];rows.forEach((colors,row)=>{const gradient=ctx.createLinearGradient(pad,0,pad+w,0);colors.forEach((c,i)=>gradient.addColorStop(scale.positions?.[i]??(colors.length===1?0:i/(colors.length-1)),c));ctx.fillStyle=gradient;ctx.fillRect(pad,y+12*row/rows.length,w,12/rows.length);});}
   ctx.strokeStyle='#cbd5e1';ctx.lineWidth=.5;ctx.strokeRect(pad,y,w,12);y+=15;ctx.fillStyle='#0e2034';ctx.font=(scale.bands?Math.min(10,w/scale.labels.length/3):10)+'px '+FONT;
   scale.labels.forEach((label,i)=>{ctx.textAlign=scale.bands?'center':i===0?'left':i===scale.labels.length-1?'right':'center';const x=scale.bands?pad+w*(i+.5)/scale.labels.length:pad+w*i/Math.max(1,scale.labels.length-1);ctx.fillText(label,x,y);});
   ctx.textAlign='left';y+=17;ctx.fillStyle='#43546a';ctx.font='10px '+FONT;for(const line of scale.notes){ctx.fillText(line,pad,y);y+=13;}y+=4;

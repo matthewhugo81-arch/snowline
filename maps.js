@@ -1,8 +1,9 @@
+import {setWeatherBackground,cloudOpacity,cloudLegendCSS} from './map-weather-background.js?v=20261013-land-sea';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-three-run-charts';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
-import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261012-weather-composite';
+import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261013-land-sea';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
@@ -30,7 +31,7 @@ import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261013-ukv-r
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261012-accum-history';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261013-land-sea';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
@@ -279,7 +280,7 @@ function panelCache(panel,model,field){
  // Changing the other panel's field can change the shared timeline too.
  const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars,state.times,state.times.map(time=>hasFieldTime(meta,field,time)),overlay.isobars?fieldSource(meta,'pressure_msl')?.valid_times:null]);
  if(panel.frameCache&&panel.cacheKey===signature)return panel.frameCache;
- panel.frameCache?.clear();orderForecastBasemap(panel);
+ panel.frameCache?.clear();orderForecastBasemap(panel);setWeatherBackground(panel.map,composite,panel.rasterBefore);
  const f=fields.find(item=>item.key===field),descriptors=new Map();
  panel.frameURLs=state.times.map(time=>{
   if(!hasFieldTime(meta,field,time))return null;
@@ -350,7 +351,8 @@ async function loadTime(){
     $('map-error-'+key).hidden=false;
     continue;
    }
-   cache.show(frame,state.opacity,fields.find(f=>f.key===field)?.bands?'nearest':'linear');
+   cache.show(frame,field===WEATHER_COMPOSITE?1:state.opacity,fields.find(f=>f.key===field)?.bands?'nearest':'linear');
+   if(field===WEATHER_COMPOSITE)for(const id of frame.underlays)panel.map.setPaintProperty(id,'raster-opacity',cloudOpacity(state.opacity));
    panel.sourceId=frame.id;panel.url=frame.url;panel.loaded=true;panel.weatherLayer=frame.layer;
    panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
    $('panel-label-'+key).textContent=forecastLabel(model,field,time);$('map-error-'+key).hidden=true;
@@ -407,6 +409,7 @@ $('retry-preload').addEventListener('click',()=>{
  updatePreloadStatus();
 });
 function setLegend(){
+ $('cloud-opacity-note').hidden=!panelSelections(state).some(p=>p.field===WEATHER_COMPOSITE);
  for(const {key,model,field} of panelSelections(state)){
   const f=fields.find(f=>f.key===field);if(!f)continue;
   const el=name=>$(name+'-'+key),gradient=el('legend-gradient'),ticks=el('legend-ticks'),bands=el('legend-bands');
@@ -421,9 +424,9 @@ function setLegend(){
   if(f.bands)displayBreaks.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categorical?String(v):i===displayBreaks.length-1?v+'+':v+'–<'+displayBreaks[i+1];item.title=range+' '+displayUnit(f);item.setAttribute('aria-label',range+' '+displayUnit(f));swatch.style.background=legendColors[i];label.textContent=v+(i===displayBreaks.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
   bands.style.gridTemplateColumns='repeat('+displayBreaks.length+',minmax(0,1fr))';
   if(field===WEATHER_COMPOSITE){
-   gradient.hidden=false;ticks.hidden=false;gradient.style.background='linear-gradient(to right,#414141,#ffffff)';ticks.replaceChildren();
+   gradient.hidden=false;ticks.hidden=false;gradient.style.background=cloudLegendCSS();ticks.replaceChildren();
    for(const text of ['Clear · 0%','Overcast · 100%']){const label=document.createElement('span');label.textContent=text;ticks.append(label);}
-   const dry=bands.firstElementChild;if(dry){dry.querySelector('i').style.background='linear-gradient(to right,#414141,#ffffff)';dry.title='Below 0.5 mm: modelled cloud remains visible, not necessarily dry';}
+   const dry=bands.firstElementChild;if(dry){dry.querySelector('i').style.background=cloudLegendCSS();dry.title='Below 0.5 mm: modelled cloud remains visible, not necessarily dry';}
   }
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
@@ -573,7 +576,7 @@ $('map-roads').addEventListener('change',e=>{roads=e.target.checked;try{localSto
 $('map-background').addEventListener('change',e=>{pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';background=e.target.value;try{localStorage.setItem('snowline-background',background);}catch{}for(const panel of Object.values(panels)){clearGridValues(panel);panel.restyling=true;panel.loaded=false;panel.version++;panel.frameCache?.clear();panel.frameCache=null;panel.frames=new Map();panel.map.setStyle('https://tiles.openfreemap.org/styles/'+backgrounds[background]);}});
 $('reload-maps').addEventListener('click',refreshLiveRuns);$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{const preview=Number(e.target.value);pauseAnimation();e.target.value=String(preview);if(state.times.length)$('animation-status').textContent='Preview '+stamp(state.times[preview])+' UTC · release to load';});
 $('previous-time').addEventListener('click',()=>{pauseAnimation();state.index--;setTime();});$('next-time').addEventListener('click',()=>{pauseAnimation();state.index++;setTime();});
-$('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.weatherLayer&&p.map.getLayer(p.weatherLayer)){p.map.setPaintProperty(p.weatherLayer,'raster-opacity',state.opacity);for(const id of p.frameCache?.current?.underlays??[])p.map.setPaintProperty(id,'raster-opacity',state.opacity);}});
+$('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.weatherLayer&&p.map.getLayer(p.weatherLayer)){const composite=p.displayedField===WEATHER_COMPOSITE;p.map.setPaintProperty(p.weatherLayer,'raster-opacity',composite?1:state.opacity);for(const id of p.frameCache?.current?.underlays??[])p.map.setPaintProperty(id,'raster-opacity',composite?cloudOpacity(state.opacity):state.opacity);}});
 $('map-area').addEventListener('change',()=>{for(const p of Object.values(panels))fitArea(p.map,400);});
 $('reset-map').addEventListener('click',()=>{$('map-area').value='uk';for(const p of Object.values(panels))fitArea(p.map,400);});
 $('play-map').addEventListener('click',()=>{
@@ -600,7 +603,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261013-three-run-charts');
+   const {createBriefing}=await import('./map-briefing.js?v=20261013-land-sea');
    briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

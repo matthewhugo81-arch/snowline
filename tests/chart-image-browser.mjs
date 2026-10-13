@@ -9,8 +9,9 @@ const root=process.cwd(),types={'.js':'text/javascript','.mjs':'text/javascript'
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!path.startsWith(root+sep))throw Error('Invalid path');const data=await readFile(path);res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(data);}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
-const oldTests=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\nconst geo=/)[1]);
-const geo={type:'FeatureCollection',features:[]},style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'background',type:'background',paint:{'background-color':'#ffffff'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222222'}}]};
+const oldTests=await readFile('tests/map-browser.mjs','utf8'),baseOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\nconst geo=/)[1]);
+const fakeOM=baseOM.replace('return {data:canvas.transferToImageBitmap()};',`if(window.fixtureOvercast){if(decodeURIComponent(params.url).includes('variable=cloud_cover')){context.fillStyle='#ffffff';context.fillRect(0,0,32,32);}if(decodeURIComponent(params.url).includes('variable=precipitation'))context.clearRect(0,0,32,32);}return {data:canvas.transferToImageBitmap()};`);
+const geo={type:'FeatureCollection',features:[]},style={version:8,sources:{roads:{type:'geojson',data:geo},water:{type:'geojson',data:{type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[[-20,40],[-3,40],[-3,70],[-20,70],[-20,40]]]}}}},layers:[{id:'background',type:'background',paint:{'background-color':'#ffffff'}},{id:'water',type:'fill',source:'water',paint:{'fill-color':'#dddddd'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222222'}}]};
 const coast={type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[[-3,53],[-3,57]]}};
 const UKV='ukmo_uk_deterministic_2km',meta={completed:true,reference_time:'2026-10-12T06:00:00Z',variables:['temperature_2m','temperature_850hPa','relative_humidity_2m','precipitation','cloud_cover','pressure_msl',...['300','200'].flatMap(l=>['wind_speed_'+l+'hPa','wind_direction_'+l+'hPa'])],valid_times:Array.from({length:10},(_,i)=>new Date(Date.UTC(2026,9,12,6+i)).toISOString())};
 await mkdir('review-output',{recursive:true});
@@ -81,6 +82,17 @@ try{
   const bw=await page.evaluate(()=>window.fixtureLayers.filter(l=>l.id.includes('contour-lines')&&Array.isArray(l.paint?.['line-width'])).at(-1).paint['line-width']);assert.equal(bw.at(-2),2.6);assert.equal(bw.at(-1),1.3);
   const image=page.locator('.briefing-card img').first();await right(image);await saveFile(`briefing-850-${viewport.width}`);await image.click();await page.locator('#briefing-enlarged[open]').waitFor();await right(page.locator('#briefing-enlarged-image'));assert.equal(await menu.evaluate(e=>e.closest('dialog')?.id),'briefing-enlarged');await saveFile(`enlarged-850-${viewport.width}`);await page.locator('#briefing-enlarged-close').click();
   await page.locator('#briefing-preset').selectOption('jet');await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});assert.deepEqual(await page.locator('#briefing-legend .briefing-band-labels span').allTextContents(),['60','75','90','105','120','135','150','165','180+']);
+  await page.evaluate(()=>window.fixtureOvercast=true);
+  await page.locator('#briefing-area').selectOption('nw-europe');
+  await page.locator('#briefing-preset').selectOption('weather');
+  await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+  const geographyPixels=await page.locator('.briefing-card img').first().evaluate(async img=>{
+   await img.decode();const map=window.fixtureChartMap,canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+   const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0);
+   return [[-1,55],[-6,55]].map(coords=>{const p=map.project(coords);return [...ctx.getImageData(Math.round(p.x*canvas.width/map.getCanvas().clientWidth),Math.round(p.y*canvas.height/map.getCanvas().clientHeight),1,1).data];});
+  });
+  for(const [i,expected]of [[248,248,245],[236,240,243]].entries())for(let channel=0;channel<3;channel++)assert.ok(Math.abs(geographyPixels[i][channel]-expected[channel])<=3,'Full cloud retains land/sea at 80% opacity: '+JSON.stringify(geographyPixels));
+  await right(page.locator('.briefing-card img').first());await saveFile('overcast-geography-'+viewport.width);
   assert.deepEqual(errors,[],`No page errors at ${viewport.width}px`);await context.close();console.log(`Jet/850 hPa styling, left-click, right-click PNG, clipboard and fallback passed at ${viewport.width}px`);
  }
 }finally{await browser.close();server.close();}

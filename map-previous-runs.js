@@ -1,12 +1,13 @@
+import {cloudLegendCSS} from './map-weather-background.js?v=20261013-land-sea';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
 import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-three-run-charts';
-import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-nw-europe-periods';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-three-run-charts';
+import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-land-sea';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-land-sea';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
-import {chartScales} from './map-image-export.js?v=20261012-accum-history';
+import {chartScales} from './map-image-export.js?v=20261013-land-sea';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
 const stamp=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const utc=time=>stamp.format(new Date(time))+' UTC';
@@ -59,7 +60,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    const item=document.createElement('div');item.className='briefing-scale';const heading=document.createElement('strong');heading.textContent=scale.name;
    const gradient=document.createElement('div');gradient.className='briefing-gradient';const colors=scale.colors;
    const stops=scale.bands||scale.discrete?colors.flatMap((c,i)=>[c+' '+100*i/colors.length+'%',c+' '+100*(i+1)/colors.length+'%']):colors;
-   gradient.style.background='linear-gradient(to right,'+stops.join(',')+')';const labels=document.createElement('div');labels.className='briefing-scale-labels'+(scale.bands?' briefing-band-labels':'');
+   gradient.style.background=scale.rows?cloudLegendCSS():'linear-gradient(to right,'+stops.join(',')+')';const labels=document.createElement('div');labels.className='briefing-scale-labels'+(scale.bands?' briefing-band-labels':'');
    for(const text of scale.labels){const span=document.createElement('span');span.textContent=text;labels.append(span);}item.append(heading,gradient,labels);$('legend').append(item);
   }
  }

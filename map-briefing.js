@@ -1,14 +1,15 @@
+import {cloudLegendCSS} from './map-weather-background.js?v=20261013-land-sea';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-three-run-charts';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-land-sea';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-nw-europe-periods';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-three-run-charts';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-land-sea';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-land-sea';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-accum-history';
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {chartScales} from './map-image-export.js?v=20261012-accum-history';
+import {chartScales} from './map-image-export.js?v=20261013-land-sea';
 
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
@@ -62,7 +63,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   const item=document.createElement('div'),title=document.createElement('strong'),gradient=document.createElement('div'),labels=document.createElement('div');
   item.className='briefing-scale';gradient.className='briefing-gradient';labels.className='briefing-scale-labels';
   if(preset.id==='weather'){
-   title.textContent='Cloud cover';gradient.style.background='linear-gradient(to right,#414141,#ffffff)';labels.innerHTML='<span>Clear · 0%</span><span>Overcast · 100%</span>';
+   title.textContent='Cloud cover';gradient.style.background=cloudLegendCSS();labels.innerHTML='<span>Clear · 0%</span><span>Overcast · 100%</span>';
   }else{
    const colors=field.colors.slice(field.legendStart??0),scale=displayStops(field).slice(field.legendStart??0),unit=displayUnit(field),min=field.temperatureBands?scale[1]:scale[0],max=scale.at(-1);
    title.textContent=field.name+' · '+unit+(field.legendNote?' · '+field.legendNote:'');

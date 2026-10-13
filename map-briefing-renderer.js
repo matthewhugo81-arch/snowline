@@ -1,5 +1,6 @@
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
 import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-hide-uk-label';
+import {setWeatherBackground,MAX_CLOUD_OPACITY} from './map-weather-background.js?v=20261013-land-sea';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
@@ -10,7 +11,7 @@ import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261013-ukv-retention';
 
-import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261012-weather-composite';
+import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261013-land-sea';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
@@ -73,6 +74,7 @@ export class BriefingRenderer{
   // A newly selected model may add a pressure-level scale to the catalogue.
   this.settings.colorScales=briefingSettings(this.baseSettings).colorScales;
   this.frames?.clear();
+  setWeatherBackground(this.map,preset.id==='weather',this.rasterBefore);
   const view=JSON.stringify([bounds,size]);
   if(this.area!==view){
    this.area=view;
@@ -83,7 +85,7 @@ export class BriefingRenderer{
   this.OM.updateCurrentBounds(clip);this.cache.setContext(JSON.stringify(clip));
   // Worker requests are shared across both views. Distinguish the composite's
   // colours even if an interactive tile is still finishing cancellation.
-  const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=1';
+  const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=20261013-land-sea';
   const field=this.fields.find(field=>field.key===preset.field);
   if(!field||!preset.required.every(key=>hasFieldTime(meta,key,time)))throw Error('This chart is unavailable for the selected time.');
   const main=url(preset.field),pressureURL=url('pressure_msl');
@@ -106,7 +108,7 @@ export class BriefingRenderer{
    const frame=await frames.acquire(main,()=>!signal.aborted);
    if(signal.aborted)throw aborted();
    if(!frame)throw Error('Chart could not load. Use Retry charts.');
-   frames.show(frame,1,'linear');
+   frames.show(frame,preset.id==='weather'?MAX_CLOUD_OPACITY:1,'linear');
    // All raster fills belong below coast/place labels; pressure lines above.
    if(preset.id==='weather')this.map.moveLayer(frame.id+'-rain-image',this.rasterBefore);
    await rendered(this.map,signal);

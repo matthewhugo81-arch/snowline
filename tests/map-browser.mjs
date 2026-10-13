@@ -107,7 +107,7 @@ try{
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Precipitation')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    const palettes=await page.evaluate(()=>window.fixturePalettes);
-   assert.ok(palettes.some(p=>p.url.includes('weather_composite=1')&&p.rain?.[3]===0&&p.cloud?.[0]===65),'Composite uses transparent dry band and grayscale cloud');
+   assert.ok(palettes.some(p=>p.url.includes('weather_composite=1')&&p.rain?.[3]===0&&p.cloud?.[0]===255&&p.cloud?.[3]===0),'Composite uses transparent dry band and clear-sky cloud');
    assert.ok(palettes.some(p=>!p.url.includes('weather_composite=1')&&p.url.includes('variable=precipitation')&&p.rain?.[3]===1),'Ordinary precipitation stays opaque');
    await page.locator('#map-variable-b').selectOption(composite);
    await page.locator('#map-variable').selectOption('temperature_2m');

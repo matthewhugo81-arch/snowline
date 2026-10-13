@@ -1,5 +1,5 @@
 import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261013-ukv-retention';
-import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261013-nw-europe-periods';
+import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261013-land-sea';
 import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-ukv-retention';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 const HOUR=3600000;
