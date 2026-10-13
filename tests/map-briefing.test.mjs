@@ -6,10 +6,10 @@ import {briefingValueLabels} from '../map-briefing-values.js';
 import * as OM from '../vendor/index.mjs';
 const time=hour=>new Date(Date.UTC(2026,9,11,hour)).toISOString();
 const meta={reference_time:time(0),domain:'ncep_gfs013',variables:['cloud_cover','precipitation','pressure_msl','temperature_850hPa','geopotential_height_500hPa'],valid_times:Array.from({length:49},(_,i)=>time(i))};
-test('composite makes dry precipitation transparent and 100% cloud white without changing interactive scales',()=>{
+test('composite makes dry precipitation transparent and caps cloud brightness at 90% white',()=>{
  const settings={colorScales:{cloud_cover:{breakpoints:[0,50,100],colors:[[1,2,3,1],[4,5,6,1],[7,8,9,1]]},precipitation:{breakpoints:[0,.5,1],colors:[[255,255,255,1],[0,0,255,1],[0,255,0,1]]}}};
  const original=structuredClone(settings),composite=briefingSettings(settings);
- assert.deepEqual(composite.colorScales.cloud_cover.colors,[[65,65,65,1],[160,160,160,1],[255,255,255,1]]);
+ assert.deepEqual(composite.colorScales.cloud_cover.colors,[[65,65,65,1],[148,148,148,1],[230,230,230,1]]);
  assert.equal(composite.colorScales.precipitation.colors[0][3],0);assert.equal(composite.colorScales.precipitation.colors[1][3],1);
  assert.deepEqual(settings,original);
 });
@@ -48,6 +48,7 @@ test('rain captions retain the source accumulation period rather than the displa
 });
 test('chart cache separates model, run, area, preset and time and releases old images',()=>{
  const a=briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3));
+ assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,660],{},'streets'),'Different map backgrounds cannot reuse the same image');
  for(const overlays of [{contours:true},{grid:true},{contours:true,grid:true}])assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,660],overlays),'Overlay variants must never reuse plain images');
  assert.equal(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,660],{contours:false,grid:false}));
  assert.notEqual(a,briefingKey('gfs',meta,BRIEFING_PRESETS[0],[0,0,1,1],time(3),[960,960]),'Different chart shapes cannot reuse the same image');

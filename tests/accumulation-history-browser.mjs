@@ -94,8 +94,14 @@ try{
    await page.locator('#previous-model').selectOption('gfs_global');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
    assert.equal(await page.locator('#previous-grid .briefing-card:visible').count(),3,'Unrelated models retain three-run analysis');
    assert.equal(await page.locator('#previous-model option[value="'+UKV+'_nowcast"]').count(),0);
+   const previousImage=await page.locator('#previous-grid img').first().getAttribute('src');
+   await page.locator('#previous-background').selectOption('streets');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
+   assert.notEqual(await page.locator('#previous-grid img').first().getAttribute('src'),previousImage,'Previous runs redraw for the chosen background');
    await page.locator('#briefing-sequence-mode').click();await page.waitForFunction(()=>!document.querySelector('#briefing-preset').disabled);assert.equal(await page.locator('#previous-run-view').isVisible(),false);
+   assert.equal(await page.locator('#briefing-background').inputValue(),'streets','Background follows between briefing modes');
    await page.locator('#briefing-close').click();assert.equal(await page.locator('#map-a').isVisible(),true);
+   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-background').inputValue(),'streets','Background follows back to interactive maps');
    await page.locator('#map-model').selectOption('gfs_global');await page.waitForFunction(()=>!document.querySelector('#map-variable').disabled);
    assert.equal(await page.locator('#map-variable option[value="precipitation_total_120h"]').isDisabled(),false);
    if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').uncheck();if(viewport.width<650)await page.locator('#mobile-return-map').click();

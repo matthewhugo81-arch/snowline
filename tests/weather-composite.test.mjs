@@ -54,7 +54,7 @@ test('combined palette matches the briefing while preserving ordinary cloud and 
  const before=JSON.stringify(settings),styled=compositeSettings(settings);
  assert.equal(JSON.stringify(settings),before);
  assert.deepEqual(styled.colorScales.cloud_cover.colors[0],[65,65,65,1]);
- assert.deepEqual(styled.colorScales.cloud_cover.colors.at(-1),[255,255,255,1]);
+ assert.deepEqual(styled.colorScales.cloud_cover.colors.at(-1),[230,230,230,1]);
  assert.equal(styled.colorScales.precipitation.colors[0][3],0);
  assert.equal(OM.getColor(styled.colorScales.precipitation,.499,false)[3],0);
  assert.equal(OM.getColor(styled.colorScales.precipitation,.5,false)[3],1);

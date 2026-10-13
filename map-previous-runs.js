@@ -1,12 +1,13 @@
+import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-ukv-retention';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
 import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-three-run-charts';
-import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-nw-europe-periods';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-three-run-charts';
+import {BRIEFING_AREAS,BRIEFING_PRESETS,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-map-appearance';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-map-appearance';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
-import {chartScales} from './map-image-export.js?v=20261012-accum-history';
+import {chartScales} from './map-image-export.js?v=20261013-map-appearance';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
 const stamp=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const utc=time=>stamp.format(new Date(time))+' UTC';
@@ -14,7 +15,7 @@ function option(value,label){const el=document.createElement('option');el.value=
 
 // Separate controller: no changes to the forecast-sequence state or main maps.
 // Runs remain pinned until the user explicitly chooses/reloads them.
-export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose,...renderOptions}){
+export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose,getBackground=()=>'light',onBackgroundChange=()=>{},...renderOptions}){
  host.innerHTML=`<div class="briefing-heading"><div><h2>Previous Run Analysis</h2><p id="previous-status" role="status">Choose a model to compare three runs.</p></div><div class="briefing-heading-actions"><button type="button" class="secondary" id="previous-toggle-controls" aria-expanded="true" aria-controls="previous-control-section">Hide controls</button><button type="button" class="secondary" id="previous-close">Back to maps</button></div></div>
  <div id="previous-control-section"><div class="previous-controls">
  <label>Forecast model<select id="previous-model"></select></label>
@@ -23,7 +24,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <label><span id="previous-time-heading">Shared valid time · UTC</span><select id="previous-time" disabled></select></label>
  <label>Forecast interval<select id="previous-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
  <button type="button" class="secondary" id="previous-refresh">Load latest three runs</button></div>
- <div class="briefing-overlays"><label class="check-row"><input type="checkbox" id="previous-contours"> Contours</label><label class="check-row"><input type="checkbox" id="previous-grid-values"> Grid values</label><span class="small-note">Same area, chart, colour scale and valid time. Each panel retains its own initialization and lead time.</span></div>
+ <div class="briefing-overlays"><label class="briefing-background">Map background<select id="previous-background">${backgroundOptions}</select></label><label class="check-row"><input type="checkbox" id="previous-contours"> Contours</label><label class="check-row"><input type="checkbox" id="previous-grid-values"> Grid values</label><span class="small-note">Same area, chart, colour scale and valid time. Each panel retains its own initialization and lead time.</span></div>
  <p id="previous-note" class="small-note"></p></div>
  <p id="previous-new" class="previous-notice" hidden>A newer run is available. Your comparison is unchanged. Show controls and use Load latest three runs to update it.</p>
  <div id="previous-legend" class="briefing-legend"></div>
@@ -51,7 +52,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  const area=()=>BRIEFING_AREAS.find(a=>a.id===$('area').value);
  const bounds=()=>area()?.bounds??currentBounds,size=()=>area()?.size??[960,660];
  function cancel(){generation++;controller?.abort();renderController?.abort();renderer?.cancel();}
- function disable(value){for(const id of ['preset','time','back','forward','refresh'])$(id).disabled=value;for(const c of cards)c.select.disabled=value;}
+ function disable(value){for(const id of ['preset','time','back','forward','refresh','background'])$(id).disabled=value;for(const c of cards)c.select.disabled=value;}
  function navigation(){const empty=!times.length;$('back').disabled=empty||index===0;$('forward').disabled=empty||index===times.length-1;$('time').disabled=empty;$('time').value=accumulationHours(preset()?.field)&&times[index]?periodStart(times[index],accumulationHours(preset().field)):String(index);}
  function legend(){
   const p=preset(),field=fields.find(f=>f.key===p?.field);$('legend').replaceChildren();if(!p||!field)return;
@@ -92,7 +93,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    $('progress').textContent='Choose '+runCount()+' different runs with overlapping coverage. No missing data is substituted.';return;
   }
   requestedTime=Date.parse(time);if(accumulationHours(p.field))requestedStart=periodStart(time,accumulationHours(p.field));navigation();
-  const opts={model:model.id,preset:p,bounds:[...bounds()],size:[...size()],overlays:{contours:$('contours').checked,grid:$('grid-values').checked}};
+  const opts={model:model.id,preset:p,bounds:[...bounds()],size:[...size()],background:$('background').value,overlays:{contours:$('contours').checked,grid:$('grid-values').checked}};
   let loaded=0,failed=0;const started=performance.now();
   const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+runCount()+' charts ready'+(failed?' · '+failed+' unavailable':loaded===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(accumulationHours(p.field)?' · Shared period: '+accumulationPeriod(p.field,time):' · Shared valid time: '+utc(time));};
   const show=(c,src,meta)=>{
@@ -104,11 +105,12 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;
    c.title.textContent=model.name+' · '+forecastValidity(p.field,time);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
-   const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays),cached=images.get(key);if(cached)show(c,cached,meta);
+   const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays,opts.background),cached=images.get(key);if(cached)show(c,cached,meta);
    return {c,meta,key,cached};
   });progress();
   work=work.catch(()=>{}).then(async()=>{
-   if(signal.aborted)return;renderer??=new BriefingRenderer({...renderOptions,fields});
+   if(signal.aborted)return;if(renderer&&renderer.background!==opts.background){renderer.destroy();renderer=null;}
+   renderer??=new BriefingRenderer({...renderOptions,fields,background:opts.background});
    for(const item of tasks){
     if(signal.aborted||!active)return;if(item.cached)continue;
     try{const src=await renderer.render({...opts,meta:item.meta,time,signal,onProgress:({done,total})=>{
@@ -122,7 +124,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    const next=times[index+1];if(failed||!next||accumulationHours(p.field))return;
    for(const meta of chosen){
     if(signal.aborted||!active||document.hidden)return;
-    const key=briefingKey(model.id,meta,p,opts.bounds,next,opts.size,opts.overlays);if(images.get(key))continue;
+    const key=briefingKey(model.id,meta,p,opts.bounds,next,opts.size,opts.overlays,opts.background);if(images.get(key))continue;
     try{const src=await renderer.render({...opts,meta,time:next,signal});if(signal.aborted){URL.revokeObjectURL(src);return;}images.set(key,src);}catch{if(signal.aborted)return;}
    }
   }).catch(error=>{if(token===generation)$('progress').textContent=error.message;});
@@ -147,6 +149,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    configureTimeline();
   }catch(error){if(token===generation&&active){$('status').textContent=error.message;$('refresh').disabled=false;$('progress').textContent='Archive unavailable. The main maps and forecast sequence are unchanged.';}}
  }
+ $('background').addEventListener('change',()=>{onBackgroundChange($('background').value);render();});
  $('model').addEventListener('change',loadLatest);$('refresh').addEventListener('click',loadLatest);
  $('preset').addEventListener('change',configureTimeline);$('interval').addEventListener('change',()=>{interval=$('interval').value;configureTimeline();});
  for(const name of ['area','contours','grid-values'])$(name).addEventListener('change',render);
@@ -173,5 +176,5 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden){renderController?.abort();renderer?.cancel();}else if(runs.length>=runCount())render();});
  const close=()=>{active=false;cancel();renderer?.destroy();renderer=null;host.hidden=true;if($('enlarged').open)$('enlarged').close();};
  window.addEventListener('pagehide',()=>{close();images.clear();});
- return {open(selection){active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();requestedStart=selection.periodStart??null;if(selection.preset)$('preset').replaceChildren(option(selection.preset,selection.preset));$('model').value=isUKVChoice(selection.model)?UKV:choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value=selection.area??'uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},close};
+ return {open(selection){$('background').value=getBackground();active=true;host.hidden=false;currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();requestedStart=selection.periodStart??null;if(selection.preset)$('preset').replaceChildren(option(selection.preset,selection.preset));$('model').value=isUKVChoice(selection.model)?UKV:choices.some(m=>m.id===selection.model)?selection.model:choices.find(m=>m.id==='ukmo_uk_deterministic_2km')?.id??choices[0].id;$('area').value=selection.area??'uk';document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));loadLatest();},close};
 }

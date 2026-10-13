@@ -14,12 +14,12 @@ export function compositeField(precipitationScale){
 export function compositeSettings(settings){
  const cloud=settings.colorScales.cloud_cover,rain=settings.colorScales.precipitation;
  return {...settings,colorScales:{...settings.colorScales,
-  cloud_cover:{...cloud,colors:cloud.colors.map((_,index)=>{const shade=Math.round(65+190*cloud.breakpoints[index]/100);return [shade,shade,shade,1];})},
+  cloud_cover:{...cloud,colors:cloud.colors.map((_,index)=>{const shade=Math.round(65+165*cloud.breakpoints[index]/100);return [shade,shade,shade,1];})},
   precipitation:{...rain,colors:rain.colors.map((color,index)=>index===0?[...color.slice(0,3),0]:[...color])}
  }};
 }
 // The flag stays in TileJSON templates and worker/cache keys, not the data-file URL.
-export const compositeURL=url=>url+'&weather_composite=1';
+export const compositeURL=url=>url+'&weather_composite=1&cloud_style=20261013-white90';
 export const isCompositeURL=url=>/[?&]weather_composite=1(?:[&/]|$)/.test(url);
 export function compositeUnderlay(url){
  return {id:'cloud',placement:'underlay',source:{type:'raster',url,tileSize:512,maxzoom:10},

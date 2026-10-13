@@ -1,8 +1,9 @@
+import {MAP_BACKGROUNDS,backgroundStyle,hideProtectedAreas} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-three-run-charts';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
-import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261012-weather-composite';
+import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
@@ -30,7 +31,7 @@ import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261013-ukv-r
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261012-accum-history';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261013-map-appearance';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
@@ -85,7 +86,7 @@ const stamp=t=>date.format(new Date(t));
 let roads=false;try{roads=localStorage.getItem('snowline-roads')==='true';}catch{}
 $('map-roads').checked=roads;
 function applyRoads(map){for(const layer of map.getStyle().layers)if(['transportation','transportation_name'].includes(layer['source-layer']))map.setLayoutProperty(layer.id,'visibility',roads?'visible':'none');}
-const backgrounds={light:'positron',streets:'liberty'};
+const backgrounds=MAP_BACKGROUNDS;
 let background='light';try{const saved=localStorage.getItem('snowline-background');if(Object.hasOwn(backgrounds,saved))background=saved;else if(saved)localStorage.setItem('snowline-background',background);}catch{}
 $('map-background').value=background;
 let terrain=true;try{terrain=localStorage.getItem('snowline-terrain')!=='false';}catch{}
@@ -144,8 +145,8 @@ function makeMap(key){
  map.touchZoomRotate.disableRotation();
  map.once('load',()=>{const credits=map.getContainer().querySelector('.maplibregl-compact-show .maplibregl-ctrl-attrib-button');credits?.click();});
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');fitArea(map);
- const panel={key,map,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{if(briefingActive)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive)return;pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{if(briefingActive)return;const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
- map.on('style.load',()=>{panel.styleOrdered=false;hideUKCountryLabel(map);applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
+ const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{if(briefingActive)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive)return;pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{if(briefingActive)return;const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
+ map.on('style.load',()=>{panel.styleOrdered=false;hideUKCountryLabel(map);hideProtectedAreas(map);applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(!panel.loaded||panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
@@ -421,9 +422,9 @@ function setLegend(){
   if(f.bands)displayBreaks.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categorical?String(v):i===displayBreaks.length-1?v+'+':v+'–<'+displayBreaks[i+1];item.title=range+' '+displayUnit(f);item.setAttribute('aria-label',range+' '+displayUnit(f));swatch.style.background=legendColors[i];label.textContent=v+(i===displayBreaks.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
   bands.style.gridTemplateColumns='repeat('+displayBreaks.length+',minmax(0,1fr))';
   if(field===WEATHER_COMPOSITE){
-   gradient.hidden=false;ticks.hidden=false;gradient.style.background='linear-gradient(to right,#414141,#ffffff)';ticks.replaceChildren();
+   gradient.hidden=false;ticks.hidden=false;gradient.style.background='linear-gradient(to right,#414141,#e6e6e6)';ticks.replaceChildren();
    for(const text of ['Clear · 0%','Overcast · 100%']){const label=document.createElement('span');label.textContent=text;ticks.append(label);}
-   const dry=bands.firstElementChild;if(dry){dry.querySelector('i').style.background='linear-gradient(to right,#414141,#ffffff)';dry.title='Below 0.5 mm: modelled cloud remains visible, not necessarily dry';}
+   const dry=bands.firstElementChild;if(dry){dry.querySelector('i').style.background='linear-gradient(to right,#414141,#e6e6e6)';dry.title='Below 0.5 mm: modelled cloud remains visible, not necessarily dry';}
   }
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
@@ -570,7 +571,15 @@ for(const key of ['a','b']){
 }
 $('map-terrain').addEventListener('change',e=>{terrain=e.target.checked;try{localStorage.setItem('snowline-terrain',String(terrain));}catch{}for(const panel of Object.values(panels))if(panel.map.getLayer('terrain-shading')||panel.map.isStyleLoaded())drawTerrain(panel.map);});
 $('map-roads').addEventListener('change',e=>{roads=e.target.checked;try{localStorage.setItem('snowline-roads',String(roads));}catch{}for(const panel of Object.values(panels))if(panel.map.isStyleLoaded())applyRoads(panel.map);});
-$('map-background').addEventListener('change',e=>{pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';background=e.target.value;try{localStorage.setItem('snowline-background',background);}catch{}for(const panel of Object.values(panels)){clearGridValues(panel);panel.restyling=true;panel.loaded=false;panel.version++;panel.frameCache?.clear();panel.frameCache=null;panel.frames=new Map();panel.map.setStyle('https://tiles.openfreemap.org/styles/'+backgrounds[background]);}});
+function restyleMaps(){
+ const changed=Object.values(panels).filter(panel=>panel.background!==background);
+ if(!changed.length)return false;
+ pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';
+ for(const panel of changed){clearGridValues(panel);panel.background=background;panel.restyling=true;panel.loaded=false;panel.version++;panel.frameCache?.clear();panel.frameCache=null;panel.frames=new Map();panel.map.setStyle(backgroundStyle(background));}
+ return true;
+}
+function selectBackground(value){background=value;$('map-background').value=value;try{localStorage.setItem('snowline-background',background);}catch{}if(!briefingActive)restyleMaps();}
+$('map-background').addEventListener('change',e=>selectBackground(e.target.value));
 $('reload-maps').addEventListener('click',refreshLiveRuns);$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{const preview=Number(e.target.value);pauseAnimation();e.target.value=String(preview);if(state.times.length)$('animation-status').textContent='Preview '+stamp(state.times[preview])+' UTC · release to load';});
 $('previous-time').addEventListener('click',()=>{pauseAnimation();state.index--;setTime();});$('next-time').addEventListener('click',()=>{pauseAnimation();state.index++;setTime();});
 $('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.weatherLayer&&p.map.getLayer(p.weatherLayer)){p.map.setPaintProperty(p.weatherLayer,'raster-opacity',state.opacity);for(const id of p.frameCache?.current?.underlays??[])p.map.setPaintProperty(id,'raster-opacity',state.opacity);}});
@@ -600,12 +609,12 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261013-three-run-charts');
-   briefingView=createBriefing({host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
+   const {createBriefing}=await import('./map-briefing.js?v=20261013-map-appearance');
+   briefingView=createBriefing({getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
-    onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}
+    onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();if(!restyleMaps())setTime();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}
    });
   }
   document.body.classList.add('briefing-open');briefingView.open(selection);window.scrollTo(0,0);
