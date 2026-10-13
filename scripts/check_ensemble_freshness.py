@@ -54,8 +54,10 @@ def assess(model,published,source_run,source_hours,now):
  available_ms={datetime.fromisoformat(t.replace('Z','+00:00')).timestamp() for t in available}
  missing=[h for h in source_hours if (source_run+timedelta(hours=h)).timestamp() not in available_ms]
  newer=reference is None or source_run>reference
- incomplete_gefs=model=='gefs' and reference==source_run and published.get('completed') is False
- update=newer or (reference==source_run and (bool(missing) or incomplete_gefs))
+ # A source may publish only a subset of its eventual forecast horizon.
+ # Do not treat a correctly initialized, partially issued GEFS cycle as stale
+ # when every hour verified in the official index is already on the site.
+ update=newer or (reference==source_run and bool(missing))
  return dict(model=MODELS[model][0],published_reference=published.get('reference_time') if published else None,source_reference=iso(source_run),source_hours=source_hours,published_frames=len(available),completed=published.get('completed') if published else None,status='newer-source-run' if newer else 'hours-pending' if update else 'current',refresh_needed=update,missing_source_hours=missing,checked_at=iso(now))
 def check_model(model,site,now):
  run,hours=newest_source(model,now)
