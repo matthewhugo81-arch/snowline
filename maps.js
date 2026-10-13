@@ -8,12 +8,12 @@ import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-e
 import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261012-weather-composite';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261013-ukv-full-timeline';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261013-ukv-retention';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261013-ukv-full-timeline';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261012-chart-style';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
@@ -147,7 +147,7 @@ function makeMap(key){
  map.on('style.load',()=>{panel.styleOrdered=false;applyRoads(map);drawTerrain(map);if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))setTime();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
- map.on('click',async event=>{if(panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
+ map.on('click',async event=>{if(!panel.loaded||panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
 locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await readMapValue(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${displayValue(result.value,field).toFixed(1)} ${displayUnit(field)} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
  imageMenu.registerMap(map,()=>({...panel.imageInfo,subtitle:$('map-error-'+key).hidden?'':$('map-error-'+key).textContent,ready:panel.loaded&&!!panel.displayedTime&&!!panel.imageInfo&&!!map.getLayer(panel.weatherLayer)}),pauseAnimation);
@@ -250,7 +250,7 @@ function frameBudget(){
  return {loop:true,...(state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2})};
 }
 function updatePreloadStatus(){
- const choices=panelSelections(state),total=state.times.length*choices.length;
+ const choices=panelSelections(state),total=choices.reduce((sum,{model,field})=>sum+state.times.filter(time=>hasFieldTime(state.metas[model],field,time)).length,0);
  let loaded=0,failed=0;
  for(const {key}of choices){const panel=panels[key];for(const url of panel?.frameURLs??[]){if(panel.frameCache?.preloaded.has(url))loaded++;else if(panel.frameCache?.failures.has(url))failed++;}}
  const complete=total>0&&loaded===total&&!imageryCache.limited;
@@ -276,7 +276,7 @@ function orderForecastBasemap(panel){
 function panelCache(panel,model,field){
  const meta=state.metas[model],overlay=state.overlays[panel.key],composite=field===WEATHER_COMPOSITE;
  // Changing the other panel's field can change the shared timeline too.
- const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars,state.times,overlay.isobars?fieldSource(meta,'pressure_msl')?.valid_times:null]);
+ const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars,state.times,state.times.map(time=>hasFieldTime(meta,field,time)),overlay.isobars?fieldSource(meta,'pressure_msl')?.valid_times:null]);
  if(panel.frameCache&&panel.cacheKey===signature)return panel.frameCache;
  panel.frameCache?.clear();orderForecastBasemap(panel);
  const f=fields.find(item=>item.key===field),descriptors=new Map();
@@ -304,7 +304,7 @@ async function prepareSelection(index,valid=()=>true){
  if(!valid()||metas!==state.metas||choices.some(({key,model,field})=>panels[key].restyling||model!==panelSelection(state,key).model||field!==panelSelection(state,key).field))return null;
  const prepared=await Promise.all(choices.map(async({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
-  if(!url)return null;
+  if(!url)return {panel,cache,frame:null,key,model,field,time};
   const frame=await cache.acquire(url,valid);
   return frame?{panel,cache,frame,key,model,field,time}:null;
  }));
@@ -335,10 +335,20 @@ async function loadTime(){
   viewportBounds();
   const prepared=await prepareSelection(index,valid);
   if(!valid())return false;
-  if(!prepared||prepared.some(({cache,frame})=>!cache.isReady(frame.url)))throw new Error('Forecast frame could not load.');
+  if(!prepared||prepared.some(({cache,frame})=>frame&&!cache.isReady(frame.url)))throw new Error('Forecast frame could not load.');
   // Synchronous commit: images, contours, isobars and labels share one valid time.
   for(const {panel,cache,frame,key,model,field}of prepared){
    clearGridValues(panel);
+   if(!frame){
+    cache.hide();panel.sourceId=null;panel.url=null;panel.loaded=false;panel.weatherLayer=null;panel.imageInfo=null;
+    panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
+    const meta=state.metas[model],end=meta.valid_times.filter(t=>hasFieldTime(meta,field,t)).at(-1);
+    const pending=meta.completed===false&&end&&Date.parse(time)>Date.parse(end);
+    $('panel-label-'+key).textContent=forecastLabel(model,field,time)+' · unavailable';
+    $('map-error-'+key).textContent=(pending?'Not yet published for this run.':'No forecast for this layer at the selected time.')+(end?' Latest available: '+stamp(end)+' UTC.':'')+' The other UKV run remains available.';
+    $('map-error-'+key).hidden=false;
+    continue;
+   }
    cache.show(frame,state.opacity,fields.find(f=>f.key===field)?.bands?'nearest':'linear');
    panel.sourceId=frame.id;panel.url=frame.url;panel.loaded=true;panel.weatherLayer=frame.layer;
    panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
@@ -346,7 +356,7 @@ async function loadTime(){
    scheduleGridValues(panel);
   }
   syncTimeline(index);setLegend();pressureNote();
-  for(const {panel,key,field}of prepared)panel.imageInfo={title:$('panel-label-'+key).textContent,scales:chartScales(fields.find(f=>f.key===field),$('legend-interval-'+key).textContent)};
+  for(const {panel,key,field,frame}of prepared)if(frame)panel.imageInfo={title:$('panel-label-'+key).textContent,scales:chartScales(fields.find(f=>f.key===field),$('legend-interval-'+key).textContent)};
   for(const {panel}of prepared)warmUpcoming(panel);
   $('animation-status').textContent=playing?'Playing · buffered native forecast frames':'Ready';updatePreloadStatus();
   status('Click a map for a value and local charts.');return true;
@@ -355,7 +365,7 @@ async function loadTime(){
   pauseAnimation();
   for(const {key}of panelSelections(state)){
    const panel=panels[key];
-   $('map-error-'+key).textContent=panel.displayedTime?'Unable to load the requested frame. Showing the forecast labelled '+stamp(panel.displayedTime)+' UTC. Retry or choose another time.':'Unable to load this forecast frame. Retry or check latest runs.';
+   $('map-error-'+key).textContent=panel.loaded&&panel.displayedTime?'Unable to load the requested frame. Showing the forecast labelled '+stamp(panel.displayedTime)+' UTC. Retry or choose another time.':'Unable to load this forecast frame. Retry or check latest runs.';
    $('map-error-'+key).hidden=false;
   }
   const shown=state.times.indexOf(panels.a?.displayedTime);
@@ -374,7 +384,7 @@ playback=new ForecastPlayback({
  length:()=>state.times.length,index:()=>state.index,buffer:2,settle:retrySelectedFrame,
  prepare:async index=>{
   const generation=timeGeneration;
-  const ready=panelSelections(state).every(({key})=>panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
+  const ready=panelSelections(state).every(({key,model,field})=>!hasFieldTime(state.metas[model],field,state.times[index])||panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
   if(!ready)$('animation-status').textContent='Buffering '+stamp(state.times[index])+' UTC…';
   return !!await prepareSelection(index,()=>generation===timeGeneration);
  },
@@ -456,7 +466,9 @@ function refreshTimeline(){
  state.times=intervalForecastTimes(panelForecastTimes(state),hours);
  $('map-forecast-interval').value=shortRange?'native':state.interval;
  $('map-forecast-interval').disabled=shortRange||!state.times.length;
- $('forecast-interval-note').textContent=shortRange
+ $('forecast-interval-note').textContent=fullUKVComparison(state)
+  ?'Both UKV runs keep every available hour. A panel is blank where its selected run has no forecast yet.'
+  :shortRange
   ?'Short-term models keep every available hour. Comparison uses matching times.'
   :hours?'Only the selected forecast hours load. Coarser model steps are retained.':'Every available forecast hour loads; longer forecasts take more time.';
  if(!state.times.length){

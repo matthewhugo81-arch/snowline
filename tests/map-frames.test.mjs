@@ -23,6 +23,14 @@ class FakeMap{
 }
 const loaded=async(cache,map,url)=>{const frame=cache.prepare(url);map.load(frame);assert.equal(await frame.ready,true);return frame;};
 
+test('an unpublished slot hides the previous image and can return to it without relabelling stale imagery',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');
+ const frame=await loaded(cache,map,'run09/hour11');cache.show(frame,.8,'linear');cache.hide();
+ assert.equal(cache.current,null);assert.ok(map.layers.indexOf(map.getLayer(frame.layer))<map.layers.indexOf(map.getLayer('background')));
+ assert.equal(cache.show(frame,.8,'linear'),true);assert.equal(cache.current,frame);
+ cache.invalidateView();cache.hide();assert.equal(cache.retired.size,0);assert.equal(map.sources.size,0);cache.clear();
+});
+
 test('visited frames reuse their source and image layer without changing the displayed frame during loading',async()=>{
  const map=new FakeMap(),cache=new ForecastFrames(map,'a');
  const first=await loaded(cache,map,'run1/temp/hour1');cache.show(first,.8,'linear');
