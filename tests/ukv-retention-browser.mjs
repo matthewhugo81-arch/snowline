@@ -123,16 +123,16 @@ try{
    // 06Z stays incomplete: 09Z must retain completed 03Z, never partial 06Z.
    phase=3;await tick();await page.waitForFunction(()=>document.querySelector('#briefing-model option[value="ukmo_uk_deterministic_2km"]').textContent.includes('09Z'));
    assert.match(await page.locator('#briefing-run').textContent(),/0300Z/);
-   await page.locator('#briefing-history-mode').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===2,{},{timeout:40000});
-   assert.equal(await page.locator('#previous-grid .briefing-card:visible').count(),2);
+   await page.locator('#briefing-history-mode').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:40000});
+   assert.equal(await page.locator('#previous-grid .briefing-card:visible').count(),3);
    const visible='#previous-grid .briefing-card:not([hidden])';
-   assert.deepEqual(await page.locator(visible+' select').evaluateAll(ss=>ss.map(s=>new Date(s.value).getUTCHours())),[3,9]);
-   for(const select of await page.locator(visible+' select').all())assert.equal(await select.locator('option').count(),2);
+   assert.deepEqual(await page.locator(visible+' select').evaluateAll(ss=>ss.map(s=>new Date(s.value).getUTCHours())),[0,3,9]);
+   for(const select of await page.locator(visible+' select').all())assert.equal(await select.locator('option').count(),3);
    const times=await page.locator(visible).evaluateAll(cs=>cs.map(c=>c.dataset.time));assert.equal(new Set(times).size,1);
    assert.equal(await page.locator('#previous-interval').inputValue(),'native');
    phase=4;await tick();
-   await page.waitForFunction(()=>document.querySelector('#previous-run-0').value.startsWith('2026-10-13T09:00')&&document.querySelector('#previous-run-1').value.startsWith('2026-10-13T12:00')&&document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===2,{},{timeout:40000});
-   assert.deepEqual(await page.locator(visible+' select').evaluateAll(ss=>ss.map(s=>new Date(s.value).getUTCHours())),[9,12],'History rolls automatically on the shared minute check');
+   await page.waitForFunction(()=>document.querySelector('#previous-run-0').value.startsWith('2026-10-13T03:00')&&document.querySelector('#previous-run-1').value.startsWith('2026-10-13T09:00')&&document.querySelector('#previous-run-2').value.startsWith('2026-10-13T12:00')&&document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:40000});
+   assert.deepEqual(await page.locator(visible+' select').evaluateAll(ss=>ss.map(s=>new Date(s.value).getUTCHours())),[3,9,12],'History rolls automatically on the shared minute check');
    await page.screenshot({path:`review-output/ukv-pair-${viewport.width}.png`,fullPage:true});
    assert.deepEqual(errors,[]);console.log(`UKV latest/previous, completion, rollover, failed checks, hourly steps, exact-cycle maps/briefing/history passed at ${viewport.width}px`);
   }catch(error){console.error('UKV STATE',await page.locator('#map-status,#run-update-status,#briefing-run,#previous-status,#previous-progress').allTextContents());await page.screenshot({path:`review-output/ukv-failure-${viewport.width}.png`,fullPage:true}).catch(()=>{});throw error;}

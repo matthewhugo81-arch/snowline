@@ -74,7 +74,7 @@ try{
    assert.match(await page.locator('#briefing-note').textContent(),/do not overlap/);
    assert.equal(await page.locator('#briefing-next').isDisabled(),true);
    const expectedPeriod='VALID 12 Oct 12:00 to 13 Oct 12:00 UTC';
-   assert.equal(await page.locator('#briefing-grid h3').first().textContent(),expectedPeriod);
+   assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · latest · '+expectedPeriod);
    assert.equal(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),'T+024');
    const exported=JSON.parse(await page.locator('#briefing-grid img').first().getAttribute('data-fixture-export'));
    assert.ok(exported.title.endsWith(expectedPeriod));assert.equal(exported.subtitle,'T+024');
@@ -119,7 +119,7 @@ try{
    assert.ok(historyExport.title.endsWith(expectedPeriod));assert.match(historyExport.subtitle,/^T\+\d+$/);
    const captions=await page.locator('#previous-grid .briefing-card:not([hidden])>p').allTextContents();
    assert.ok(captions.every(c=>/^Run .* · T\+\d+$/.test(c)));
-   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden]) h3').allTextContents(),Array(2).fill(expectedPeriod));
+   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden]) h3').allTextContents(),Array(3).fill('UKV · '+expectedPeriod));
    await page.locator('#previous-grid img').first().click();
    assert.equal(await page.locator('#previous-enlarged-title').textContent(),historyExport.title);
    await page.locator('#previous-enlarged-close').click();
@@ -127,9 +127,9 @@ try{
    assert.equal(await page.locator('#previous-preset').inputValue(),key(24));
    assert.equal(await page.locator('#previous-run-view #previous-time').inputValue(),'2026-10-12T12:00:00.000Z');
    assert.equal(await page.locator('#previous-time-heading').textContent(),'Shared period start · UTC');
-   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(2).fill('2026-10-13T12:00:00.000Z'));
+   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(3).fill('2026-10-13T12:00:00.000Z'));
    await page.locator('#previous-forward').click();await readyHistory();
-   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(2).fill('2026-10-14T12:00:00.000Z'));
+   assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(3).fill('2026-10-14T12:00:00.000Z'));
    assert.equal(await page.locator('#previous-forward').isDisabled(),true);
    await page.locator('#previous-back').click();await readyHistory();
    await page.locator('#previous-area').selectOption('atlantic');await readyHistory();

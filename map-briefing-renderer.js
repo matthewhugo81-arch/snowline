@@ -18,7 +18,7 @@ function rendered(map,signal){
  return new Promise((resolve,reject)=>{
   if(signal.aborted){reject(aborted());return;}
   const finish=error=>{clearTimeout(timer);map.off('render',check);signal.removeEventListener('abort',cancel);error?reject(error):resolve();};
-  const check=()=>{if(map.areTilesLoaded())finish();};
+  const check=()=>{if(map.areTilesLoaded()&&map.isSourceLoaded('briefing-coast'))finish();};
   const cancel=()=>finish(aborted());
   const timer=setTimeout(()=>finish(Error('The chart background could not finish loading.')),30000);
   signal.addEventListener('abort',cancel,{once:true});map.on('render',check);map.triggerRepaint();
@@ -56,7 +56,11 @@ export class BriefingRenderer{
     for(const layer of lines)this.map.moveLayer(layer.id);
     this.rasterBefore=lines[0]?.id;this.overlayBefore=lines.find(layer=>layer.type==='symbol')?.id;
     this.map.addSource('briefing-coast',{type:'geojson',data:'coastline.geojson'});
-    this.map.addLayer({id:'briefing-coast',type:'line',source:'briefing-coast',paint:{'line-color':'#111','line-width':.8}},this.overlayBefore);
+    // A narrow pale edge keeps the coastline visible on dark cloud/rain;
+    // the dark centre remains clear over white cloud, including ICON charts.
+    const coast={type:'line',source:'briefing-coast',layout:{'line-join':'round','line-cap':'round'}};
+    this.map.addLayer({...coast,id:'briefing-coast-halo',paint:{'line-color':'rgba(255,255,255,0.8)','line-width':2.8}},this.overlayBefore);
+    this.map.addLayer({...coast,id:'briefing-coast',paint:{'line-color':'#111','line-width':1.5}},this.overlayBefore);
     resolve();
    });
   });
