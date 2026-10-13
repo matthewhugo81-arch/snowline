@@ -1,4 +1,4 @@
-import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261012-accum-history';
+import {briefingTimes,briefingPresets,BRIEFING_PRESETS} from './map-briefing-data.js?v=20261013-fixed-periods';
 import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261012-accum-history';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 const HOUR=3600000;
