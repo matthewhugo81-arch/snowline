@@ -103,7 +103,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   };
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;
-   c.title.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'');c.caption.textContent=forecastValidity(p.field,time)+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
+   c.title.textContent=forecastValidity(p.field,time);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
    const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays),cached=images.get(key);if(cached)show(c,cached,meta);
    return {c,meta,key,cached};
   });progress();
