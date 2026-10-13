@@ -52,6 +52,8 @@ try{
    assert.match(await page.locator('#panel-label-a').textContent(),/13 Oct.*12:00/);assert.match(await page.locator('#panel-label-b').textContent(),/13 Oct.*12:00/);
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
+   assert.equal(await page.locator('#briefing-preset').inputValue(),key(24),'Main map rainfall total carries into briefing');
+   assert.equal(await page.locator('#briefing-time').inputValue(),'2026-10-12T12:00:00.000Z','The same rainfall window is retained on entry');
    await page.locator('#briefing-preset').selectOption('weather');
    await page.locator('#briefing-history-mode').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:60000});
    const savedImages=await page.locator('#previous-grid img').evaluateAll(imgs=>imgs.map(i=>i.src));

@@ -229,7 +229,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    active=false;cancel();renderer?.destroy();renderer=null;
    history??=createPreviousRunAnalysis({host:host.querySelector('#previous-run-view'),models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose:close,getBackground,onBackgroundChange,...renderOptions});
    history.open({model:model?.id??$('model').value,time:times[start]??new Date(requestedTime).toISOString(),periodStart:accumulationHours(preset?.field)&&times[start]?periodStart(times[start],accumulationHours(preset.field)):null,preset:preset?.id,area:$('area').value,bounds:currentBounds});
-  }else{const selection=history?.selection();history?.close();if(selection){$('model').value=selection.model;requestedChart=selection.preset;requestedTime=Date.parse(selection.time)||requestedTime;}$('background').value=getBackground();active=true;configure(true);}
+  }else{const selection=history?.selection();history?.close();if(selection){$('model').value=selection.model;requestedChart=selection.preset;requestedTime=Date.parse(selection.time)||requestedTime;requestedStart=selection.periodStart??null;}$('background').value=getBackground();active=true;configure(true);}
  }
  $('sequence-mode').addEventListener('click',()=>{if($('sequence').hidden)mode(false);});
  $('history-mode').addEventListener('click',()=>{if(!$('sequence').hidden)mode(true);});
@@ -244,7 +244,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  window.addEventListener('pagehide',()=>{clearInterval(refreshTimer);cancel();images.clear();renderer?.destroy();renderer=null;});
  return {open(selection){$('background').value=getBackground();
   history?.close();$('sequence').hidden=false;$('sequence-mode').setAttribute('aria-pressed','true');$('history-mode').setAttribute('aria-pressed','false');
-  active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=null;requestedChart=selection.field??selection.preset??null;
+  active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=accumulationHours(selection.field)&&selection.time?periodStart(selection.time,accumulationHours(selection.field)):null;requestedChart=selection.field??selection.preset??null;
   $('model').value=choices.some(item=>item.id===selection.model)?selection.model:choices[0].id;
   $('area').value=selection.area??'uk';$('close').focus({preventScroll:true});configure();
  },close};
