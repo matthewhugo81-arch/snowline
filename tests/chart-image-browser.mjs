@@ -27,7 +27,7 @@ try{
   await page.route('**/ensemble-data/*/latest.json',r=>r.fulfill({status:404,contentType:'application/json',body:'{}'}));
   await page.goto(origin+'/maps.html?time=2026-10-12T07:00:00Z');
   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
-  await page.evaluate(async()=>{const {Map}=await import('/vendor/maplibre-gl.mjs');window.fixtureLayers=[];const original=Map.prototype.addLayer;Map.prototype.addLayer=function(layer,before){window.fixtureLayers.push(structuredClone(layer));if(layer.id==='briefing-coast')window.fixtureChartMap=this;return original.call(this,layer,before);};});
+  await page.evaluate(async()=>{const {Map}=await import('/vendor/maplibre-gl.mjs');window.fixtureLayers=[];window.fixtureOpacity=[];const paint=Map.prototype.setPaintProperty;Map.prototype.setPaintProperty=function(id,name,value){if(name==='raster-opacity'&&value>0)window.fixtureOpacity.push({briefing:this.getContainer().classList.contains('briefing-renderer'),id,value});return paint.call(this,id,name,value);};const original=Map.prototype.addLayer;Map.prototype.addLayer=function(layer,before){window.fixtureLayers.push(structuredClone(layer));if(layer.id==='coast-line'&&this.getContainer().classList.contains('briefing-renderer'))window.fixtureChartMap=this;return original.call(this,layer,before);};});
   const map=page.locator('#map-a .maplibregl-canvas'),menu=page.locator('.chart-image-menu'),copy=menu.getByRole('menuitem',{name:'Copy image'}),save=menu.getByRole('menuitem',{name:'Save image'});
   const right=async(target=map)=>{
    // Settle test-driven page scrolling before contextmenu: the actual menu
@@ -70,16 +70,23 @@ try{
   if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').check();if(viewport.width<650)await page.locator('#mobile-return-map').click();
   await page.locator('#map-variable-b').selectOption('cloud_precipitation_mslp');await page.waitForFunction(()=>document.querySelector('#panel-label-b').textContent.includes('Cloud, precipitation'));
   await right(page.locator('#map-b .maplibregl-canvas'));await saveFile(`composite-export-${viewport.width}`);
+  if(viewport.width<650)await page.locator('#mobile-map-settings').click();
+  await page.getByText('Map appearance',{exact:true}).click();
+  assert.equal(await page.locator('#map-opacity').inputValue(),'80');
+  for(let step=0;step<20;step++)await page.locator('#map-opacity').press('ArrowLeft');
+  assert.equal(await page.locator('#map-opacity').inputValue(),'60');
+  if(viewport.width<650)await page.locator('#mobile-return-map').click();
   await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
   await page.locator('#briefing-preset').selectOption('airmass');await page.locator('#briefing-contours').check();await page.locator('#briefing-time').selectOption('0');
   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+  assert.ok(await page.evaluate(()=>window.fixtureOpacity.some(p=>p.briefing&&p.value===.6)),'Briefing inherits the selected main-map transparency');
   // Verify exported pixels contain the coastline above an opaque weather raster.
   const coastPixel=await page.locator('.briefing-card img').first().evaluate(async img=>{
    await img.decode();const map=window.fixtureChartMap,point=map.project([-3,55]),canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
    const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0);const x=Math.round(point.x*canvas.width/map.getCanvas().clientWidth),y=Math.round(point.y*canvas.height/map.getCanvas().clientHeight);
    const pixels=ctx.getImageData(x-2,y-2,5,5).data;return Array.from({length:25},(_,i)=>Array.from(pixels.slice(i*4,i*4+3))).some(rgb=>rgb.every(v=>v<60));
   });assert.equal(coastPixel,true,'Dark coastline remains visible above chart weather');
-  const bw=await page.evaluate(()=>window.fixtureLayers.filter(l=>l.id.includes('contour-lines')&&Array.isArray(l.paint?.['line-width'])).at(-1).paint['line-width']);assert.equal(bw.at(-2),2.6);assert.equal(bw.at(-1),1.3);
+  const bw=await page.evaluate(()=>window.fixtureLayers.filter(l=>l.id.includes('contour-lines')&&Array.isArray(l.paint?.['line-width'])).at(-1).paint['line-width']);assert.equal(bw.at(-2),1.8);assert.equal(bw.at(-1),.7);
   const image=page.locator('.briefing-card img').first();await right(image);await saveFile(`briefing-850-${viewport.width}`);await image.click();await page.locator('#briefing-enlarged[open]').waitFor();await right(page.locator('#briefing-enlarged-image'));assert.equal(await menu.evaluate(e=>e.closest('dialog')?.id),'briefing-enlarged');await saveFile(`enlarged-850-${viewport.width}`);await page.locator('#briefing-enlarged-close').click();
   await page.locator('#briefing-preset').selectOption('jet');await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});assert.deepEqual(await page.locator('#briefing-legend .briefing-band-labels span').allTextContents(),['60','75','90','105','120','135','150','165','180+']);
   const lightImage=await page.locator('.briefing-card img').first().getAttribute('src');

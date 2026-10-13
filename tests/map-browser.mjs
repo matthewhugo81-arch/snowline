@@ -378,7 +378,7 @@ try{
     const image=card.querySelector('img');await image.decode();const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
     const context=canvas.getContext('2d');context.drawImage(image,0,0,1,1);return {hour:new Date(card.dataset.time).getUTCHours(),red:context.getImageData(0,0,1,1).data[0]};
    })));
-   for(const {hour,red}of chartPixels)assert.ok(Math.abs(red-hour*7)<3,'Each snapshot contains the pixels for its labelled valid time');
+   for(const {hour,red}of chartPixels)assert.ok(Math.abs(red-(hour*7*.96+255*.04))<3,'Each snapshot contains the pixels for its labelled valid time');
    assert.match(await page.locator('.briefing-card>p').first().textContent(),/1 h precipitation/);
    await page.locator('.briefing-chart').first().click();
    assert.equal(await page.locator('#briefing-enlarged').evaluate(dialog=>dialog.open),true);
@@ -395,7 +395,7 @@ try{
    await page.locator('#briefing-grid-values').check();
    await page.waitForFunction(()=>document.getElementById('briefing-status').textContent==='6/6 charts ready · 6/6 next charts prepared',{},{timeout:60000});
    assert.notEqual(await page.locator('#briefing-grid img').first().getAttribute('src'),plainImage,'Enabling overlays renders a distinct image');
-   assert.match(await page.locator('#briefing-overlay-note').textContent(),/cloud cover.*%/i);
+   assert.match(await page.locator('#briefing-overlay-note').textContent(),/precipitation.*mm water/i);
    const preparedImages=await page.locator('#briefing-grid img').evaluateAll(images=>images.map(image=>image.src));
    const preparedRequests=await page.evaluate(()=>window.fixtureRequests.length);
    const expandedGridTop=await page.locator('#briefing-grid').evaluate(grid=>grid.getBoundingClientRect().top);
@@ -411,8 +411,8 @@ try{
    assert.deepEqual(await page.locator('#briefing-grid img').evaluateAll(images=>images.map(image=>image.src)),preparedImages,'Collapsing controls retains prepared imagery');
    assert.equal(await page.evaluate(()=>window.fixtureRequests.length),preparedRequests,'Toggling controls does not fetch or redraw the charts');
    const gridReads=await page.evaluate(()=>window.fixtureGridReads);
-   assert.ok(gridReads.length>=12);assert.ok(gridReads.every(r=>r.variable==='cloud_cover'));
-   assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=cloud_cover'))),'Cloud contours need the correct vector field');
+   assert.ok(gridReads.length>=12);assert.ok(gridReads.every(r=>r.variable==='precipitation'));
+   assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=precipitation'))),'Composite contours use precipitation in every view');
    await page.locator('.briefing-chart').first().click();
    assert.equal(await page.locator('#briefing-enlarged-image').getAttribute('src'),await page.locator('#briefing-grid img').first().getAttribute('src'),'Enlargement retains both overlays');
    await page.locator('#briefing-enlarged-close').click();

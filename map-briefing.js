@@ -1,10 +1,11 @@
+import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-chart-catalogue';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-shared-appearance';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-chart-catalogue';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-chart-catalogue';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-shared-appearance';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-shared-appearance';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-accum-history';
@@ -15,7 +16,7 @@ const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
 
-export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,imageMenu,onClose,getBackground=()=>'light',onBackgroundChange=()=>{},...renderOptions}){
+export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,imageMenu,onClose,getAppearance=()=>({}),getBackground=()=>'light',onBackgroundChange=()=>{},...renderOptions}){
  host.innerHTML=`<div class="briefing-mode-row" role="group" aria-label="Briefing mode"><button type="button" id="briefing-sequence-mode" aria-pressed="true">Forecast sequence</button><button type="button" class="secondary" id="briefing-history-mode" aria-pressed="false">Previous Run Analysis</button></div><div id="briefing-sequence"><div class="briefing-heading"><div><h2>Forecast briefing</h2><p id="briefing-run">Choose a model and chart.</p></div><div class="briefing-heading-actions"><button type="button" id="briefing-toggle-controls" class="secondary" aria-expanded="true" aria-controls="briefing-control-section">Hide controls</button><button type="button" id="briefing-close" class="secondary">Back to maps</button></div></div>
  <div id="briefing-control-section"><div class="briefing-controls">
  <label>Forecast model<select id="briefing-model"></select></label>
@@ -48,7 +49,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
  const overlays=()=>({contours:$('contours').checked,grid:$('grid-values').checked});
- function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('overlay-note').textContent=field?'Contours and grid values: '+field.name+' · '+displayUnit(field):'';}
+ function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('overlay-note').textContent=field?'Contours and grid values: '+(preset.id==='weather'?'Precipitation':field.name)+' · '+displayUnit(field):'';}
  function cancel(){controller?.abort();renderer?.cancel();generation++;}
  function controlsDisabled(disabled){for(const id of ['preset','time','interval','previous','next','contours','grid-values'])$(id).disabled=disabled;}
  function navigation(){
@@ -119,10 +120,10 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(!active||!meta||!preset)return;cancel();
   if(!times.length){$('grid').replaceChildren();$('status').textContent='No common forecast times for this chart.';navigation();return;}
   const token=generation;controller=new AbortController();const signal=controller.signal;
-  const selection={model:model.id,meta,preset,bounds:[...bounds()],size:[...chartSize()],background:$('background').value,overlays:overlays()};
+  const selection={model:model.id,meta,preset,bounds:[...bounds()],size:[...chartSize()],background:$('background').value,appearance:getAppearance(),overlays:overlays()};
   $('grid').style.setProperty('--briefing-aspect',selection.size[0]+'/'+selection.size[1]);
   const visible=briefingPage(times,start,count()),upcoming=accumulationHours(preset.field)?[]:briefingPage(times,start+count(),count());
-  const key=time=>briefingKey(selection.model,selection.meta,selection.preset,selection.bounds,time,selection.size,selection.overlays,selection.background);
+  const key=time=>briefingKey(selection.model,selection.meta,selection.preset,selection.bounds,time,selection.size,selection.overlays,selection.background,selection.appearance);
   const cards=new Map();let loaded=0,failed=0,prepared=0;
   $('grid').replaceChildren();$('retry').hidden=true;
   const progress=()=>{if(token===generation)$('status').textContent=loaded+'/'+visible.length+' charts ready'+(failed?' · '+failed+' unavailable':loaded===visible.length&&upcoming.length?' · '+prepared+'/'+upcoming.length+' next charts prepared':'');};
@@ -140,8 +141,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   navigation();progress();
   const task=async()=>{
    if(signal.aborted)return;
-   if(renderer&&renderer.background!==selection.background){renderer.destroy();renderer=null;}
-   renderer??=new BriefingRenderer({...renderOptions,fields,background:selection.background});
+   if(renderer&&(renderer.background!==selection.background||renderer.appearanceKey!==appearanceKey(selection.appearance))){renderer.destroy();renderer=null;}
+   renderer??=new BriefingRenderer({...renderOptions,fields,background:selection.background,appearance:selection.appearance});
    for(const time of [...visible,...upcoming]){
     if(signal.aborted||!active)return;
     const card=cards.get(time),cached=images.get(key(time));
@@ -227,7 +228,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   $('sequence-mode').setAttribute('aria-pressed',String(!historyMode));$('history-mode').setAttribute('aria-pressed',String(historyMode));$('sequence').hidden=historyMode;
   if(historyMode){
    active=false;cancel();renderer?.destroy();renderer=null;
-   history??=createPreviousRunAnalysis({host:host.querySelector('#previous-run-view'),models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose:close,getBackground,onBackgroundChange,...renderOptions});
+   history??=createPreviousRunAnalysis({host:host.querySelector('#previous-run-view'),models,fields,loadModel,loadRun,loadJSON,imageMenu,onClose:close,getAppearance,getBackground,onBackgroundChange,...renderOptions});
    history.open({model:model?.id??$('model').value,time:times[start]??new Date(requestedTime).toISOString(),periodStart:accumulationHours(preset?.field)&&times[start]?periodStart(times[start],accumulationHours(preset.field)):null,preset:preset?.id,area:$('area').value,bounds:currentBounds});
   }else{const selection=history?.selection();history?.close();if(selection){$('model').value=selection.model;requestedChart=selection.preset;requestedTime=Date.parse(selection.time)||requestedTime;requestedStart=selection.periodStart??null;}$('background').value=getBackground();active=true;configure(true);}
  }

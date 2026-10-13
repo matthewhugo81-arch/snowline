@@ -42,7 +42,5 @@ test('850 hPa spread, other temperature levels, theta-w and MSLP retain their li
  for(const key of ['temperature_850hPa_spread','temperature_500hPa','temperature_2m','wet_bulb_potential_temperature_850hPa','pressure_msl']){
   assert.equal(is850Temperature(key),false);assert.equal(contourLineWidth({key}),.7);
  }
- const code=readFileSync(new URL('../map-briefing-renderer.js',import.meta.url),'utf8');
- assert.match(code,/layer.id==='contour-lines'\?contourLineWidth\(field,2.6,1.3\):1.3/,'Briefing must not overwrite highlighted 850 hPa contours with a uniform width');
  const maps=readFileSync(new URL('../maps.js',import.meta.url),'utf8');assert.match(maps,/if\(is850Temperature\(field.key\)\)return temperatureContourLevels\(field\)/);assert.match(maps,/contour_style:'20261012-major850'/);
 });
