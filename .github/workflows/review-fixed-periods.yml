@@ -43,6 +43,12 @@ jobs:
           # The main map also has a previous-time navigation button.
           s=s.replace("page.locator('#previous-time')", "page.locator('#previous-run-view #previous-time')")
           p.write_text(s)
+          # Past T+90 h, IFS has 3-hour native steps. Use 12Z for two
+          # consecutive 48 h live windows; arbitrary 13Z starts are covered
+          # by numerical/UI tests and the first live review, not invented at T+109.
+          p=Path('tests/fixed-periods-live-browser.mjs')
+          s=p.read_text().replace(' 13Z',' 12Z').replace('T13:00:00','T12:00:00')
+          p.write_text(s)
           Path('review-output/changed-files.json').write_text(json.dumps(names))
           PY
           git diff --check
