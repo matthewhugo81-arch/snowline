@@ -35,19 +35,21 @@ jobs:
           assert all(n.startswith(('map-','maps.','tests/','docs/','.github/workflows/map-browser-tests.yml')) for n in names)
           subprocess.run(['git','apply','--check','/tmp/fixed-periods.patch'],check=True)
           subprocess.run(['git','apply','/tmp/fixed-periods.patch'],check=True)
-          # fitBounds adds 18 px padding: actual -70.00175..40.00175 degrees.
           p=Path('tests/accumulation-periods-browser.mjs')
           s=p.read_text()
           assert 'b[0]>-70&&b[2]<40' in s
+          # Account for the existing 18 px fit padding around the target bounds.
           s=s.replace('b[0]>-70&&b[2]<40','b[0]>-71&&b[2]<41')
-          # The main map also has a previous-time navigation button.
           s=s.replace("page.locator('#previous-time')", "page.locator('#previous-run-view #previous-time')")
           p.write_text(s)
-          # Past T+90 h, IFS has 3-hour native steps. Use 12Z for two
-          # consecutive 48 h live windows; arbitrary 13Z starts are covered
-          # by numerical/UI tests and the first live review, not invented at T+109.
           p=Path('tests/fixed-periods-live-browser.mjs')
+          # Native 3 h steps past T+90 require a 12Z anchor for consecutive windows.
           s=p.read_text().replace(' 13Z',' 12Z').replace('T13:00:00','T12:00:00')
+          # These IFS runs do not share the 850 hPa preset. Verify the actual
+          # available cloud/precipitation/MSLP composite rather than inventing it.
+          s=s.replace("selectOption('airmass')", "selectOption('weather')")
+          s=s.replace('north-atlantic-real-850hpa.png','north-atlantic-real-weather.png')
+          s=s.replace('Instantaneous charts retain','Non-accumulation charts retain')
           p.write_text(s)
           Path('review-output/changed-files.json').write_text(json.dumps(names))
           PY
