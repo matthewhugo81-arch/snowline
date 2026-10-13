@@ -86,3 +86,10 @@ test('briefing values preserve zero and missing data, and cancellation prevents 
  value=NaN;assert.deepEqual(await briefingValueLabels(args),[]);
  controller.abort();await assert.rejects(briefingValueLabels(args),{name:'AbortError'});assert.equal(reads,2);
 });
+
+test('composite grid values read precipitation when pressure uses a companion model grid',async()=>{
+ const calls=[],backend={...OM,getProtocolInstance:()=>({omFileReader:{readVariable:async(url,variable)=>{calls.push({url,variable});return {values:new Proxy({},{get:()=>1.5})};}}})};
+ const primary={...meta,variables:['cloud_cover','precipitation']},pressure={...meta,domain:'ncep_gfs025',variables:['pressure_msl']};
+ const labels=await briefingValueLabels({OM:backend,settings:{domainOptions:OM.domainOptions},meta:{...primary,sources:[primary,pressure]},field:{key:'cloud_precipitation_mslp',unit:'mm water'},time:time(3),bounds:[-10,49,2,61],width:960,height:960,unproject:([x,y])=>({lng:-10+x/80,lat:61-y/80}),project:([lng,lat])=>({x:(lng+10)*80,y:(61-lat)*80})});
+ assert.equal(calls.length,1);assert.equal(calls[0].variable,'precipitation');assert.match(calls[0].url,/ncep_gfs013/);assert.ok(labels.length>0&&labels.every(label=>label.label==='1.5'));
+});
