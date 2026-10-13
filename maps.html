@@ -5,7 +5,7 @@ import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261013-ukv-r
 import {cachedJSON} from './cache.js?v=20261010-ukv-families';
 installModelRunMenu({models: MAP_MODELS, loadModel: loadSpatialModel,
   loadJSON: (url, {force}) => cachedJSON(url, {kind: 'metadata', ttl: 15000, force})});
-</script><link rel="stylesheet" href="map-image-export.css?v=20261012-chart-style"><link rel="stylesheet" href="map-previous-runs.css?v=20261013-history-valid-time"></head><body class="map-page">
+</script><link rel="stylesheet" href="map-image-export.css?v=20261012-chart-style"><link rel="stylesheet" href="map-previous-runs.css?v=20261013-compact-valid-time"></head><body class="map-page">
 <header><div class="map-heading"><a class="brand" href="./"><span class="mark" aria-hidden="true">✳</span> Snowline</a><span class="header-divider" aria-hidden="true">|</span><h1>UK Model Maps</h1></div><nav class="page-nav" aria-label="Main navigation"><a id="nav-charts" href="./">Location charts</a><a href="maps.html" aria-current="page">UK maps</a></nav><span class="strap">Winter forecasting</span></header>
 <main class="map-main">
 <section id="briefing-view" class="briefing-stage" aria-label="Forecast briefing" hidden></section>
