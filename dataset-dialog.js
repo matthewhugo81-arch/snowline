@@ -1,6 +1,6 @@
 import {chartWindow} from './chart-window.js?v=20261012-zoom';
 import {MODELS, VARIABLES} from './data.js?v=20261007-wind-mph';
-import {buildDataset, datasetTable, datasetCoverage, datasetCSV, datasetHTML, datasetFilename, variableLegend, escapeHTML} from './export.js?v=20261007-wind-mph';
+import {buildDataset, datasetTable, datasetCoverage, datasetCSV, datasetHTML, datasetFilename, variableLegend, escapeHTML} from './export.js?v=20261013-compact-tables';
 
 export function createDatasetDialog(state){
   const dialog = document.createElement('dialog');

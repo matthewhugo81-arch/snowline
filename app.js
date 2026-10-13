@@ -2,8 +2,8 @@ import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fet
 import {averageSeries} from './average.js';
 import {chartWindow} from './chart-window.js?v=20261012-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261012-zoom';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261012-zoom';
-import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261007-wind-mph';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261013-compact-tables';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261013-compact-tables';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

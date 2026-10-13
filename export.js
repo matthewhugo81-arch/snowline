@@ -63,23 +63,26 @@ export function formatValue(value, variable){
 }
 
 export function buildDataset({variable, modelDefinitions, models, times, full, location, loading, errors}){
-  const columns = modelDefinitions.map(model => ({...model, data:models.get(model.id)}));
-  const rowTimes = full ? [...new Set(columns.flatMap(model => model.data?.time ?? []))].sort() : [...times];
-  const series = columns.map(model => ({values:rowTimes.map(time => model.data ? valueAt(model.data, variable.key, time) : null)}));
+  const requestedColumns = modelDefinitions.map(model => ({...model, data:models.get(model.id)}));
+  const rowTimes = full ? [...new Set(requestedColumns.flatMap(model => model.data?.time ?? []))].sort() : [...times];
+  // Keep columns and values together when omitting models empty in this variable/period.
+  const series = requestedColumns.map(model => ({model, values:rowTimes.map(time => model.data ? valueAt(model.data, variable.key, time) : null)})).filter(model => model.values.some(finite));
+  const columns = series.map(item => item.model);
   const averages = averageSeries(series, rowTimes.length);
   const rows = rowTimes.map((time, index) => ({time, values:series.map(model => model.values[index]), average:averages.values[index], averageCount:averages.counts[index]}));
-  return {variable, columns, rows, location:{...location}, loading, errors:new Map(errors), full, hasData:rows.some(row => row.values.some(finite))};
+  return {variable, requestedColumns, columns, rows, location:{...location}, loading, errors:new Map(errors), full, hasData:columns.length > 0};
 }
 
 export function datasetTable(dataset){
   const {variable, columns, rows} = dataset;
-  if(!columns.length) return '<p class="dataset-empty">Select at least one model, or choose All models above.</p>';
+  if(!(dataset.requestedColumns ?? columns).length) return '<p class="dataset-empty">Select at least one model, or choose All models above.</p>';
   if(!rows.length) return '<p class="dataset-empty">No forecast hours available for this selection.</p>';
+  if(!columns.length) return '<p class="dataset-empty">No values available for this variable and period.</p>';
   return `<table class="forecast-table"><caption>${escapeHTML(variable.title)} (${escapeHTML(variable.unit)}) · hourly model values</caption><thead><tr><th scope="col">Date &amp; time (UTC)</th>${columns.map(model => `<th scope="col">${escapeHTML(model.name)}${model.ensemble ? '<br><small>Ensemble mean</small>' : ''}<br><small>${escapeHTML(variable.unit)}</small></th>`).join('')}<th scope="col" class="average-column">Average<br><small>${escapeHTML(variable.unit)}</small></th></tr></thead><tbody>${rows.map(row => `<tr><th scope="row"><time datetime="${escapeHTML(row.time)}">${escapeHTML(row.time.replace('T',' ').replace(/Z$/, ''))}</time></th>${row.values.map(value => `<td ${valueAttributes(value, variable)}>${formatValue(value, variable)}</td>`).join('')}<td ${valueAttributes(row.average, variable, 'average-column', row.averageCount ? `Mean of ${row.averageCount} available ${row.averageCount === 1 ? 'model' : 'models'}` : 'No available model values')}>${formatValue(row.average, variable)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 export function datasetCoverage(dataset){
-  return dataset.columns.map(model => {
+  return (dataset.requestedColumns ?? dataset.columns).map(model => {
     const count = dataset.rows.filter(row => finite(valueAt(model.data ?? {}, dataset.variable.key, row.time))).length;
     const retrieved = finite(model.data?.fetchedAt) ? `; retrieved ${new Date(model.data.fetchedAt).toISOString()}` : '';
     const status = count ? `${count} of ${dataset.rows.length} hours${retrieved}` : dataset.errors.get(model.id) ?? (dataset.loading && !model.data ? 'Loading…' : 'No values for this variable and period');

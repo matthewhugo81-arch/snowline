@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalise, VARIABLES, forecastURL, windMph} from '../data.js';
-import {FROST_BANDS, RAIN_BANDS, frostBand, rainBand, buildDataset, datasetCSV, datasetHTML, datasetTable, formatValue} from '../export.js';
+import {FROST_BANDS, RAIN_BANDS, frostBand, rainBand, buildDataset, datasetCSV, datasetHTML, datasetTable, datasetCoverage, formatValue} from '../export.js';
 
 const variable = VARIABLES.find(v => v.key === 'soil_temperature_0cm');
 const times = ['2026-10-07T00:00:00Z','2026-10-07T01:00:00Z','2026-10-07T02:00:00Z'];
@@ -13,7 +13,8 @@ const options = {variable,modelDefinitions:defs,models,times,full:false,location
 
 test('all model values align by UTC timestamp, retaining zero and missing values',() => {
   const data = buildDataset(options);
-  assert.deepEqual(data.rows.map(row => row.values), [[0,null,null],[-2,null,null],[-15,-5.123,null]]);
+  assert.deepEqual(data.columns.map(model => model.id), ['one','two']);
+  assert.deepEqual(data.rows.map(row => row.values), [[0,null],[-2,null],[-15,-5.123]]);
   assert.equal(data.hasData,true);
 });
 
@@ -24,6 +25,46 @@ test('chart window and full model dataset respect the chosen model scope',() => 
   assert.deepEqual(full.rows.map(row => row.values),[[null],[-5.123]]);
   assert.equal(buildDataset({...options,modelDefinitions:[]}).hasData,false);
   assert.deepEqual(buildDataset({...options,modelDefinitions:[defs[2]],full:true}).rows,[]);
+});
+
+test('empty columns disappear for the chosen period and return when it includes data',() => {
+  const window = buildDataset({...options,times:[times[0]]});
+  assert.deepEqual(window.columns.map(model => model.id),['one']);
+  assert.deepEqual(window.rows[0].values,[0]);
+  assert.equal(window.rows[0].average,0);
+  assert.ok(!datasetTable(window).includes('Model &quot;Two&quot;'));
+  assert.ok(!datasetCSV(window).includes('Model ""Two""'));
+  assert.ok(datasetCoverage(window).includes('Model &quot;Two&quot;</strong>: No values'));
+  const full = buildDataset({...options,times:[times[0]],full:true});
+  assert.deepEqual(full.columns.map(model => model.id),['one','two']);
+  assert.deepEqual(full.rows.at(-1).values,[-15,-5.123]);
+});
+
+test('unsupported, invalid and loading models leave no gaps between available models',() => {
+  const unsupported = normalise({hourly:{time:times,temperature_2m:[1,2,3]}},defs[2]);
+  const invalid = {...unsupported,id:'invalid',values:{...unsupported.values,soil_temperature_0cm:[NaN,Infinity,undefined]}};
+  const data = buildDataset({...options,loading:true,modelDefinitions:[defs[0],defs[2],{id:'invalid',name:'Invalid'},{id:'loading',name:'Loading'},defs[1]],models:new Map([...models,['missing',unsupported],['invalid',invalid]])});
+  assert.deepEqual(data.columns.map(model => model.id),['one','two']);
+  assert.deepEqual(data.rows.map(row => row.values),[[0,null],[-2,null],[-15,-5.123]]);
+  assert.ok(!datasetTable(data).includes('Unavailable'));
+  assert.ok(!datasetTable(data).includes('Invalid'));
+  assert.ok(datasetCoverage(data).includes('Loading</strong>: Loading…'));
+  assert.ok(datasetHTML(data).includes(datasetTable(data)));
+  const loaded = buildDataset({...options,modelDefinitions:[defs[2]],models:new Map([['missing',modelOne]])});
+  assert.deepEqual(loaded.columns.map(model => model.id),['missing']);
+  assert.equal(loaded.hasData,true);
+});
+
+test('an empty selection and a selection with no values have clear distinct empty states',() => {
+  const unavailable = buildDataset({...options,modelDefinitions:[defs[2]]});
+  assert.deepEqual(unavailable.columns,[]);
+  assert.equal(unavailable.hasData,false);
+  assert.ok(unavailable.rows.every(row => row.values.length === 0 && row.average === null));
+  assert.match(datasetTable(unavailable),/No values available for this variable and period/);
+  assert.ok(!datasetTable(unavailable).includes('<table'));
+  assert.match(datasetCoverage(unavailable),/No coverage/);
+  assert.match(datasetTable(buildDataset({...options,modelDefinitions:[]})),/Select at least one model/);
+  assert.match(datasetTable(buildDataset({...options,times:[]})),/No forecast hours/);
 });
 
 test('Celsius colour bands have exact boundaries and exclude zero, missing and other units',() => {
@@ -39,8 +80,9 @@ test('CSV includes units and location, escapes text, preserves precision, negati
   const csv = datasetCSV(buildDataset(options));
   assert.ok(csv.startsWith('\ufeff"Location"'));
   assert.ok(csv.includes('"Model ""Two"" — 0 cm soil temperature (°C)"'));
-  assert.ok(csv.includes('"Test, ""Place""","53.9","-2.1","2026-10-07T02:00:00Z","-15","-5.123",,"-10.0615"\r\n'));
-  assert.ok(csv.includes('"2026-10-07T00:00:00Z","0",,,"0"\r\n'));
+  assert.ok(csv.includes('"Test, ""Place""","53.9","-2.1","2026-10-07T02:00:00Z","-15","-5.123","-10.0615"\r\n'));
+  assert.ok(csv.includes('"2026-10-07T00:00:00Z","0",,"0"\r\n'));
+  assert.ok(!csv.includes('Unavailable'));
   const guarded = datasetCSV(buildDataset({...options,location:{...options.location,name:'=1+1'}}));
   assert.ok(guarded.includes('"\'=1+1"'));
 });
