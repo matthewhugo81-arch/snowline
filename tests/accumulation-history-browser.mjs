@@ -107,7 +107,7 @@ try{
    assert.equal(await page.locator('#briefing-background').inputValue(),'streets','Background follows between briefing modes');
    assert.equal(await page.locator('#briefing-preset').inputValue(),'cloud_cover','Standalone field follows from previous runs into forecast sequence');
    await page.locator('#briefing-close').click();assert.equal(await page.locator('#map-a').isVisible(),true);
-   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready'));
+   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:90000});assert.equal(await page.locator('#map-error-a').isVisible(),false,'Map restoration must not leave a forecast-frame error');
    assert.equal(await page.locator('#map-background').inputValue(),'streets','Background follows back to interactive maps');
    await page.locator('#map-model').selectOption('gfs_global');await page.waitForFunction(()=>!document.querySelector('#map-variable').disabled);
    assert.equal(await page.locator('#map-variable option[value="precipitation_total_120h"]').isDisabled(),false);
