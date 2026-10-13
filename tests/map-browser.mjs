@@ -216,19 +216,10 @@ try{
    assert.equal(await page.locator('#map-model').inputValue(),main);
    assert.match(await page.locator('#panel-label-a').textContent(),/0600Z/);
    assert.equal(metadata.some(url=>url.includes('/0300Z/')),false,'Do not fetch an older longer main cycle');
-   await page.locator('#map-model-b').selectOption(nowcast);
-   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('0800Z'));
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'11','Comparison uses the 12 overlapping precipitation intervals');
-   const labels=await page.locator('.map-panel-label').allTextContents();
-   assert.match(labels[0],/0600Z/);assert.match(labels[1],/0800Z/);
-   assert.equal(labels[0].split('Valid ')[1],labels[1].split('Valid ')[1]);
-   await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
-   await page.waitForFunction(()=>document.getElementById('map-time').max==='53'&&document.getElementById('panel-label-a').textContent.includes('0600Z'));
-   await page.locator('#map-model').selectOption(nowcast);
-   await page.waitForFunction(()=>document.getElementById('map-time').max==='11'&&document.getElementById('panel-label-a').textContent.includes('0800Z'));
-   assert.match(await page.locator('#run-a').textContent(),/nowcast/);
-   await page.locator('#map-model').selectOption(main);
-   await page.waitForFunction(()=>document.getElementById('map-time').max==='53'&&document.getElementById('panel-label-a').textContent.includes('0600Z'));
+   assert.deepEqual(await page.locator('#map-model option').evaluateAll(os=>os.filter(o=>o.value.startsWith('ukmo_uk_deterministic_2km')).map(o=>o.value)),[main]);
+   assert.equal(await page.locator('#map-model-b option[value="'+nowcast+'"]').count(),0);
+   await page.locator('#map-model-b').selectOption(main);
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('0600Z'));
    // Playback must wrap both panels together and remain active after the final hour.
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.locator('#map-model-b').selectOption(main);
@@ -254,49 +245,15 @@ try{
    assert.ok(await initialTemperatureRequests()>=1,'The initialization image is available; cached data is shared across panels');
    const invalidIntervals=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('variable=precipitation&')&&/\/(\d{4})Z\/2026-10-10T\1\.om/.test(r.url)));
    assert.deepEqual(invalidIntervals,[],'Do not request precipitation at initialization');
-   // Ensembles auto-select only their supplied layer, then compare and loop together.
-   const ensembleOptions=await page.locator('#map-model optgroup[label="Ensemble models"] option').evaluateAll(options=>options.map(o=>o.value));
-   for(const id of Object.keys(ensembleFixtures))assert.ok(ensembleOptions.includes(id));
-   assert.ok(ensembleOptions.includes('ncep_hgefs025_ensemble_mean'),'Existing ensemble mean remains available');
-   await page.locator('#map-model').selectOption('ncep_gefs025');
-   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('GEFS 0.25°'));
-   assert.deepEqual(await page.locator('#map-variable option').evaluateAll(options=>options.map(o=>o.value)),['precipitation_probability']);
-   assert.equal(await page.locator('#legend-title-a').textContent(),'Chance (%)');
-   assert.equal(await page.locator('#legend-interval-a').textContent(),'≥0.3 mm / 3 h ending at valid time');
-   assert.equal(await page.locator('#map-mslp-a').isDisabled(),true);
-   await page.locator('#map-model-b').selectOption('ecmwf_ifs025_ensemble');
-   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('ECMWF ENS'));
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'7');
-   // Entire comparison loads without playing or moving the slider, not just the
-   // rolling window. Distant jumps and a loop must need no new renderer requests.
-   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
-   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'16');
-   const fullSequenceRequests=await page.evaluate(()=>window.fixtureRequests.length);
-   for(const [index,time]of [[0,'Sat 10 Oct, 03:00 UTC'],[4,'Sat 10 Oct, 15:00 UTC'],[2,'Sat 10 Oct, 09:00 UTC']]){
-    await page.locator('#map-time').evaluate((el,index)=>{el.value=index;el.dispatchEvent(new Event('change',{bubbles:true}));},String(index));
-    await bothAt(time);
-   }
-   await page.locator('#map-time').evaluate(el=>{el.value=el.max;el.dispatchEvent(new Event('change',{bubbles:true}));});
-   await bothAt('Sun 11 Oct, 00:00 UTC');
-   await page.locator('#play-map').click();
-   await bothAt('Sat 10 Oct, 03:00 UTC');
-   assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true');
-   await page.locator('#play-map').click();
-   assert.equal(await page.evaluate(()=>window.fixtureRequests.length),fullSequenceRequests,'Prepared raster and overlay tiles are reused for distant frames and loop restart');
-   await page.locator('#map-model').selectOption('ncep_gefs05');
-   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('GEFS 0.5°'));
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'4','Comparison intersects 3-hour and 6-hour native steps');
-   assert.equal(await page.locator('#legend-interval-a').textContent(),'≥0.6 mm / 6 h ending at valid time');
-   assert.equal(await page.locator('#legend-interval-b').textContent(),'≥0.3 mm / 3 h ending at valid time');
+   // Removed menu products must also stop their metadata polling. Existing
+   // mean/spread layer, buffering and comparison tests continue below.
+   const ensembleOptions=await page.locator('#map-model optgroup[label="Ensemble models"] option').evaluateAll(os=>os.map(o=>o.value));
+   for(const id of Object.keys(ensembleFixtures))assert.equal(ensembleOptions.includes(id),false);
+   assert.ok(ensembleOptions.includes('ncep_hgefs025_ensemble_mean'));
+   assert.ok(ensembleOptions.includes('snowline_gefs_ensemble'));
+   assert.ok(ensembleOptions.includes('snowline_ecmwf_ensemble'));
+   assert.equal(metadata.some(url=>/\/(ncep_gefs025|ncep_gefs05|ecmwf_ifs025_ensemble)\//.test(url)),false,'Removed feeds are not polled');
    await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
-   await page.waitForFunction(()=>document.getElementById('map-time').max==='7');
-   assert.match(await page.locator('#range-end').textContent(),/12 Oct/,'Single panel recovers extended GEFS horizon');
-   const invalidEnsembleRequests=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&/\/(ncep_gefs025|ncep_gefs05|ecmwf_ifs025_ensemble)\//.test(r.url)&&(!r.url.includes('variable=precipitation_probability&')||r.url.includes('/2026-10-10T0000.om'))));
-   assert.deepEqual(invalidEnsembleRequests,[],'Ensembles request neither unavailable MSLP nor initialization files');
-   await page.locator('#map-model').selectOption(main);
-   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('UKV — latest main run'));
-   assert.equal(await page.locator('#map-variable').inputValue(),'temperature_2m');
-   assert.equal(await page.locator('#map-mslp-a').isDisabled(),false,'Returning to UKV restores pressure availability');
    await page.locator('#map-model').selectOption('snowline_gefs_ensemble');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('500 hPa height'));
    assert.equal(await page.locator('#map-variable option').count(),6);
@@ -363,7 +320,7 @@ try{
    // Adding a regional panel restores all common native hours; returning to
    // globals remembers the chosen six-hour setting.
    await page.locator('#map-model-b').selectOption(main);
-   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('UKV — latest main run')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('UKV')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
    assert.equal(await page.locator('#map-forecast-interval').isDisabled(),true);
    assert.equal(await page.locator('#map-time').getAttribute('max'),'42','Mixed comparison preserves every common hourly step');
@@ -501,7 +458,7 @@ try{
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
    assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
    assert.deepEqual(await page.locator('#briefing-preset option').evaluateAll(options=>options.map(option=>option.value)),['weather','temperature','dew-point','precipitation_total_6h','precipitation_total_12h','precipitation_total_18h','precipitation_total_24h','precipitation_total_36h','precipitation_total_48h'],'UKV includes surface temperature and derived dew point, without unsupported diagnostics');
-   for(const selectedModel of [main,nowcast]){
+   for(const selectedModel of [main]){
     await page.evaluate(()=>{window.fixtureRequests=[];window.fixtureGridReads=[];});
     await page.locator('#briefing-model').selectOption(selectedModel);
     await page.waitForFunction(()=>!document.getElementById('briefing-preset').disabled);

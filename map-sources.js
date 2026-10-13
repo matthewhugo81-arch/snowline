@@ -3,7 +3,7 @@ import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-co
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
 import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
-import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261011-ensemble-statistics';
+import {ENSEMBLE_DOMAINS,ensembleFreshnessWarning} from './map-ensemble.js?v=20261013-operational-feeds';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
@@ -59,7 +59,7 @@ export async function loadSpatialModel(model,load){
  const base=baseURL+domain+'/';
  // in-progress.json advances after EACH uploaded forecast hour. latest.json
  // alone deliberately points to the last fully completed run.
- const results=await Promise.allSettled((ownEnsembles.has(domain)?['latest.json']:['latest.json','in-progress.json']).map(path=>load(base+path)));
+ const results=await Promise.allSettled((ownEnsembles.has(domain)?['latest.json','../health.json']:['latest.json','in-progress.json']).map(path=>load(base+path)));
  const published=results.filter(result=>result.status==='fulfilled').map(result=>result.value);
  if(!published.some(publishedRun))throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
  const latest=await chooseRun(...published);
@@ -67,7 +67,8 @@ export async function loadSpatialModel(model,load){
  const primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
  const warnings=[...(primary.selectionWarnings??[])];
  if(results.some(result=>result.status==='rejected'&&result.reason?.status!==404))warnings.push('A live run check failed; using verified published data and retrying automatically.');
- if(ownEnsembles.has(domain)&&Date.now()-Date.parse(primary.reference_time)>36*3600000)warnings.push('Ensemble run is over 36 hours old. Checking for newer published hours.');
+ const freshnessWarning=ownEnsembles.has(domain)?ensembleFreshnessWarning(primary,results[1]?.status==='fulfilled'?results[1].value:null):null;
+ if(freshnessWarning)warnings.push(freshnessWarning);
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{
    const meta=await load(SPATIAL_BASE+companion+'/'+runPath(primary.reference_time)+'meta.json');
@@ -78,7 +79,7 @@ export async function loadSpatialModel(model,load){
    return null;
   }
  }));
- return {...combineSources(primary,other.filter(Boolean)),sourceWarnings:warnings};
+ return {...combineSources(primary,other.filter(Boolean)),sourceWarnings:warnings,freshnessWarning};
 }
 
 // Deliberate historical selection never falls back to latest.json or a different

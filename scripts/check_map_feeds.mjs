@@ -7,16 +7,18 @@ import {loadSpatialModel,loadSpatialRun,fieldDataURL} from '../map-sources.js';
 import {UKV} from '../ukv-run-selection.js';
 import {ACCUMULATION_HOURS,accumulationKey,accumulationSource} from '../map-accumulation.js';
 const timings=[],cache=new Map(),output=process.argv[2]??'map-feed-health.json';
+const deployed=url=>url.startsWith('file:')&&url.includes('/ensemble-data/')?'https://matthewhugo81-arch.github.io/snowline/ensemble-data/'+url.split('/ensemble-data/')[1]:url;
 async function get(url){
+ url=deployed(url);
  const start=performance.now();const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(15000)});
  timings.push({url,status:response.status,ms:Math.round(performance.now()-start)});
  if(!response.ok)throw Object.assign(Error('HTTP '+response.status),{status:response.status});return response.json();
 }
 const load=url=>{if(!cache.has(url))cache.set(url,get(url));return cache.get(url);};
 // Statistical files are site-generated, not native precipitation amount feeds.
-const models=MAP_MODELS.filter(m=>!m.id.startsWith('snowline_')),results=[];let index=0;
+const models=MAP_MODELS,results=[];let index=0;
 async function sample(meta){
- const end=meta.valid_times.find(t=>Date.parse(t)>Date.parse(meta.reference_time)),url=fieldDataURL(meta,'precipitation',end);if(!url)return null;
+ const end=meta.valid_times.find(t=>Date.parse(t)>Date.parse(meta.reference_time)),raw=fieldDataURL(meta,meta.domain?.startsWith('snowline_')?'pressure_msl_mean':'precipitation',end);if(!raw)return null;const url=deployed(raw)+(meta.domain?.startsWith('snowline_')?'.png':'');
  const start=performance.now(),response=await fetch(url,{headers:{Range:'bytes=0-63'},signal:AbortSignal.timeout(15000)});
  const range=response.headers.get('content-range');
  if(response.status!==206){await response.body?.cancel();throw Error('Expected a byte-range response; received '+response.status);}
@@ -33,7 +35,7 @@ async function worker(){while(index<models.length){
   const threshold=model.id===UKV||model.id===UKV+'_nowcast'?6:model.regional?12:24;
   if(ageHours>threshold)record.warnings.push('Initialization age exceeds the '+threshold+' h review threshold.');
   if(elapsed>10000)record.warnings.push('Metadata check took over 10 seconds.');
-  if(meta.variables.includes('precipitation')){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
+  if(meta.variables.includes('precipitation')||meta.variables.includes('pressure_msl_mean')){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
   if(model.id===UKV){record.history=[];for(const back of [3,6]){const reference=new Date(Date.parse(meta.reference_time)-back*3600000).toISOString();try{const prior=await loadSpatialRun(model.id,reference,load);record.history.push({reference_time:prior.reference_time,available:true});}catch(e){record.history.push({reference_time:reference,available:false,error:e.message});record.warnings.push('An immediately previous UKV main cycle is unavailable: '+reference);}}}
   results.push(record);
  }catch(e){results.push({model:model.id,name:model.name,error:e.message});}

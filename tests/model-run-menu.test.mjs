@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {formatModelRun, modelOptionLabel, installModelRunMenu} from '../map-model-run-menu.js';
 
 const ifs = {id: 'ecmwf_ifs', name: 'IFS 9 km'};
-const main = {id: 'ukmo_uk_deterministic_2km', name: 'UKV — latest main run'};
+const main = {id: 'ukmo_uk_deterministic_2km', name: 'UKV'};
 const nowcast = {id: 'ukmo_uk_deterministic_2km_nowcast', name: 'UKV — latest hourly nowcast'};
 const run = (reference_time, completed = true) => ({reference_time, completed});
 

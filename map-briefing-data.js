@@ -1,5 +1,5 @@
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261012-accum-history';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-operational-feeds';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
 

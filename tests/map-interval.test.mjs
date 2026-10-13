@@ -21,7 +21,8 @@ test('global and ensemble maps default to three-hour steps, with native and six-
 
 test('every short-range model keeps native detail even after a six-hour global selection',()=>{
  const regional=MAP_MODELS.filter(model=>model.regional&&!model.ensemble);
- assert.ok(regional.some(model=>model.id==='ukmo_uk_deterministic_2km_nowcast'));
+ assert.equal(regional.some(model=>model.id==='ukmo_uk_deterministic_2km_nowcast'),false);
+ assert.ok(regional.some(model=>model.id==='ukmo_uk_deterministic_2km'));
  for(const model of regional){
   for(const selection of ['3','6','native']){
    const interval=forecastInterval([model],selection);
