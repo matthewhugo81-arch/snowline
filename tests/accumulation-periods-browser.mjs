@@ -152,6 +152,9 @@ try{
    assert.equal(await page.locator('#previous-interval').isDisabled(),false);
    assert.equal(await page.locator('#previous-interval').inputValue(),'6');
    await page.locator('#briefing-sequence-mode').click();await readySequence();
+   assert.equal(await page.locator('#briefing-model').inputValue(),'gfs_global','The selected comparison model carries back into sequence');
+   assert.equal(await page.locator('#briefing-preset').inputValue(),'temperature','The selected comparison chart carries back into sequence');
+   await page.locator('#briefing-model').selectOption(UKV);await readySequence();
    await page.locator('#briefing-preset').selectOption('weather');await readySequence();
    assert.equal(await page.locator('#briefing-time-heading').textContent(),'Starting time');
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
