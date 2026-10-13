@@ -9,6 +9,7 @@
 .briefing-controls select{display:block;width:100%;margin-top:5px;padding:8px;font-size:12px;min-width:0}
 .briefing-overlays{display:flex;align-items:center;flex-wrap:wrap;gap:8px 20px;padding:8px 12px;background:white;border:1px solid var(--line);border-radius:6px;margin-bottom:8px}
 .briefing-overlays .check-row{display:flex;align-items:center;gap:7px;font-size:13px;white-space:nowrap;margin:0}
+.briefing-background{display:flex;align-items:center;gap:8px;margin:0;font-size:12px;font-weight:700}.briefing-background select{width:auto;min-width:100px;padding:6px;font-size:12px}
 .briefing-overlays input{margin:0;accent-color:var(--teal,#007a80)}.briefing-overlays .small-note{margin:0}
 .briefing-legend{display:flex;gap:24px;align-items:start;padding:8px 12px;background:white;border:1px solid var(--line);border-radius:6px;font-size:11px}
 .briefing-scale{flex:1;max-width:480px}.briefing-gradient{height:12px;border:1px solid #a8bdd0;margin:5px 0 3px}.briefing-scale-labels{display:flex;justify-content:space-between}

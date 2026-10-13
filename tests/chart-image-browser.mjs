@@ -20,7 +20,8 @@ try{
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{localStorage.setItem('snowline-terrain','false');window.fixtureDelay=5;});
   await page.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
-  await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(style)}));
+  const backgrounds=[];
+  await page.route('https://tiles.openfreemap.org/**',r=>{backgrounds.push(r.request().url());return r.fulfill({contentType:'application/json',body:JSON.stringify(style)});});
   await page.route('**/coastline.geojson',r=>r.fulfill({contentType:'application/json',body:JSON.stringify(coast)}));
   await page.route('https://openmeteo.s3.amazonaws.com/**',r=>{const u=r.request().url(),ok=u.includes('/'+UKV+'/')&&(u.endsWith('latest.json')||u.endsWith('in-progress.json')||u.includes('/0600Z/meta.json'));return r.fulfill({status:ok?200:404,contentType:'application/json',body:JSON.stringify(ok?meta:{error:true})});});
   await page.route('**/ensemble-data/*/latest.json',r=>r.fulfill({status:404,contentType:'application/json',body:'{}'}));
@@ -81,6 +82,14 @@ try{
   const bw=await page.evaluate(()=>window.fixtureLayers.filter(l=>l.id.includes('contour-lines')&&Array.isArray(l.paint?.['line-width'])).at(-1).paint['line-width']);assert.equal(bw.at(-2),2.6);assert.equal(bw.at(-1),1.3);
   const image=page.locator('.briefing-card img').first();await right(image);await saveFile(`briefing-850-${viewport.width}`);await image.click();await page.locator('#briefing-enlarged[open]').waitFor();await right(page.locator('#briefing-enlarged-image'));assert.equal(await menu.evaluate(e=>e.closest('dialog')?.id),'briefing-enlarged');await saveFile(`enlarged-850-${viewport.width}`);await page.locator('#briefing-enlarged-close').click();
   await page.locator('#briefing-preset').selectOption('jet');await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});assert.deepEqual(await page.locator('#briefing-legend .briefing-band-labels span').allTextContents(),['60','75','90','105','120','135','150','165','180+']);
+  const lightImage=await page.locator('.briefing-card img').first().getAttribute('src');
+  await page.locator('#briefing-background').selectOption('streets');
+  await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
+  assert.match(backgrounds.at(-1),/\/liberty$/,'Briefing renderer loads the selected background');
+  assert.notEqual(await page.locator('.briefing-card img').first().getAttribute('src'),lightImage,'Background changes generate new charts');
+  await page.locator('#briefing-background').selectOption('light');
+  await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6);
+  assert.equal(await page.locator('.briefing-card img').first().getAttribute('src'),lightImage,'Switching back reuses only the matching background');
   assert.deepEqual(errors,[],`No page errors at ${viewport.width}px`);await context.close();console.log(`Jet/850 hPa styling, left-click, right-click PNG, clipboard and fallback passed at ${viewport.width}px`);
  }
 }finally{await browser.close();server.close();}

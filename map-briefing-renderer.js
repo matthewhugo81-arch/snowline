@@ -1,5 +1,6 @@
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
 import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-hide-uk-label';
+import {backgroundStyle,hideProtectedAreas} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
@@ -10,7 +11,7 @@ import {installDewPoint} from './map-dew-point.js';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261013-ukv-retention';
 
-import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261012-weather-composite';
+import {compositeSettings as briefingSettings} from './map-weather-composite.js?v=20261013-map-appearance';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
@@ -28,8 +29,8 @@ function rendered(map,signal){
 // One renderer produces reusable PNGs. Six/nine visible panels are plain images,
 // not six/nine live maps, worker pools and independent download queues.
 export class BriefingRenderer{
- constructor({maplibre,OM,settings,fields,createURL}){
-  Object.assign(this,{maplibre,OM,fields,createURL});this.baseSettings=settings;this.settings=briefingSettings(settings);
+ constructor({maplibre,OM,settings,fields,createURL,background='light'}){
+  Object.assign(this,{maplibre,OM,fields,createURL,background});this.baseSettings=settings;this.settings=briefingSettings(settings);
   installDiagnostics(OM,this.settings);
   installDewPoint(OM,this.settings);
   this.accumulations=installAccumulations(OM,this.settings);
@@ -42,12 +43,12 @@ export class BriefingRenderer{
   });
   maplibre.addProtocol('briefing',(params,controller)=>this.cache.protocol(params,controller));
   this.container=document.createElement('div');this.container.className='briefing-renderer';this.container.setAttribute('aria-hidden','true');document.body.append(this.container);
-  this.map=new maplibre.Map({container:this.container,style:'https://tiles.openfreemap.org/styles/positron',center:[-3,55],zoom:4,interactive:false,attributionControl:false,preserveDrawingBuffer:true,fadeDuration:0,renderWorldCopies:false});
+  this.map=new maplibre.Map({container:this.container,style:backgroundStyle(background),center:[-3,55],zoom:4,interactive:false,attributionControl:false,preserveDrawingBuffer:true,fadeDuration:0,renderWorldCopies:false});
   this.ready=new Promise((resolve,reject)=>{
    const timer=setTimeout(()=>reject(Error('The chart map could not start. Try again.')),30000);
    this.cancelReady=()=>{clearTimeout(timer);reject(aborted());};
    this.map.once('load',()=>{clearTimeout(timer);
-    hideUKCountryLabel(this.map);
+    hideUKCountryLabel(this.map);hideProtectedAreas(this.map);
     for(const layer of this.map.getStyle().layers){
      if(['transportation','transportation_name'].includes(layer['source-layer'])||(layer.type==='symbol'&&!layer.id.startsWith('label_country_')))this.map.setLayoutProperty(layer.id,'visibility','none');
      if(layer.id.startsWith('label_country_'))this.map.setLayoutProperty(layer.id,'text-size',18);
@@ -83,7 +84,7 @@ export class BriefingRenderer{
   this.OM.updateCurrentBounds(clip);this.cache.setContext(JSON.stringify(clip));
   // Worker requests are shared across both views. Distinguish the composite's
   // colours even if an interactive tile is still finishing cancellation.
-  const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=1';
+  const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=20261013-white90';
   const field=this.fields.find(field=>field.key===preset.field);
   if(!field||!preset.required.every(key=>hasFieldTime(meta,key,time)))throw Error('This chart is unavailable for the selected time.');
   const main=url(preset.field),pressureURL=url('pressure_msl');
