@@ -1,15 +1,12 @@
 name: Map feed health
 on:
-  schedule:
-    - cron: '7,22,37,52 * * * *'
+  # Check only after the atomic publisher has finished. A push or timer
+  # can race the in-progress upload and report a run that is about to deploy.
   workflow_dispatch:
   workflow_run:
     workflows: ['Publish Snowline and ensemble maps']
     types: [completed]
     branches: [main]
-  push:
-    branches: [main]
-    paths: ['scripts/check_map_feeds.mjs', 'scripts/check_ensemble_freshness.py', '.github/workflows/map-feed-health.yml']
 permissions:
   contents: read
   actions: write
