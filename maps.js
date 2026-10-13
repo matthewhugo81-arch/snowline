@@ -304,7 +304,7 @@ async function prepareSelection(index,valid=()=>true){
  if(!valid()||metas!==state.metas||choices.some(({key,model,field})=>panels[key].restyling||model!==panelSelection(state,key).model||field!==panelSelection(state,key).field))return null;
  const prepared=await Promise.all(choices.map(async({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
-  if(!url)return {panel,cache,frame:null,key,model,field,time};
+  if(!url)return fullUKVComparison(state)?{panel,cache,frame:null,key,model,field,time}:null;
   const frame=await cache.acquire(url,valid);
   return frame?{panel,cache,frame,key,model,field,time}:null;
  }));
