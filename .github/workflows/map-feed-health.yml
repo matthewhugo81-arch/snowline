@@ -1,15 +1,14 @@
 name: Map feed health
 on:
+  # Post-publish checks are authoritative. Independent checks at 00/30
+  # protect against a stalled publisher while avoiding the usual build window.
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '0,30 * * * *'
   workflow_dispatch:
   workflow_run:
     workflows: ['Publish Snowline and ensemble maps']
     types: [completed]
     branches: [main]
-  push:
-    branches: [main]
-    paths: ['scripts/check_map_feeds.mjs', 'scripts/check_ensemble_freshness.py', '.github/workflows/map-feed-health.yml']
 permissions:
   contents: read
   actions: write
@@ -27,12 +26,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Avoid checking data while the publisher is rebuilding it
+        id: publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          active=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" --jq '[.workflow_runs[] | select(.name == "Publish Snowline and ensemble maps" and .status != "completed")] | length')
+          if [ "$active" -gt 0 ]; then
+            echo 'skip=true' >> "$GITHUB_OUTPUT"
+            echo '::notice::Publisher is still running; health will be checked after publication completes.'
+          fi
       - name: Compare published ensembles with official statistical source indexes
         id: ensembles
+        if: steps.publisher.outputs.skip != 'true'
         continue-on-error: true
         run: python scripts/check_ensemble_freshness.py --output health-output/ensembles.json
       - name: Recover a missed ensemble update without overlapping or looping builds
-        if: steps.ensembles.outputs.refresh_needed == 'true'
+        if: steps.publisher.outputs.skip != 'true' && steps.ensembles.outputs.refresh_needed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -54,9 +65,10 @@ jobs:
             echo 'Requested a publisher refresh for verified missing ensemble data.'
           fi
       - name: Check all offered models, including ensemble binary transport
+        if: steps.publisher.outputs.skip != 'true'
         run: node scripts/check_map_feeds.mjs health-output/map-feeds.json
       - name: Report official-source failures or missing cycles
-        if: always()
+        if: always() && steps.publisher.outputs.skip != 'true'
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -68,7 +80,7 @@ jobs:
               raise SystemExit('Ensemble update requires attention; see report and recovery step')
           PY
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.publisher.outputs.skip != 'true'
         with:
           name: map-feed-health
           path: health-output/

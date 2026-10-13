@@ -18,7 +18,8 @@ const metrics=[];
 await mkdir('review-output',{recursive:true});
 try{
  for(const viewport of [{width:1280,height:900},{width:390,height:844}]){
-  const context=await browser.newContext({viewport,deviceScaleFactor:1}),page=await context.newPage(),errors=[],requests=[];let newer=false;
+  const context=await browser.newContext({viewport,deviceScaleFactor:1}),page=await context.newPage(),errors=[],requests=[],httpFailures=[];let newer=false;
+  page.on('response',response=>{if(response.status()>=400)httpFailures.push({status:response.status(),url:response.url()});});
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{localStorage.setItem('snowline-terrain','false');window.fixtureDelay=5;});
   await page.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
@@ -106,7 +107,7 @@ try{
    assert.equal(await page.locator('#briefing-background').inputValue(),'streets','Background follows between briefing modes');
    assert.equal(await page.locator('#briefing-preset').inputValue(),'cloud_cover','Standalone field follows from previous runs into forecast sequence');
    await page.locator('#briefing-close').click();assert.equal(await page.locator('#map-a').isVisible(),true);
-   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready'));
+   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:90000});assert.equal(await page.locator('#map-error-a').isVisible(),false,'Map restoration must not leave a forecast-frame error');
    assert.equal(await page.locator('#map-background').inputValue(),'streets','Background follows back to interactive maps');
    await page.locator('#map-model').selectOption('gfs_global');await page.waitForFunction(()=>!document.querySelector('#map-variable').disabled);
    assert.equal(await page.locator('#map-variable option[value="precipitation_total_120h"]').isDisabled(),false);
@@ -114,7 +115,7 @@ try{
    await page.locator('#map-variable').selectOption(key(120));await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('120 h precipitation total'));
    assert.match(await page.locator('#legend-interval-a').textContent(),/120 h.*12 Oct.*17 Oct/);
    assert.deepEqual(errors,[]);console.log(`Accumulation menus, exact windows, three-run comparison, pinning and export passed at ${viewport.width}px`);
-  }catch(e){console.error('ORIGINAL FAILURE',e);console.log('DIAGNOSTICS',await page.evaluate(()=>({main:document.querySelector('#map-status')?.textContent,history:document.querySelector('#previous-status')?.textContent,progress:document.querySelector('#previous-progress')?.textContent})).catch(()=>({})));await page.screenshot({path:`review-output/failure-history-${viewport.width}.png`,fullPage:true}).catch(()=>{});throw e;}
+  }catch(e){console.error('ORIGINAL FAILURE',e);console.log('DIAGNOSTICS',await page.evaluate(()=>({main:document.querySelector('#map-status')?.textContent,history:document.querySelector('#previous-status')?.textContent,progress:document.querySelector('#previous-progress')?.textContent,animation:document.querySelector('#animation-status')?.textContent,preload:document.querySelector('#preload-status')?.textContent,run:document.querySelector('#map-run-a')?.textContent})).catch(()=>({})));console.log('FAILED HTTP REQUESTS',httpFailures.slice(-60));await page.screenshot({path:`review-output/failure-history-${viewport.width}.png`,fullPage:true}).catch(()=>{});throw e;}
   finally{await context.close();}
  }
  await writeFile('review-output/browser-metrics.json',JSON.stringify(metrics,null,2));
