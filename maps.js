@@ -603,13 +603,13 @@ window.addEventListener('pagehide',pauseAnimation);document.addEventListener('vi
 async function openBriefing(){
  if(briefingActive)return;
  // Carry explicit area presets; retain the UK briefing default after free panning.
- const bounds=a.map.getBounds(),selection={model:state.model,time:state.times[state.index],interval:state.interval,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
+ const bounds=a.map.getBounds(),selection={model:state.model,field:state.field,time:state.times[state.index],interval:state.interval,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
  briefingScroll=window.scrollY;briefingActive=true;pauseAnimation();++timeGeneration;clearTimeout(viewportRefreshTimer);
  if($('expanded-map').open)$('expanded-map').close();
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261013-map-appearance');
+   const {createBriefing}=await import('./map-briefing.js?v=20261013-chart-catalogue');
    briefingView=createBriefing({getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

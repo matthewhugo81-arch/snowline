@@ -52,6 +52,9 @@ try{
    assert.match(await page.locator('#panel-label-a').textContent(),/13 Oct.*12:00/);assert.match(await page.locator('#panel-label-b').textContent(),/13 Oct.*12:00/);
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
+   assert.equal(await page.locator('#briefing-preset').inputValue(),key(24),'Main map rainfall total carries into briefing');
+   assert.equal(await page.locator('#briefing-time').inputValue(),'2026-10-12T12:00:00.000Z','The same rainfall window is retained on entry');
+   await page.locator('#briefing-preset').selectOption('weather');
    await page.locator('#briefing-history-mode').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:60000});
    const savedImages=await page.locator('#previous-grid img').evaluateAll(imgs=>imgs.map(i=>i.src));
    const savedControls=await page.locator('#previous-control-section select').evaluateAll(ss=>ss.map(s=>s.value));
@@ -94,11 +97,14 @@ try{
    await page.locator('#previous-model').selectOption('gfs_global');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
    assert.equal(await page.locator('#previous-grid .briefing-card:visible').count(),3,'Unrelated models retain three-run analysis');
    assert.equal(await page.locator('#previous-model option[value="'+UKV+'_nowcast"]').count(),0);
+   await page.locator('#previous-preset').selectOption('cloud_cover');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
+   assert.match(await page.locator('#previous-grid img').first().getAttribute('alt'),/Total cloud cover/);
    const previousImage=await page.locator('#previous-grid img').first().getAttribute('src');
    await page.locator('#previous-background').selectOption('streets');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
    assert.notEqual(await page.locator('#previous-grid img').first().getAttribute('src'),previousImage,'Previous runs redraw for the chosen background');
    await page.locator('#briefing-sequence-mode').click();await page.waitForFunction(()=>!document.querySelector('#briefing-preset').disabled);assert.equal(await page.locator('#previous-run-view').isVisible(),false);
    assert.equal(await page.locator('#briefing-background').inputValue(),'streets','Background follows between briefing modes');
+   assert.equal(await page.locator('#briefing-preset').inputValue(),'cloud_cover','Standalone field follows from previous runs into forecast sequence');
    await page.locator('#briefing-close').click();assert.equal(await page.locator('#map-a').isVisible(),true);
    await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#map-background').inputValue(),'streets','Background follows back to interactive maps');

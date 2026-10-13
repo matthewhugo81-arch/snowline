@@ -1,7 +1,8 @@
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
 import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-ukv-retention';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261012-accum-history';
+import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
 
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, rain & pressure',field:'cloud_cover',required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
@@ -16,7 +17,27 @@ export const BRIEFING_PRESETS=[
  ...[300,400].map(level=>({id:'vorticity-'+level,name:level+' hPa relative vorticity & pressure',field:'relative_vorticity_'+level+'hPa',required:['relative_vorticity_'+level+'hPa','pressure_msl'],note:'Derived '+level+' hPa relative vorticity (10⁻⁵ s⁻¹), with MSLP isobars every 4 hPa. Yellow through red = positive (anticlockwise); purple highlights 35–40 and above. Cyan = negative (clockwise). Smoothed over approximately 20 km (Gaussian standard deviation) to reduce grid-scale striping.'}))
 ];
 export {MAP_AREAS as BRIEFING_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
-export function briefingPresets(meta){return BRIEFING_PRESETS.filter(preset=>preset.required.every(key=>sourceVariable(meta,key)));}
+// Named combinations remain shortcuts, but the main map catalogue determines
+// the choices in both briefing views. A missing optional pressure overlay must
+// never hide an otherwise available field.
+export function briefingPresets(meta,fields){
+ if(!fields)return BRIEFING_PRESETS.filter(preset=>preset.required.every(key=>sourceVariable(meta,key)));
+ return availableFields(fields,[meta]).map(field=>{
+  const named=BRIEFING_PRESETS.find(p=>field.key===WEATHER_COMPOSITE?p.id==='weather':p.id!=='weather'&&p.field===field.key);
+  const pressure=!!sourceVariable(meta,'pressure_msl');
+  const preset=named?{...named,required:named.id==='weather'?named.required:[named.field],...(!pressure?{name:field.name,note:field.note}:{})}:
+   {id:field.key,name:field.name,field:field.key,required:[field.key],note:field.note};
+  return {...preset,key:field.key,group:variableGroup(field.key)};
+ });
+}
+export function briefingOptions(select,presets){
+ select.replaceChildren();const groups=new Map();
+ for(const preset of presets){
+  const group=preset.group??'Charts';
+  if(!groups.has(group)){const el=document.createElement('optgroup');el.label=group;groups.set(group,el);select.append(el);}
+  const el=document.createElement('option');el.value=preset.id;el.textContent=preset.name;groups.get(group).append(el);
+ }
+}
 export function briefingTimes(meta,preset,model,interval='3'){
  const native=[...new Map((meta?.valid_times??[]).filter(time=>Number.isFinite(Date.parse(time))&&preset.required.every(key=>hasFieldTime(meta,key,time))).map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
  // Accumulation start choices use every complete native window. The view
@@ -26,8 +47,9 @@ export function briefingTimes(meta,preset,model,interval='3'){
 export function briefingPage(times,start,count=6){return times.slice(Math.max(0,start),Math.max(0,start)+count);}
 export function briefingCaption(meta,preset,time){
  const lead=(Date.parse(time)-Date.parse(meta.reference_time))/3600000;
- const period=preset.id==='weather'?fieldIntervalHours(meta,'precipitation',time):null;
- return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h precipitation ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
+ const amount=preset.id==='weather'?'precipitation':preset.field;
+ const period=['precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
+ return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
 export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={},background='light'){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid,background]);}
 

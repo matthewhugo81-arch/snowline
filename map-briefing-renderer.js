@@ -8,6 +8,7 @@ import {contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
 import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261013-ukv-retention';
 import {installDewPoint} from './map-dew-point.js';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels,drawBriefingValues} from './map-briefing-values.js?v=20261013-ukv-retention';
 
@@ -33,6 +34,7 @@ export class BriefingRenderer{
   Object.assign(this,{maplibre,OM,fields,createURL,background});this.baseSettings=settings;this.settings=briefingSettings(settings);
   installDiagnostics(OM,this.settings);
   installDewPoint(OM,this.settings);
+  installEnsembleTransport(OM,this.settings);
   this.accumulations=installAccumulations(OM,this.settings);
   this.cache=new ForecastTileCache(async(params,controller)=>{
    const result=await OM.omProtocol({...params,url:params.url.replace(/^briefing:\/\//,'om://')},controller,this.settings);
@@ -72,7 +74,8 @@ export class BriefingRenderer{
  async render({model,meta,preset,bounds,size=[960,660],time,signal,overlays={},onProgress}){
   await this.ready;if(signal.aborted)throw aborted();
   // A newly selected model may add a pressure-level scale to the catalogue.
-  this.settings.colorScales=briefingSettings(this.baseSettings).colorScales;
+  const weather=preset.id==='weather';
+  this.settings.colorScales=(weather?briefingSettings(this.baseSettings):this.baseSettings).colorScales;
   this.frames?.clear();
   const view=JSON.stringify([bounds,size]);
   if(this.area!==view){
@@ -84,10 +87,10 @@ export class BriefingRenderer{
   this.OM.updateCurrentBounds(clip);this.cache.setContext(JSON.stringify(clip));
   // Worker requests are shared across both views. Distinguish the composite's
   // colours even if an interactive tile is still finishing cancellation.
-  const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=20261013-white90';
+  const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=20261013-catalogue-'+(weather?'white90':'field');
   const field=this.fields.find(field=>field.key===preset.field);
   if(!field||!preset.required.every(key=>hasFieldTime(meta,key,time)))throw Error('This chart is unavailable for the selected time.');
-  const main=url(preset.field),pressureURL=url('pressure_msl');
+  const main=url(preset.field),pressureURL=hasFieldTime(meta,'pressure_msl',time)?url('pressure_msl'):null;
   const decorate=()=>{
    const groups=[];
    if(preset.id==='weather')groups.push({id:'rain',source:{type:'raster',url:url('precipitation'),tileSize:512,maxzoom:10},layers:[{id:'rain-image',type:'raster',paint:{'raster-opacity':1,'raster-resampling':'nearest','raster-fade-duration':0}}]});
@@ -107,7 +110,7 @@ export class BriefingRenderer{
    const frame=await frames.acquire(main,()=>!signal.aborted);
    if(signal.aborted)throw aborted();
    if(!frame)throw Error('Chart could not load. Use Retry charts.');
-   frames.show(frame,1,'linear');
+   frames.show(frame,1,field.categorical||field.bands||field.temperatureBands?'nearest':'linear');
    // All raster fills belong below coast/place labels; pressure lines above.
    if(preset.id==='weather')this.map.moveLayer(frame.id+'-rain-image',this.rasterBefore);
    await rendered(this.map,signal);
