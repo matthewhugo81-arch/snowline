@@ -39,7 +39,10 @@ jobs:
           p=Path('tests/accumulation-periods-browser.mjs')
           s=p.read_text()
           assert 'b[0]>-70&&b[2]<40' in s
-          p.write_text(s.replace('b[0]>-70&&b[2]<40','b[0]>-71&&b[2]<41'))
+          s=s.replace('b[0]>-70&&b[2]<40','b[0]>-71&&b[2]<41')
+          # The main map also has a previous-time navigation button.
+          s=s.replace("page.locator('#previous-time')", "page.locator('#previous-run-view #previous-time')")
+          p.write_text(s)
           Path('review-output/changed-files.json').write_text(json.dumps(names))
           PY
           git diff --check
