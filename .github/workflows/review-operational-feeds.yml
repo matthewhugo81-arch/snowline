@@ -1,0 +1,98 @@
+name: Verify single UKV and ensemble publication recovery
+on:
+  push:
+    branches: [review/operational-feeds-20261013]
+permissions:
+  contents: write
+concurrency:
+  group: review-operational-feeds
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply targeted menu and health edits
+        run: |
+          mkdir -p review-output
+          python review/apply-ops.py
+          git diff --check
+      - name: Numerical, run-selection and freshness tests
+        run: |
+          node --test tests/*.test.mjs > review-output/node-tests.txt 2>&1
+          tail -12 review-output/node-tests.txt
+          pip install -r scripts/ensemble-requirements.txt
+          python -m unittest discover -s tests -p 'test_ensemble*.py' 2>&1 | tee review-output/python-tests.txt
+      - uses: actions/cache/restore@v4
+        with:
+          path: ensemble-data
+          key: ensemble-grids-v1-review-${{ github.run_id }}
+          restore-keys: ensemble-grids-v1-
+      - name: Verify actual latest ensemble generation and exact native metadata
+        run: |
+          python scripts/check_ensemble_freshness.py --output review-output/ensemble-before.json || true
+          python scripts/build_ensembles.py --model gefs --workers 4 --max-new-frames 128 > review-output/gefs-build.txt 2>&1 &
+          gefs=$!
+          python scripts/build_ensembles.py --model ecmwf --workers 4 --max-new-frames 128 > review-output/ecmwf-build.txt 2>&1 &
+          ecmwf=$!
+          failed=0; wait "$gefs" || failed=1; wait "$ecmwf" || failed=1
+          cat review-output/gefs-build.txt review-output/ecmwf-build.txt
+          test "$failed" = 0
+          python scripts/check_ensemble_freshness.py --local-root ensemble-data --output review-output/ensemble-prepared.json || true
+          python - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          from omfiles import OmFileReader
+          result={}
+          for p in Path('ensemble-data').glob('*/latest.json'):
+              m=json.loads(p.read_text());run=m['reference_time'];folder=p.parent/run[:10].replace('-','') if False else p.parent/run[:10].replace('-','/')/(run[11:13]+'00Z')
+              samples=[]
+              for t in [m['valid_times'][0],m['valid_times'][len(m['valid_times'])//2],m['valid_times'][-1]]:
+                  f=folder/(t[:16].replace(':','')+'.om');r=OmFileReader(str(f));values={v:float(r.get_child_by_name(v)[280 if m['grid_resolution']==.5 else 560,350 if m['grid_resolution']==.5 else 700]) for v in m['variables']};samples.append({'valid_time':t,'bytes':f.stat().st_size,'values':values});del r
+              result[p.parent.name]={'reference_time':run,'completed':m['completed'],'frames':len(m['valid_times']),'last':m['valid_times'][-1],'samples':samples}
+          Path('review-output/native-grid-check.json').write_text(json.dumps(result,indent=2))
+          try:
+              raw=subprocess.check_output(['git','show','origin/review/ukv-ensemble-freshness-20261013:review/feed-audit.json'],text=True)
+              a=json.loads(raw)
+              rows=[{k:v for k,v in r.items() if k in ['label','url','reference_time','last_modified','last_modified_time','completed','frames','first','last','error','ms','steps']} for r in a['results']]
+              Path('review-output/source-audit-summary.json').write_text(json.dumps({'checked_at':a['checked_at'],'results':rows},indent=2))
+          except Exception as e:print('Earlier audit summary:',e)
+          PY
+      - name: Install pinned browser runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Desktop and mobile maps, single UKV, retained ensembles and briefing
+        run: node tests/map-browser.mjs 2>&1 | tee review-output/map-browser.txt
+      - name: Fixed rainfall periods and the tighter Atlantic view still work
+        run: node tests/accumulation-periods-browser.mjs 2>&1 | tee review-output/period-browser.txt
+      - name: Preserve exact tested source on review branch
+        run: |
+          git add -- map*.js maps.html scripts/check_map_feeds.mjs scripts/check_ensemble_freshness.py tests docs/operational-feeds-20261013.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Verify single three-hourly UKV selection and ensemble publication health'
+          git rev-parse HEAD > review-output/tested-commit.txt
+          git ls-files -s > review-output/tested-blobs.txt
+          git push origin HEAD:review/operational-feeds-20261013
+      - name: Keep source snapshot for inspection
+        if: always()
+        run: git diff --binary > review-output/uncommitted.patch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-operational-feeds
+          path: review-output/
+          retention-days: 7

@@ -1,13 +1,18 @@
 name: Map feed health
 on:
   schedule:
-    - cron: '23 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
+  workflow_run:
+    workflows: ['Publish Snowline and ensemble maps']
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
-    paths: ['scripts/check_map_feeds.mjs', '.github/workflows/map-feed-health.yml']
+    paths: ['scripts/check_map_feeds.mjs', 'scripts/check_ensemble_freshness.py', '.github/workflows/map-feed-health.yml']
 permissions:
   contents: read
+  actions: write
 concurrency:
   group: snowline-map-feed-health
   cancel-in-progress: false
@@ -17,11 +22,51 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check exact published runs, coverage and tiny forecast samples
+      - name: Compare published ensembles with official statistical source indexes
+        id: ensembles
+        continue-on-error: true
+        run: python scripts/check_ensemble_freshness.py --output health-output/ensembles.json
+      - name: Recover a missed ensemble update without overlapping or looping builds
+        if: steps.ensembles.outputs.refresh_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/publish-maps.yml/runs?branch=main&per_page=10" > /tmp/publish-runs.json
+          busy=$(python - <<'PY'
+          import json,time
+          from datetime import datetime
+          runs=json.load(open('/tmp/publish-runs.json'))['workflow_runs']
+          active=any(r['status']!='completed' for r in runs)
+          recent=any(time.time()-datetime.fromisoformat(r['updated_at'].replace('Z','+00:00')).timestamp()<600 for r in runs)
+          print('true' if active or recent else 'false')
+          PY
+          )
+          if [ "$busy" = true ]; then
+            echo 'Publisher already active or checked in the last ten minutes; no duplicate recovery.'
+          else
+            gh workflow run publish-maps.yml --repo "$GITHUB_REPOSITORY" --ref main
+            echo 'Requested a publisher refresh for verified missing ensemble data.'
+          fi
+      - name: Check all offered models, including ensemble binary transport
         run: node scripts/check_map_feeds.mjs health-output/map-feeds.json
+      - name: Report official-source failures or missing cycles
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('health-output/ensembles.json')
+          if not p.exists(): raise SystemExit('Ensemble source check did not produce a report')
+          rows=json.loads(p.read_text())['models']
+          if any(r['status']=='check-failed' or r['refresh_needed'] for r in rows):
+              raise SystemExit('Ensemble update requires attention; see report and recovery step')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
