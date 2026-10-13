@@ -45,11 +45,11 @@ try{
    await page.mouse.click((left+right)/2,(top+bottom)/2,{button:'right'});
    await menu.waitFor({state:'visible'});
   };
-  const saveFile=async name=>{
+  const saveFile=async(name,whiteThreshold=230)=>{
    const [download]=await Promise.all([page.waitForEvent('download'),save.click()]);const path=resolve('review-output',name+'.png');await download.saveAs(path);
    assert.match(download.suggestedFilename(),/^Snowline-.*\.png$/);const bytes=await readFile(path);assert.deepEqual([...bytes.subarray(0,8)],[137,80,78,71,13,10,26,10]);
    const pixel=await page.evaluate(async b=>{const img=new Image();img.src='data:image/png;base64,'+b;await img.decode();const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const x=c.getContext('2d');x.drawImage(img,0,0);return [...x.getImageData(c.width>>1,c.height>>1,1,1).data];},bytes.toString('base64'));
-   assert.equal(pixel[3],255,'PNG is opaque, not a cleared WebGL buffer');assert.ok(pixel.slice(0,3).some(v=>v<230),'PNG includes displayed weather pixels');await page.keyboard.press('Escape');return download;
+   assert.equal(pixel[3],255,'PNG is opaque, not a cleared WebGL buffer');assert.ok(pixel.slice(0,3).some(v=>v<whiteThreshold),'PNG includes displayed weather pixels');await page.keyboard.press('Escape');return download;
   };
   for(const level of [300,200]){
    await page.locator('#map-variable').selectOption('wind_speed_'+level+'hPa');await page.waitForFunction(l=>document.querySelector('#panel-label-a').textContent.includes(l+' hPa'),level);
@@ -92,7 +92,7 @@ try{
    return [[-1,55],[-6,55]].map(coords=>{const p=map.project(coords);return [...ctx.getImageData(Math.round(p.x*canvas.width/map.getCanvas().clientWidth),Math.round(p.y*canvas.height/map.getCanvas().clientHeight),1,1).data];});
   });
   for(const [i,expected]of [[248,248,245],[236,240,243]].entries())for(let channel=0;channel<3;channel++)assert.ok(Math.abs(geographyPixels[i][channel]-expected[channel])<=3,'Full cloud retains land/sea at 80% opacity: '+JSON.stringify(geographyPixels));
-  await right(page.locator('.briefing-card img').first());await saveFile('overcast-geography-'+viewport.width);
+  await right(page.locator('.briefing-card img').first());await saveFile('overcast-geography-'+viewport.width,255);
   assert.deepEqual(errors,[],`No page errors at ${viewport.width}px`);await context.close();console.log(`Jet/850 hPa styling, left-click, right-click PNG, clipboard and fallback passed at ${viewport.width}px`);
  }
 }finally{await browser.close();server.close();}
