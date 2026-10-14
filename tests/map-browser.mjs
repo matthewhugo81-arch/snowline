@@ -190,6 +190,20 @@ try{
    await page.locator('#map-time').evaluate(el=>{for(const value of ['20','40','6']){el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));}});
    await bothAt('Sat 10 Oct, 13:00 UTC');
    assert.equal(await page.locator('.map-error:visible').count(),0);
+   // Starting another drag supersedes a pending request before release. The
+   // cancelled request cannot commit its label or overwrite the preview thumb.
+   const beforeDrag=await page.locator('#panel-label-a').textContent();
+   await page.evaluate(()=>window.fixtureDelay=300);
+   await page.locator('#map-time').evaluate(el=>{el.value='39';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.waitForTimeout(50);
+   await page.locator('#map-time').evaluate(el=>{el.value='5';el.dispatchEvent(new Event('input',{bubbles:true}));});
+   await page.waitForTimeout(800);
+   assert.equal(await page.locator('#map-time').inputValue(),'5');
+   assert.equal(await page.locator('#panel-label-a').textContent(),beforeDrag);
+   assert.equal(await page.locator('.map-error:visible').count(),0);
+   await page.evaluate(()=>window.fixtureDelay=80);
+   await page.locator('#map-time').evaluate(el=>{el.value='6';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await bothAt('Sat 10 Oct, 13:00 UTC');
    // After a genuinely failed selected time, Retry must display that original
    // time and clear both banners, not merely warm files behind the old image.
    await page.evaluate(()=>window.fixtureFault={match:'2026-10-11T0300.om?variable=cloud_cover_high',remaining:100});

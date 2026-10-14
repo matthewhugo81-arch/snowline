@@ -1,3 +1,4 @@
+let cacheSequence=0;
 // Retain a bounded window. The browser selects a smaller budget in comparison mode.
 export function frameWindow(urls,index,{ahead=2,behind=2,loop=false}={}){
  if(loop&&urls.length){
@@ -17,6 +18,7 @@ export function fullSequence(urls,index){return [...new Set([...urls.slice(index
 export class ForecastFrames{
  constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true,isActive=()=>true,maxAttempts=3,prefetch,preloadConcurrency=2}={}){
   Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload,isActive,maxAttempts,prefetch,preloadConcurrency});
+  this.prefix=prefix+'-'+(++cacheSequence);
   this.frames=new Map();this.sequence=0;this.current=null;this.epoch=0;this.queue=[];this.keep=new Set();
   this.preloaded=new Set();this.failures=new Set();this.failureAttempts=new Map();this.retired=new Set();
   this.prefetches=new Map();

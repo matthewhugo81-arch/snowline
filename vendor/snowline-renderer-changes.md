@@ -16,3 +16,8 @@ Local fixes to the bundled Open-Meteo weather map renderer (11 October 2026):
 Preserve these changes when updating the bundled renderer. The upstream licence
 remains in `weather-map-layer-LICENSE.txt`. Worker dispatch regression coverage
 is in `tests/map-worker-pool.test.mjs`.
+
+14 October 2026: paired derived-field reads and variable prefetches use
+`settleNativeReads` before releasing native readers. A cancelled/failed input
+must not dispose the file or sibling reader while another WASM read is still
+pending. Regression coverage: `tests/map-reader-lifetime.test.mjs`.

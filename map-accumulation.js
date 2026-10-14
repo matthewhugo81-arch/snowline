@@ -18,10 +18,14 @@ export function accumulationField(key) {
   note:'Rolling '+hours+'-hour total ending at the valid time: liquid plus frozen water equivalent, from one model run. All native intervals must be present. Missing cells remain missing. White: below 0.2 mm; not necessarily zero. Only nearby totals are prepared in the background.'};
 }
 const HOUR=3600000;
+// NOAA AI/HGEFS spatial files advertise precipitation run-wide, but their
+// first T+6 file omits it. The provider skips the initial 0–6 h message.
+// Verified against native OM children and GfsGraphCastDownload.swift.
+export const precipitationExistsAt=(domain,lead)=>!['ncep_aigfs025','ncep_hgefs025_ensemble_mean'].includes(domain)||lead>6;
 // These are precipitation intervals, not the user's playback interval. Unknown
 // or changed cadences fail closed instead of interpreting a missing hour as 3 h.
 export function precipitationStepHours(domain,lead) {
- if(!(lead>0&&Number.isInteger(lead)))return null;
+ if(!(lead>0&&precipitationExistsAt(domain,lead)&&Number.isInteger(lead)))return null;
  switch(domain){
   case 'ukmo_uk_deterministic_2km':case 'knmi_harmonie_arome_europe':
   case 'meteofrance_arpege_europe':case 'meteofrance_arome_france0025':return 1;

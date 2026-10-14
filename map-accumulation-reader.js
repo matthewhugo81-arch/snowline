@@ -1,4 +1,4 @@
-import {accumulationHours,accumulationSlots} from './map-accumulation.js?v=20261012-accum-history';
+import {accumulationHours,accumulationSlots} from './map-accumulation.js?v=20261014-interaction-audit';
 const abort=()=>new DOMException('Accumulation cancelled','AbortError');
 function check(signal){if(signal?.aborted)throw signal.reason??abort();}
 export function accumulationFiles(url,key){

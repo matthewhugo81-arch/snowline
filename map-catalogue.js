@@ -1,11 +1,11 @@
-import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261012-accum-history';
+import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
 import {ensembleField} from './map-ensemble.js?v=20261013-operational-feeds';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {isJetWind,JET_WIND_SCALE,is850Temperature} from './map-chart-style.js?v=20261012-chart-style';
-import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-clean-symbols';
-import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261014-clean-symbols';
+import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
+import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261014-interaction-audit';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
