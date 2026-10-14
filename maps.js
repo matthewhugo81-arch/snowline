@@ -12,7 +12,7 @@ import {installDewPoint} from './map-dew-point.js';
 import {PRECIPITATION_TYPE,installPrecipitationType} from './map-precipitation-type.js?v=20261014-winter-type';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261013-ukv-full-timeline';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261014-snow-credits';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
@@ -608,7 +608,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261014-mogreps-snow');
+   const {createBriefing}=await import('./map-briefing.js?v=20261014-snow-credits');
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

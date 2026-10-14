@@ -2,7 +2,7 @@ import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rast
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
-import {ForecastFrames} from './map-frames.js?v=20261012-weather-composite';
+import {ForecastFrames} from './map-frames.js?v=20261014-snow-credits';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
 import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261014-mogreps-snow';
