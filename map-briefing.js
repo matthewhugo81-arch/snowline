@@ -26,8 +26,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <label><span id="briefing-time-heading">Starting time</span><select id="briefing-time"></select></label>
  <label>Forecast interval<select id="briefing-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
  <label>Layout<select id="briefing-count"><option value="6">6 panels</option><option value="9">9 panels</option></select></label></div>
- <div class="briefing-overlays" role="group" aria-label="Briefing chart overlays"><label class="briefing-background">Map background<select id="briefing-background">${backgroundOptions}</select></label><label class="check-row"><input id="briefing-contours" type="checkbox" autocomplete="off"> Contours</label><label class="check-row"><input id="briefing-grid-values" type="checkbox" autocomplete="off"> Grid values</label><span id="briefing-overlay-note" class="small-note"></span></div>
- <p id="briefing-note" class="small-note"></p><div id="briefing-legend" class="briefing-legend"></div></div>
+ <div class="briefing-overlays" role="group" aria-label="Briefing chart overlays"><label class="briefing-background">Map background<select id="briefing-background">${backgroundOptions}</select></label><label class="check-row"><input id="briefing-contours" type="checkbox" autocomplete="off"> Contours</label><label class="check-row"><input id="briefing-grid-values" type="checkbox" autocomplete="off"> Grid values</label></div>
+ <div id="briefing-legend" class="briefing-legend" role="group" aria-label="Chart colour scale"></div></div>
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
  <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html">Data and map credits</a>.</p>
@@ -50,7 +50,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
  const overlays=()=>({contours:$('contours').checked,grid:$('grid-values').checked});
- function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('contours').disabled=!!field?.categorical;if(field?.categorical)$('contours').checked=false;$('overlay-note').textContent=field?(field.categorical?'Grid values: ':'Contours and grid values: ')+(preset.id==='weather'?'Precipitation':field.name)+(field.categorical?'':' · '+displayUnit(field)):'';}
+ function configureOverlays(){const field=fields.find(field=>field.key===preset?.field);$('contours').disabled=!!field?.categorical;if(field?.categorical)$('contours').checked=false;}
  function cancel(){controller?.abort();renderer?.cancel();generation++;}
  function controlsDisabled(disabled){for(const id of ['preset','time','interval','previous','next','contours','grid-values'])$(id).disabled=disabled;}
  function navigation(){
@@ -64,12 +64,13 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   const field=fields.find(field=>field.key===preset.field);
   if(isTypeField(field.key)){for(const scale of chartScales(field)){const item=document.createElement('div'),heading=document.createElement('strong'),gradient=document.createElement('div'),labels=document.createElement('div');item.className='briefing-scale';heading.textContent=scale.name;gradient.className='briefing-gradient';gradient.style.background='linear-gradient(to right,'+scale.colors.flatMap((c,i)=>[c+' '+i*25+'%',c+' '+(i+1)*25+'%']).join(',')+')';labels.className='briefing-scale-labels briefing-band-labels';for(const text of scale.labels){const span=document.createElement('span');span.textContent=text;labels.append(span);}item.append(heading,gradient,labels);$('legend').append(item);}return;}
   const item=document.createElement('div'),title=document.createElement('strong'),gradient=document.createElement('div'),labels=document.createElement('div');
-  item.className='briefing-scale';gradient.className='briefing-gradient';labels.className='briefing-scale-labels';
+  item.className='briefing-scale';item.setAttribute('role','group');item.setAttribute('aria-label',field.name+' colour scale');gradient.className='briefing-gradient';labels.className='briefing-scale-labels';
   if(preset.id==='weather'){
    title.textContent='Cloud cover';gradient.style.background='linear-gradient(to right,#414141,#e6e6e6)';labels.innerHTML='<span>Clear · 0%</span><span>Overcast · 100%</span>';
   }else{
    const colors=field.colors.slice(field.legendStart??0),scale=displayStops(field).slice(field.legendStart??0),unit=displayUnit(field),min=field.temperatureBands?scale[1]:scale[0],max=scale.at(-1);
-   title.textContent=field.name+(field.categorical?'':' · '+unit)+(field.legendNote?' · '+field.legendNote:'');
+   // Continuous scales already label their units at the endpoints.
+   title.textContent=field.bands&&!field.categorical?unit:'';
    const stops=field.temperatureBands||field.bands?colors.flatMap((color,index)=>[color+' '+100*index/colors.length+'%',color+' '+100*(index+1)/colors.length+'%']):colors.map((color,index)=>color+' '+100*(scale[index]-min)/(max-min)+'%');
    gradient.style.background='linear-gradient(to right,'+stops.join(',')+')';
    if(field.bands){
@@ -79,7 +80,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
     const low=document.createElement('span'),high=document.createElement('span');low.textContent=min+' '+unit;high.textContent=max+' '+unit;labels.append(low,high);
    }
   }
-  item.append(title,gradient,labels);$('legend').append(item);
+  if(title.textContent)item.append(title);item.append(gradient,labels);$('legend').append(item);
   if(preset.id==='weather'){
    const rain=document.createElement('div');rain.className='briefing-rain-scale';
    const heading=document.createElement('strong');heading.textContent='Precipitation · mm water';rain.append(heading);
@@ -95,7 +96,6 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   configurePeriodInterval($('interval'),hours,interval,regional);
   $('time-heading').textContent=hours?'Period start · UTC':'Starting time';
   $('previous').textContent=hours?'Earlier periods':'Earlier charts';$('next').textContent=hours?'Later periods':'Later charts';
-  $('note').textContent=hours?fixedPeriodNote(hours):preset.note+(regional?' Short-term models retain every available hour.':' Only the selected forecast intervals are prepared.');
   if(hours){
    const periods=fixedAccumulationPeriods(native,hours,requestedStart??requestedTime);
    times=periods.times;start=periods.index;requestedStart=periods.start??requestedStart;
@@ -105,7 +105,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    $('time').replaceChildren(...times.map((time,index)=>option(String(index),stamp(time))));
    start=times.reduce((best,time,index)=>Math.abs(Date.parse(time)-requestedTime)<Math.abs(Date.parse(times[best])-requestedTime)?index:best,0);
   }
-  $('time').disabled=!times.length;legend();navigation();overlayNote();
+  $('time').disabled=!times.length;legend();navigation();configureOverlays();
  }
  function periodTitle(time){return forecastValidity(preset.field,time);}
  function rememberTime(){if(times[start]){requestedTime=Date.parse(times[start]);const hours=accumulationHours(preset?.field);if(hours)requestedStart=periodStart(times[start],hours);}}
