@@ -1,6 +1,6 @@
 import {MODELS} from './data.js?v=20261010-ukv';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-winter-type';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-winter-intensity';
 import {MOGREPS_MODELS} from './map-mogreps.js';
 // One UKV choice: 00/03/06/...Z main cycles; all hourly valid steps retained.
 // Probability products are explicitly labelled and retain percentage units.

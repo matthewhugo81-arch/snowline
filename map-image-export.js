@@ -1,11 +1,13 @@
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-winter-type';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-winter-intensity';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
+import {isTypeField,NATIVE_PRECIPITATION_TYPE,precipitationTypeScales} from './map-precipitation-type.js?v=20261014-winter-intensity';
 const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';
 const FONT='Arial, sans-serif';
 // Detached descriptors prevent later model/run changes relabelling a saved image.
 export function chartScales(field,interval='',weather=false){
  if(!field)return [];
+ if(isTypeField(field.key))return precipitationTypeScales(field.key===NATIVE_PRECIPITATION_TYPE);
  if(weather||field.key===WEATHER_COMPOSITE)return [
   {name:'Modelled total cloud cover (not satellite observations)',colors:['#414141','#e6e6e6'],labels:['Clear · 0%','Overcast · 100%'],bands:false},
   {name:'Total precipitation · mm water'+(interval?' · '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm: cloud remains visible; not necessarily dry.'}

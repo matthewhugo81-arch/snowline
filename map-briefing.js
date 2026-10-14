@@ -2,16 +2,17 @@ import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261014-winter-type';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261014-winter-intensity';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261014-winter-type';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261014-winter-type';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261014-winter-intensity';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261014-winter-intensity';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-winter-type';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-winter-intensity';
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {chartScales} from './map-image-export.js?v=20261014-winter-type';
+import {chartScales} from './map-image-export.js?v=20261014-winter-intensity';
 
+import {isTypeField} from './map-precipitation-type.js?v=20261014-winter-intensity';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
@@ -61,6 +62,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  function legend(){
   $('legend').replaceChildren();
   const field=fields.find(field=>field.key===preset.field);
+  if(isTypeField(field.key)){for(const scale of chartScales(field)){const item=document.createElement('div'),heading=document.createElement('strong'),gradient=document.createElement('div'),labels=document.createElement('div');item.className='briefing-scale';heading.textContent=scale.name;gradient.className='briefing-gradient';gradient.style.background='linear-gradient(to right,'+scale.colors.flatMap((c,i)=>[c+' '+i*25+'%',c+' '+(i+1)*25+'%']).join(',')+')';labels.className='briefing-scale-labels briefing-band-labels';for(const text of scale.labels){const span=document.createElement('span');span.textContent=text;labels.append(span);}item.append(heading,gradient,labels);$('legend').append(item);}return;}
   const item=document.createElement('div'),title=document.createElement('strong'),gradient=document.createElement('div'),labels=document.createElement('div');
   item.className='briefing-scale';gradient.className='briefing-gradient';labels.className='briefing-scale-labels';
   if(preset.id==='weather'){
