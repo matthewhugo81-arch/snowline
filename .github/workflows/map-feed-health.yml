@@ -73,22 +73,27 @@ jobs:
           p=Path('health-output/ensembles.json')
           if not p.exists(): raise SystemExit('Ensemble source check did not produce a report')
           rows=json.loads(p.read_text())['models']
-          from datetime import datetime, timezone, timedelta
-          now = datetime.now(timezone.utc)
+          from datetime import datetime, timedelta
           problems = []
           for model in rows:
               status = model.get('status')
               if status == 'check-failed':
                   problems.append(f"{model['model']}: official-source health check failed ({model.get('error', 'unknown error')})")
               elif status == 'newer-source-run':
-                  # A newly issued cycle is normally published progressively.
-                  # Only fail if one *whole* model cycle plus two hours has passed.
+                  # Allow the new source cycle to arrive progressively. A real
+                  # outage is measured against the *published* cycle, rather
+                  # than the age of the latest official cycle (which resets).
                   reference = datetime.fromisoformat(model['source_reference'].replace('Z', '+00:00'))
-                  grace_hours = 8 if 'gefs' in model['model'].lower() else 14
-                  if now - reference >= timedelta(hours=grace_hours):
-                      problems.append(f"{model['model']}: published cycle still behind official source after {grace_hours} h")
+                  published = model.get('published_reference')
+                  tolerance_hours = 12 if 'gefs' in model['model'].lower() else 24
+                  if not published:
+                      problems.append(f"{model['model']}: no ensemble cycle is published")
                   else:
-                      print(f"::notice::{model['model']}: new cycle being prepared; no failure notification")
+                      deployed = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                      if reference - deployed >= timedelta(hours=tolerance_hours):
+                          problems.append(f"{model['model']}: published cycle trails official source by at least {tolerance_hours} h")
+                      else:
+                          print(f"::notice::{model['model']}: latest source cycle is still being published")
               elif status == 'hours-pending':
                   print(f"::notice::{model['model']}: same run as source; later forecast hours still being published")
           if problems:
