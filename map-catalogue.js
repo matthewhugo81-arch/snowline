@@ -4,6 +4,7 @@ import {ensembleField} from './map-ensemble.js?v=20261013-operational-feeds';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {isJetWind,JET_WIND_SCALE,is850Temperature} from './map-chart-style.js?v=20261012-chart-style';
+import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-winter-type';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
@@ -21,7 +22,7 @@ function menuField(key){
  return !pressure||MENU_PRESSURE_LEVELS[pressure[1]].includes(Number(pressure[2]));
 }
 const HEIGHT_LEVELS = [50,100,200,300];
-const GROUPS = ['Combined weather','Ensemble mean','Ensemble spread','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
 export const PRECIPITATION_SCALE = {
@@ -43,6 +44,7 @@ export function sourceVariable(meta,key){
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
+ if(key===PRECIPITATION_TYPE)return canDerivePrecipitationType(meta)?PRECIPITATION_TYPE_SOURCE:null;
  if(DIAGNOSTIC_KEYS.includes(key))return diagnosticVariable(meta,key);
  if(key==='dew_point_2m'&&!vars.includes(key)&&canDeriveDewPoint(meta))return DERIVED_DEW_POINT;
  // These scales describe our verified unit conversions, not similarly named
@@ -63,6 +65,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
+ if(key===PRECIPITATION_TYPE)return 'Winter Analysis';
  if(accumulationHours(key))return 'Accumulated precipitation';
  if(key===WEATHER_COMPOSITE)return 'Combined weather';
  if(DIAGNOSTIC_KEYS.includes(key))return 'Derived diagnostics';
@@ -106,6 +109,7 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ if(key===PRECIPITATION_TYPE)return precipitationTypeField();
  const accumulation=accumulationField(key);if(accumulation)return accumulation;
  const diagnostic=diagnosticField(key);if(diagnostic)return diagnostic;
  const ensemble=ensembleField(key);if(ensemble)return ensemble;
@@ -156,6 +160,7 @@ export function extendCatalogue(fields,metas,OM,settings){
  const keys=[...new Set(metas.flatMap(m=>m.variables??[]).map(canonicalVariable))];
  for(const key of ACCUMULATION_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of DIAGNOSTIC_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
+ if(metas.some(meta=>sourceVariable(meta,PRECIPITATION_TYPE)))keys.push(PRECIPITATION_TYPE);
  if(metas.some(meta=>sourceVariable(meta,'dew_point_2m'))&&!keys.includes('dew_point_2m'))keys.push('dew_point_2m');
  const omitted=[];
  for(const key of keys){

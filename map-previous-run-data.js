@@ -1,8 +1,9 @@
-import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261013-mogreps';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261013-mogreps';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261014-winter-type';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261014-winter-type';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
-import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261013-mogreps';
+import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261014-winter-type';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
+import {PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-type';
 const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
  if(!Number.isInteger(lookbackHours)||lookbackHours<1||lookbackHours>48)throw Error('Archive search is limited to 48 hours.');
@@ -50,7 +51,7 @@ export function previousRunTimes(runs,preset,model,interval='3'){
  if(runs.length!==3||!preset||new Set(runs.map(m=>Date.parse(m.reference_time))).size!==runs.length)return [];
  const series=runs.map(meta=>briefingTimes(meta,preset,model,interval)),sets=series.slice(1).map(times=>new Set(times.map(Date.parse)));
  const amount=preset.id==='weather'?'precipitation':preset.field;
- const intervalAmount=['precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount);
+ const intervalAmount=[PRECIPITATION_TYPE,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount);
  return series[0].filter(time=>sets.every(set=>set.has(Date.parse(time)))&&(!intervalAmount||new Set(runs.map(meta=>fieldIntervalHours(meta,amount,time))).size===1));
 }
 export function newerRunAvailable(runs,incoming){return !!incoming&&runs.length>0&&Date.parse(incoming.reference_time)>Math.max(...runs.map(meta=>Date.parse(meta.reference_time)));}

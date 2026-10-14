@@ -2,7 +2,8 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261012-accum-history';
+import {sourceVariable} from './map-catalogue.js?v=20261014-winter-type';
+import {PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-type';
 import {ENSEMBLE_DOMAINS,ensembleFreshnessWarning} from './map-ensemble.js?v=20261013-operational-feeds';
 import {MOGREPS_MODELS} from './map-mogreps.js';
 
@@ -18,7 +19,7 @@ for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
-const intervalFields=new Set(['temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
+const intervalFields=new Set([PRECIPITATION_TYPE,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
 // GFS 0.13° omits these fields at analysis time, although run-wide metadata lists
 // them. Verified against the provider's Gfs013DownloadSurfaceVariable.skipHour0:
 // https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Gfs/GfsVariableDownloadable.swift

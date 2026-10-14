@@ -1,9 +1,10 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261013-mogreps';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261014-winter-type';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261012-accum-history';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261014-winter-type';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
+import {PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-type';
 
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, precipitation & MSLP',field:WEATHER_COMPOSITE,required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
@@ -49,8 +50,8 @@ export function briefingPage(times,start,count=6){return times.slice(Math.max(0,
 export function briefingCaption(meta,preset,time){
  const lead=(Date.parse(time)-Date.parse(meta.reference_time))/3600000;
  const amount=preset.id==='weather'?'precipitation':preset.field;
- const period=['precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
- return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
+ const period=[PRECIPITATION_TYPE,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
+ return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(amount===PRECIPITATION_TYPE?'precipitation-type estimate':amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
 export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={},background='light',appearance={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid,background,appearanceKey(appearance)]);}
 
