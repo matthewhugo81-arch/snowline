@@ -6,9 +6,12 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timedelta,timezone
 import json,os
+import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request,urlopen
+from urllib.parse import urlencode
 SITE='https://matthewhugo81-arch.github.io/snowline/'
 MODELS={'gefs':('snowline_gefs_ensemble',6),'ecmwf':('snowline_ecmwf_ensemble',12)}
 REQUIRED={('gh','pl','500'),('t','pl','850'),('msl','sfc',None)}
@@ -26,11 +29,7 @@ def ecmwf_hours(text):
 def probe(model,run):
  date,cycle=run.strftime('%Y%m%d'),run.strftime('%H')
  if model=='gefs':
-  for product,marker in [('geavg','ens mean'),('gespr','ens std dev')]:
-   url=f'https://noaa-gefs-pds.s3.amazonaws.com/gefs.{date}/{cycle}/atmos/pgrb2ap5/{product}.t{cycle}z.pgrb2a.0p50.f003.idx'
-   rows=[row.split(':') for row in get(url).decode().splitlines()]
-   if not all(any(r[3:5]==list(pair) and marker in ':'.join(r[6:]) for r in rows) for pair in [('HGT','500 mb'),('TMP','850 mb'),('PRMSL','mean sea level')]):raise ValueError('GEFS index lacks required mean/spread fields')
-  return [3]
+  return gefs_hours(date,cycle)
  hours=[]
  for block in (240,360):
   url=f'https://data.ecmwf.int/forecasts/{date}/{cycle}z/ifs/0p25/enfo/{date}{cycle}0000-{block}h-enfo-ep.index'
@@ -38,6 +37,31 @@ def probe(model,run):
   except HTTPError as e:
    if e.code!=404:raise
  return sorted(set(hours))
+
+def gefs_hours(date,cycle):
+ # Checking f003 alone misses newly issued later hours of the same cycle.
+ # Use complete binary/index pairs, then verify all six statistical fields.
+ base='https://noaa-gefs-pds.s3.amazonaws.com/'
+ products=[('geavg','ens mean'),('gespr','ens std dev')]
+ prefixes={product:f'gefs.{date}/{cycle}/atmos/pgrb2ap5/{product}.t{cycle}z.pgrb2a.0p50.f' for product,_ in products}
+ available=[]
+ for product,_ in products:
+  prefix=prefixes[product]
+  listing=ET.fromstring(get(base+'?'+urlencode({'list-type':'2','prefix':prefix})))
+  if listing.findtext('{*}IsTruncated')=='true':raise ValueError('GEFS availability listing was truncated')
+  keys={node.text for node in listing.findall('{*}Contents/{*}Key')}
+  available.append({int(key[len(prefix):]) for key in keys if key.startswith(prefix) and re.fullmatch(r'\d{3}',key[len(prefix):]) and key+'.idx' in keys})
+ expected=set(range(0,241,3))|set(range(246,385,6))
+ candidates=sorted(expected.intersection(*available))
+ def verify(hour):
+  for product,marker in products:
+   try:rows=[row.split(':') for row in get(base+prefixes[product]+f'{hour:03d}.idx').decode().splitlines()]
+   except HTTPError as e:
+    if e.code==404:return None
+    raise
+   if not all(any(r[3:5]==list(pair) and marker in ':'.join(r[6:]) for r in rows) for pair in [('HGT','500 mb'),('TMP','850 mb'),('PRMSL','mean sea level')]):return None
+  return hour
+ with ThreadPoolExecutor(max_workers=8) as pool:return [hour for hour in pool.map(verify,candidates) if hour is not None]
 def newest_source(model,now):
  cycle=MODELS[model][1];top=now.replace(hour=now.hour//cycle*cycle,minute=0,second=0,microsecond=0)
  for back in range(4):
