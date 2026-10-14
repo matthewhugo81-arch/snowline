@@ -2,17 +2,20 @@ import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rast
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
-import {ForecastFrames} from './map-frames.js?v=20261014-mogreps-uk-only';
+import {ForecastFrames} from './map-frames.js?v=20261014-winter-intensity';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261014-mogreps-uk-only';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261014-winter-intensity';
 import {installDewPoint} from './map-dew-point.js';
-import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-winter-type';
+import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-winter-intensity';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261014-mogreps-uk-only';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261014-winter-intensity';
 
 import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
+import {THETA_SYMBOLS} from './map-winter.js?v=20261014-winter-intensity';
+import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-winter-intensity';
+import {fieldSource} from './map-sources.js?v=20261014-winter-intensity';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
@@ -38,7 +41,8 @@ export class BriefingRenderer{
   installEnsembleTransport(OM,this.settings);
   this.accumulations=installAccumulations(OM,this.settings);
   this.cache=new ForecastTileCache(async(params,controller)=>{
-   const result=await OM.omProtocol({...params,url:params.url.replace(/^briefing:\/\//,'om://')},controller,this.settings);
+   const request={...params,url:params.url.replace(/^briefing:\/\//,'om://')};
+   const result=await (isSymbolURL(request.url)?precipitationSymbolProtocol(request,controller,OM,this.settings):OM.omProtocol(request,controller,this.settings));
    // TileJSON from the renderer uses its native protocol; keep briefing colours
    // and caching isolated from the interactive map's opaque precipitation scale.
    if(params.type==='json')return {...result,data:{...result.data,tiles:result.data.tiles.map(url=>url.replace(/^om:\/\//,'briefing://'))}};
@@ -83,6 +87,7 @@ export class BriefingRenderer{
   if(!field||!preset.required.every(key=>hasFieldTime(meta,key,time)))throw Error('This chart is unavailable for the selected time.');
   const main=url(preset.field),pressureURL=hasFieldTime(meta,'pressure_msl',time)?url('pressure_msl'):null;
   const decorate=()=>[
+   ...(preset.field===THETA_SYMBOLS?[symbolOverlay(symbolURL(url('precipitation'),fieldSource(meta,'precipitation',time)))]:[]),
    ...(weather?[compositeUnderlay(url('cloud_cover'))]:[]),
    ...overlayGroups({field,url:main,pressureURL,contours:!!overlays.contours,isobars:true})
   ];

@@ -2,11 +2,13 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261014-mogreps-uk-only';
-import {PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-type';
+import {sourceVariable} from './map-catalogue.js?v=20261014-winter-intensity';
+import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-winter-intensity';
 import {ENSEMBLE_DOMAINS,ensembleFreshnessWarning} from './map-ensemble.js?v=20261013-operational-feeds';
-import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-mogreps-uk-only';
+import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-winter-intensity';
 
+import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-winter-intensity';
+import {precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
 // Open-Meteo splits GFS surface and pressure/upper-air fields into two grids.
@@ -19,13 +21,15 @@ for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
-const intervalFields=new Set([PRECIPITATION_TYPE,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
+const intervalFields=new Set([...TYPE_KEYS,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
 // GFS 0.13° omits these fields at analysis time, although run-wide metadata lists
 // them. Verified against the provider's Gfs013DownloadSurfaceVariable.skipHour0:
 // https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Gfs/GfsVariableDownloadable.swift
 const gfsForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high']);
 export function fieldIntervalHours(meta,key,time){
  if(accumulationHours(key))return accumulationHours(key);
+ if(key===THETA_SYMBOLS){const s=fieldSource(compositeMeta(meta),'precipitation',time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
+ if(isTypeField(key)){const s=fieldSource(meta,key,time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
  if(key===WEATHER_COMPOSITE)return fieldIntervalHours(compositeMeta(meta),'precipitation',time);
  // Extrema may use 3/6-hour or other reporting periods independent of file cadence.
  // Their OM metadata exposes no time bounds: never invent a duration.
@@ -48,6 +52,7 @@ export function combineSources(primary,other=[]){
 }
 export function fieldSource(meta,key,time){
  if(accumulationHours(key))return accumulationSource(meta,key,time);
+ if(key===THETA_SYMBOLS){const selected=compositeMeta(meta);return THETA_SYMBOL_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'wet_bulb_potential_temperature_850hPa',time):null;}
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'precipitation',time):null;}
  return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&!((intervalFields.has(key)||(source.domain==='ncep_gfs013'&&gfsForecastOnly.has(key)))&&Date.parse(time)===Date.parse(source.reference_time)))))??null;
 }

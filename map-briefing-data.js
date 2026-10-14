@@ -1,11 +1,12 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261014-mogreps-uk-only';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261014-winter-intensity';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261014-mogreps-uk-only';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261014-winter-intensity';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
-import {PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-type';
+import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-intensity';
 
+import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-winter-intensity';
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, precipitation & MSLP',field:WEATHER_COMPOSITE,required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
  {id:'temperature',name:'2 m air temperature & pressure',field:'temperature_2m',required:['temperature_2m','pressure_msl'],note:'2 m air temperature in °C at the chart valid time, with MSLP isobars every 4 hPa. This is instantaneous air temperature, not a maximum or minimum.'},
@@ -29,7 +30,7 @@ export function briefingPresets(meta,fields){
   const pressure=!!sourceVariable(meta,'pressure_msl');
   const preset=named?{...named,required:named.id==='weather'?named.required:[named.field],...(!pressure?{name:field.name,note:field.note}:{})}:
    {id:field.key,name:field.name,field:field.key,required:[field.key],note:field.note};
-  return {...preset,note:preset.note+(meta?.ensembleNote?' '+meta.ensembleNote:''),key:field.key,group:variableGroup(field.key)};
+  return {...preset,note:preset.note+' '+winterNote(meta,field.key)+(meta?.ensembleNote?' '+meta.ensembleNote:''),key:field.key,group:variableGroup(field.key)};
  });
 }
 export function briefingOptions(select,presets){
@@ -50,8 +51,8 @@ export function briefingPage(times,start,count=6){return times.slice(Math.max(0,
 export function briefingCaption(meta,preset,time){
  const lead=(Date.parse(time)-Date.parse(meta.reference_time))/3600000;
  const amount=preset.id==='weather'?'precipitation':preset.field;
- const period=[PRECIPITATION_TYPE,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
- return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(amount===PRECIPITATION_TYPE?'precipitation-type estimate':amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount==='snowfall_probability'?'snow probability (≥'+Number((period*.1).toFixed(2))+' mm water)':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
+ const period=[PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
+ return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(isTypeField(amount)?'precipitation-type / intensity':amount===THETA_SYMBOLS?'precipitation symbols (mean mm/h)':amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount==='snowfall_probability'?'snow probability (≥'+Number((period*.1).toFixed(2))+' mm water)':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
 export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={},background='light',appearance={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid,background,appearanceKey(appearance)]);}
 
