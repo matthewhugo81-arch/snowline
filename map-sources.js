@@ -2,12 +2,12 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261014-synoptic-symbols';
-import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-synoptic-symbols';
+import {sourceVariable} from './map-catalogue.js?v=20261014-round-symbols';
+import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-round-symbols';
 import {ENSEMBLE_DOMAINS,ensembleFreshnessWarning} from './map-ensemble.js?v=20261013-operational-feeds';
-import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-synoptic-symbols';
+import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-round-symbols';
 
-import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-synoptic-symbols';
+import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-round-symbols';
 import {precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};

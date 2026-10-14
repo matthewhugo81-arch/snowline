@@ -46,19 +46,19 @@ test('sizes distinguish intensity and keep heavy convection smaller than dynamic
  for(const r of [2,5])assert.ok(symbolRadius(r,true)<symbolRadius(r));
  const render=(values,recipe='partitioned')=>{
   const paths=[];let current;
-  const ctx={beginPath(){current=[];paths.push(current);},arc(){current.push('ring');},moveTo(){current.push('move');},lineTo(){current.push('line');},closePath(){current.push('closed');},stroke(){}};
+  const ctx={beginPath(){current=[];paths.push(current);},arc(){current.push('ring');},moveTo(){current.push('move');},lineTo(){current.push('line');},closePath(){current.push('closed');},setLineDash(){},stroke(){}};
   drawPrecipitationSymbols(ctx,precipitationSymbols(values,1,recipe),20,20);return paths;
  };
  assert.deepEqual(render({precipitation:2,showers:0})[0],['ring']);
  assert.deepEqual(render({precipitation:.2,showers:.2})[0],['move','line','line']);
  assert.deepEqual(render({precipitation:2,showers:2})[0],['move','line','line','closed']);
- assert.deepEqual(render({precipitation:2,showers:NaN})[0],['move','line','line','line','closed']);
+ assert.deepEqual(render({precipitation:2,showers:NaN})[0],['ring']);
 });
 
 test('dense tiles share identical boundary samples and read both amounts from the same native file',async()=>{
  const original=globalThis.OffscreenCanvas,contexts=[],reads=[];
  globalThis.OffscreenCanvas=class{
-  constructor(){this.ctx={centres:[],beginPath(){},arc(x,y){this.centres.push([x,y]);},stroke(){}};contexts.push(this.ctx);}
+  constructor(){this.ctx={centres:[],beginPath(){},arc(x,y){this.centres.push([x,y]);},setLineDash(){},stroke(){}};contexts.push(this.ctx);}
   getContext(){return this.ctx;}async convertToBlob(){return new Blob(['test']);}
  };
  try{

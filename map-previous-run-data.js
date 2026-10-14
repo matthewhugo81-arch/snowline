@@ -1,10 +1,10 @@
-import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261014-synoptic-symbols';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261014-synoptic-symbols';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261014-round-symbols';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261014-round-symbols';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
-import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261014-synoptic-symbols';
+import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261014-round-symbols';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
-import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-synoptic-symbols';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261014-synoptic-symbols';
+import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-round-symbols';
+import {THETA_SYMBOLS} from './map-winter.js?v=20261014-round-symbols';
 const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
  if(!Number.isInteger(lookbackHours)||lookbackHours<1||lookbackHours>48)throw Error('Archive search is limited to 48 hours.');

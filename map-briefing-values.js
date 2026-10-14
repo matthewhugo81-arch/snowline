@@ -1,7 +1,7 @@
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261014-synoptic-symbols';
-import {sourceVariable} from './map-catalogue.js?v=20261014-synoptic-symbols';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-synoptic-symbols';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261014-round-symbols';
+import {sourceVariable} from './map-catalogue.js?v=20261014-round-symbols';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-round-symbols';
 
 // One clipped native grid supplies every label, including derived diagnostics.
 // There are no point-forecast API calls and no requests per labelled cell.
