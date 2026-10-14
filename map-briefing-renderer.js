@@ -2,20 +2,20 @@ import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rast
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
-import {ForecastFrames} from './map-frames.js?v=20261014-winter-intensity';
+import {ForecastFrames} from './map-frames.js?v=20261014-synoptic-symbols';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261014-winter-intensity';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261014-synoptic-symbols';
 import {installDewPoint} from './map-dew-point.js';
-import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-winter-intensity';
+import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-synoptic-symbols';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261014-winter-intensity';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261014-synoptic-symbols';
 
 import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261014-winter-intensity';
-import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-winter-intensity';
-import {fieldSource} from './map-sources.js?v=20261014-winter-intensity';
+import {THETA_SYMBOLS} from './map-winter.js?v=20261014-synoptic-symbols';
+import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-synoptic-symbols';
+import {fieldSource} from './map-sources.js?v=20261014-synoptic-symbols';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');

@@ -80,7 +80,7 @@ test('symbols retain independent native ICON rain, convection and snow amounts; 
 
 test('symbol raster transport reads native same-file cells and produces a cached PNG, respecting abort',async()=>{
  const {precipitationSymbolProtocol}=await import('../map-precipitation-symbols.js');
- const calls=[],paths=[],context={beginPath(){},arc(){paths.push('circle');},moveTo(){},lineTo(){},closePath(){},stroke(){}};
+ const calls=[],paths=[],context={beginPath(){paths.push('glyph');},arc(){},moveTo(){},lineTo(){},closePath(){},stroke(){}};
  const original=globalThis.OffscreenCanvas;globalThis.OffscreenCanvas=class{getContext(){return context;}async convertToBlob(){return new Blob(['png-fixture']);}};
  try{
   const grid={getBounds:()=>[-180,-85,180,85],getInterpolatedValue:(values)=>values[0]};

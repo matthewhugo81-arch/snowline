@@ -4,39 +4,39 @@ import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
-import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-winter-intensity';
+import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-synoptic-symbols';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDewPoint} from './map-dew-point.js';
-import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-winter-intensity';
+import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-synoptic-symbols';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261014-winter-intensity';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261014-synoptic-symbols';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261014-winter-intensity';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261014-synoptic-symbols';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-winter-intensity';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-synoptic-symbols';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261014-winter-intensity';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261014-synoptic-symbols';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261014-winter-intensity';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261014-synoptic-symbols';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261014-winter-intensity';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261014-winter-intensity';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261014-synoptic-symbols';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261014-synoptic-symbols';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261014-winter-intensity';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261014-synoptic-symbols';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
-import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-winter-intensity';
-import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-winter-intensity';
+import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-synoptic-symbols';
+import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-synoptic-symbols';
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
@@ -628,7 +628,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261014-winter-intensity');
+   const {createBriefing}=await import('./map-briefing.js?v=20261014-synoptic-symbols');
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},
