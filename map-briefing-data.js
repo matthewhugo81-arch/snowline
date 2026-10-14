@@ -1,12 +1,12 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261012-accum-history';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261014-round-symbols';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261014-clean-symbols';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261014-round-symbols';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261014-clean-symbols';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
-import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-round-symbols';
+import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-clean-symbols';
 
-import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-round-symbols';
+import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-clean-symbols';
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, precipitation & MSLP',field:WEATHER_COMPOSITE,required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
  {id:'temperature',name:'2 m air temperature & pressure',field:'temperature_2m',required:['temperature_2m','pressure_msl'],note:'2 m air temperature in °C at the chart valid time, with MSLP isobars every 4 hPa. This is instantaneous air temperature, not a maximum or minimum.'},

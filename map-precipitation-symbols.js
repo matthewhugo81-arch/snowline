@@ -1,7 +1,7 @@
-import {nativeCategory,estimatedCategory,rateBand,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-round-symbols';
-import {symbolRecipe} from './map-winter.js?v=20261014-round-symbols';
+import {nativeCategory,estimatedCategory,rateBand,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-clean-symbols';
+import {symbolRecipe} from './map-winter.js?v=20261014-clean-symbols';
 export const isSymbolURL=url=>/[?&]precip_symbols=/.test(url);
-export const symbolURL=(url,source)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style=20261014-round3';
+export const symbolURL=(url,source)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style=20261014-clean4';
 export function symbolOverlay(url){return {id:'precip-symbols',source:{type:'raster',url,tileSize:512,maxzoom:10},layers:[{id:'precip-symbols-image',type:'raster',paint:{'raster-opacity':1,'raster-fade-duration':0,'raster-resampling':'linear'}}]};}
 export const SYMBOL_COLORS={rain:'#1535d8',precipitation:'#1535d8',showers:'#1535d8',mixed:'#11833b',snow:'#db2387',freezing:'#8c34b8',ice:'#b77505',other:'#586575'};
 const categoryKind={1:'rain',2:'mixed',3:'snow',4:'other',5:'freezing',6:'ice'};
@@ -45,8 +45,10 @@ export function drawPrecipitationSymbols(ctx,glyphs,x,y){
  // Keep concurrent components within one lattice cell, with no dominant-only
  // filtering: frontal rain and embedded showers must both remain visible.
  const offsets=glyphs.length===3?[[-4,-3],[4,-3],[0,5]]:glyphs.length===2?[[-4,-2],[4,2]]:[[0,0]];
- glyphs.forEach((g,i)=>{const [dx,dy]=offsets[i];glyphPath(ctx,g,x+dx,y+dy);ctx.setLineDash(g.mechanism==='unseparated'?[1.8,1.2]:[]);ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1.8;ctx.stroke();ctx.strokeStyle=SYMBOL_COLORS[g.kind];ctx.lineWidth=g.rate<.5?1.25:1;ctx.stroke();});
+ // Continuous coloured outlines stay crisp over theta-w shading. The model
+ // note explains an unavailable convection split, rather than a broken glyph.
  ctx.setLineDash([]);
+ glyphs.forEach((g,i)=>{const [dx,dy]=offsets[i];glyphPath(ctx,g,x+dx,y+dy);ctx.strokeStyle=SYMBOL_COLORS[g.kind];ctx.lineWidth=1.25;ctx.stroke();});
 }
 const latAt=(pixel,world)=>Math.atan(Math.sinh(Math.PI*(1-2*pixel/world)))*180/Math.PI;
 // A global 16 px lattice gives four times the coverage of the old 32 px grid.

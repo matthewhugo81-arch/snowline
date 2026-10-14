@@ -1,6 +1,6 @@
-import {hasFieldTime} from './map-sources.js?v=20261014-round-symbols';
+import {hasFieldTime} from './map-sources.js?v=20261014-clean-symbols';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-round-symbols';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-clean-symbols';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));
