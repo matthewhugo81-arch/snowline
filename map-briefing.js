@@ -2,15 +2,15 @@ import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261013-mogreps';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261014-winter-type';
 import {accumulationHours} from './map-accumulation.js?v=20261012-accum-history';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-mogreps';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-mogreps';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261014-winter-type';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261014-winter-type';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261012-accum-history';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-winter-type';
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {chartScales} from './map-image-export.js?v=20261013-map-appearance';
+import {chartScales} from './map-image-export.js?v=20261014-winter-type';
 
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
@@ -49,7 +49,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
  const overlays=()=>({contours:$('contours').checked,grid:$('grid-values').checked});
- function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('overlay-note').textContent=field?'Contours and grid values: '+(preset.id==='weather'?'Precipitation':field.name)+' · '+displayUnit(field):'';}
+ function overlayNote(){const field=fields.find(field=>field.key===preset?.field);$('contours').disabled=!!field?.categorical;if(field?.categorical)$('contours').checked=false;$('overlay-note').textContent=field?(field.categorical?'Grid values: ':'Contours and grid values: ')+(preset.id==='weather'?'Precipitation':field.name)+(field.categorical?'':' · '+displayUnit(field)):'';}
  function cancel(){controller?.abort();renderer?.cancel();generation++;}
  function controlsDisabled(disabled){for(const id of ['preset','time','interval','previous','next','contours','grid-values'])$(id).disabled=disabled;}
  function navigation(){
@@ -67,12 +67,12 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    title.textContent='Cloud cover';gradient.style.background='linear-gradient(to right,#414141,#e6e6e6)';labels.innerHTML='<span>Clear · 0%</span><span>Overcast · 100%</span>';
   }else{
    const colors=field.colors.slice(field.legendStart??0),scale=displayStops(field).slice(field.legendStart??0),unit=displayUnit(field),min=field.temperatureBands?scale[1]:scale[0],max=scale.at(-1);
-   title.textContent=field.name+' · '+unit+(field.legendNote?' · '+field.legendNote:'');
+   title.textContent=field.name+(field.categorical?'':' · '+unit)+(field.legendNote?' · '+field.legendNote:'');
    const stops=field.temperatureBands||field.bands?colors.flatMap((color,index)=>[color+' '+100*index/colors.length+'%',color+' '+100*(index+1)/colors.length+'%']):colors.map((color,index)=>color+' '+100*(scale[index]-min)/(max-min)+'%');
    gradient.style.background='linear-gradient(to right,'+stops.join(',')+')';
    if(field.bands){
     labels.classList.add('briefing-band-labels');
-    for(const [index,value]of scale.entries()){const label=document.createElement('span');label.textContent=value+(index===scale.length-1?'+':'');labels.append(label);}
+    for(const [index,value]of scale.entries()){const label=document.createElement('span');label.textContent=field.categoryLabels?.[index+(field.legendStart??0)]??value+(index===scale.length-1&&!field.categorical?'+':'');labels.append(label);}
    }else{
     const low=document.createElement('span'),high=document.createElement('span');low.textContent=min+' '+unit;high.textContent=max+' '+unit;labels.append(low,high);
    }

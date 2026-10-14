@@ -1,14 +1,14 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
-import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261013-mogreps';
+import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261014-winter-type';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261013-mogreps';
-import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261013-mogreps';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261013-mogreps';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261014-winter-type';
+import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261014-winter-type';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261014-winter-type';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
-import {chartScales} from './map-image-export.js?v=20261013-map-appearance';
+import {chartScales} from './map-image-export.js?v=20261014-winter-type';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261012-accum-history';
 const stamp=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const utc=time=>stamp.format(new Date(time))+' UTC';
@@ -57,6 +57,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  function navigation(){const empty=!times.length;$('back').disabled=empty||index===0;$('forward').disabled=empty||index===times.length-1;$('time').disabled=empty;$('time').value=accumulationHours(preset()?.field)&&times[index]?periodStart(times[index],accumulationHours(preset().field)):String(index);}
  function legend(){
   const p=preset(),field=fields.find(f=>f.key===p?.field);$('legend').replaceChildren();if(!p||!field)return;
+  $('contours').disabled=!!field.categorical;if(field.categorical)$('contours').checked=false;
   for(const scale of chartScales(field,'',p.id==='weather')){
    const item=document.createElement('div');item.className='briefing-scale';const heading=document.createElement('strong');heading.textContent=scale.name;
    const gradient=document.createElement('div');gradient.className='briefing-gradient';const colors=scale.colors;
