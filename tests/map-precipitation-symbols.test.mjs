@@ -37,12 +37,14 @@ test('missing and inconsistent convection never silently become dynamic rain',()
 });
 
 test('sizes distinguish intensity and keep heavy convection smaller than dynamic rings',()=>{
- const rates=[.1,.5,2,5];
+ const rates=[.1,.5,1,2,4,8];
  for(const convective of [false,true]){
   const sizes=rates.map(r=>symbolRadius(r,convective));
   assert.ok(sizes.every((r,i)=>!i||r>sizes[i-1]));assert.equal(symbolRadius(.09,convective),0);
  }
- assert.ok(symbolRadius(5)>symbolRadius(.1)*5);
+ // The continuous display scale spans 3 to 15 px diameter, capped at 8 mm/h.
+ assert.equal(symbolRadius(8),symbolRadius(.1)*5);
+ assert.equal(symbolRadius(100),symbolRadius(8));
  for(const r of [2,5])assert.ok(symbolRadius(r,true)<symbolRadius(r));
  const render=(values,recipe='partitioned')=>{
   const paths=[];let current;
@@ -69,7 +71,11 @@ test('dense tiles share identical boundary samples and read both amounts from th
   for(const x of [7,8])await precipitationSymbolProtocol({type:'image',url:'om://'+file+'?precip_symbols=partitioned/4/'+x+'/5'},new AbortController(),fake,settings);
   const visible=contexts[0].centres.filter(([x,y])=>x>=0&&x<512&&y>=0&&y<512);
   assert.equal(visible.length,1024); // 4x the old 16-by-16 coverage.
-  assert.deepEqual(contexts[0].centres.filter(([x])=>x>=504).map(([x,y])=>[x-512,y]),contexts[1].centres.filter(([x])=>x<=8));
+  // Compare the same global strip on both sides of the seam. The larger halo
+  // also paints extra off-tile roots which cannot affect the adjacent tile.
+  const left=contexts[0].centres.filter(([x])=>x>=504&&x<=520).map(([x,y])=>[x-512,y]);
+  const right=contexts[1].centres.filter(([x])=>x>=-8&&x<=8);
+  assert.ok(left.length>0);assert.deepEqual(left,right);
   assert.deepEqual(reads.map(r=>r.key),['precipitation','showers','precipitation','showers']);assert.ok(reads.every(r=>r.file===file));
  }finally{globalThis.OffscreenCanvas=original;}
 });
