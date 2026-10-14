@@ -1,7 +1,7 @@
-import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261014-mogreps-snow';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261014-mogreps-snow';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261014-mogreps-uk-only';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261014-mogreps-uk-only';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
-import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261014-mogreps-snow';
+import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261014-mogreps-uk-only';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-type';
 const HOUR=3600000;

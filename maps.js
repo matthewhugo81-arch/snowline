@@ -4,7 +4,7 @@ import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
-import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-mogreps-snow';
+import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-mogreps-uk-only';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
@@ -12,28 +12,28 @@ import {installDewPoint} from './map-dew-point.js';
 import {PRECIPITATION_TYPE,installPrecipitationType} from './map-precipitation-type.js?v=20261014-winter-type';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261014-snow-credits';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261014-mogreps-uk-only';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261014-mogreps-snow';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261014-mogreps-uk-only';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-winter-type';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261014-mogreps-snow';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261014-mogreps-uk-only';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261014-mogreps-snow';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261014-mogreps-uk-only';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261014-mogreps-snow';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261014-mogreps-snow';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261014-mogreps-uk-only';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261014-mogreps-uk-only';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261014-mogreps-snow';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261014-mogreps-uk-only';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
@@ -78,7 +78,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
   result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html">Open-Meteo</a>';
  }
- if(params.type==='json'&&/\/(ukmo_(global_ensemble_20km|uk_ensemble_2km)|snowline_mogreps_(global|uk))\//.test(params.url)){
+ if(params.type==='json'&&/\/(ukmo_uk_ensemble_2km|snowline_mogreps_uk)\//.test(params.url)){
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
@@ -608,7 +608,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261014-snow-credits');
+   const {createBriefing}=await import('./map-briefing.js?v=20261014-mogreps-uk-only');
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

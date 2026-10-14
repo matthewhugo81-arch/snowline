@@ -6,7 +6,7 @@ import {loadSpatialModel,loadSpatialRun,fieldDataURL,fieldIntervalHours,fieldSou
 import {describeVariable,availableFields,extendCatalogue} from '../map-catalogue.js';
 import {briefingCaption,briefingTimes} from '../map-briefing-data.js';
 
-const t=h=>new Date(Date.UTC(2026,9,14,2+h)).toISOString(),model=MOGREPS_MODELS[1];
+const t=h=>new Date(Date.UTC(2026,9,14,2+h)).toISOString(),model=MOGREPS_MODELS[0];
 const native={reference_time:t(0),completed:true,variables:['precipitation_probability'],valid_times:[0,1,2,3,63].map(t)};
 const snow={format_version:1,reference_time:t(0),completed:false,variables:['snowfall_probability'],valid_times:[1,3,63].map(t),intervals:Object.fromEntries([1,3,63].map(h=>[t(h),1])),member_count:3,threshold_mm_per_hour:.1};
 const loader=(url)=>Promise.resolve(url.includes(model.snowDomain)?snow:native);
@@ -46,8 +46,8 @@ test('archive lookup never substitutes another snow cycle and invalid products a
  for(const change of [{member_count:18},{threshold_mm_per_hour:1},{intervals:{}},{format_version:0}])assert.equal(verifiedSnowMetadata({...snow,...change},model),false);
 });
 
-test('snowfall grids use verified native global cell centres and the reprojected UK grid',()=>{
- const global=MOGREPS_SNOW_DOMAINS[0].grid,uk=MOGREPS_SNOW_DOMAINS[1].grid;
- assert.equal(global.latMin,-89.90625);assert.equal(global.lonMin,-179.859375);
- assert.equal(OM.GridFactory.create(global).nx,1280);assert.equal(OM.GridFactory.create(uk).ny,970);
+test('snowfall uses only the reprojected UK 2 km grid',()=>{
+ assert.equal(MOGREPS_SNOW_DOMAINS.length,1);
+ const uk=MOGREPS_SNOW_DOMAINS[0].grid;
+ assert.equal(OM.GridFactory.create(uk).nx,1042);assert.equal(OM.GridFactory.create(uk).ny,970);
 });

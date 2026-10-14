@@ -1,5 +1,5 @@
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-mogreps-snow';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-mogreps-uk-only';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
 const CREDITS='Snowline Â· Weather: Open-Meteo / model providers Â· Map: OpenFreeMap / OpenMapTiles / OpenStreetMap Â· Coastline: Natural Earth';
 const FONT='Arial, sans-serif';

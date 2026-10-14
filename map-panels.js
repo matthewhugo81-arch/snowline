@@ -1,6 +1,6 @@
-import {hasFieldTime} from './map-sources.js?v=20261014-mogreps-snow';
+import {hasFieldTime} from './map-sources.js?v=20261014-mogreps-uk-only';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-mogreps-snow';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-mogreps-uk-only';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));
