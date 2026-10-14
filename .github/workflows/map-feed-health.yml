@@ -1,14 +1,11 @@
 name: Map feed health
 on:
-  # Post-publish checks are authoritative. Independent checks at 00/30
-  # protect against a stalled publisher while avoiding the usual build window.
+  # Check on an independent three-hour schedule, not after every five-minute
+  # publication. The publisher remains frequent; health checks must not spam
+  # the repository owner while a normal ensemble cycle is still filling in.
   schedule:
-    - cron: '0,30 * * * *'
+    - cron: '17 */3 * * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Publish Snowline and ensemble maps']
-    types: [completed]
-    branches: [main]
 permissions:
   contents: read
   actions: write
@@ -76,8 +73,26 @@ jobs:
           p=Path('health-output/ensembles.json')
           if not p.exists(): raise SystemExit('Ensemble source check did not produce a report')
           rows=json.loads(p.read_text())['models']
-          if any(r['status']=='check-failed' or r['refresh_needed'] for r in rows):
-              raise SystemExit('Ensemble update requires attention; see report and recovery step')
+          from datetime import datetime, timezone, timedelta
+          now = datetime.now(timezone.utc)
+          problems = []
+          for model in rows:
+              status = model.get('status')
+              if status == 'check-failed':
+                  problems.append(f"{model['model']}: official-source health check failed ({model.get('error', 'unknown error')})")
+              elif status == 'newer-source-run':
+                  # A newly issued cycle is normally published progressively.
+                  # Only fail if one *whole* model cycle plus two hours has passed.
+                  reference = datetime.fromisoformat(model['source_reference'].replace('Z', '+00:00'))
+                  grace_hours = 8 if 'gefs' in model['model'].lower() else 14
+                  if now - reference >= timedelta(hours=grace_hours):
+                      problems.append(f"{model['model']}: published cycle still behind official source after {grace_hours} h")
+                  else:
+                      print(f"::notice::{model['model']}: new cycle being prepared; no failure notification")
+              elif status == 'hours-pending':
+                  print(f"::notice::{model['model']}: same run as source; later forecast hours still being published")
+          if problems:
+              raise SystemExit('; '.join(problems))
           PY
       - uses: actions/upload-artifact@v4
         if: always() && steps.publisher.outputs.skip != 'true'
