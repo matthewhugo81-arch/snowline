@@ -225,3 +225,5 @@
 }
 
 .winter-legend-note{font-size:10px;line-height:1.4;margin-top:5px;color:#30465b}
+
+.map-canvases:has(.winter-legend-note:not([hidden])) .layer-legend{height:auto;min-height:96px}
