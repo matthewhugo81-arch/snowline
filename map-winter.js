@@ -1,5 +1,5 @@
 import {THETA_W,diagnosticField,diagnosticVariable} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {typeMethod,ESTIMATE_NOTE,NATIVE_NOTE} from './map-precipitation-type.js?v=20261014-clean-symbols';
+import {typeMethod,ESTIMATE_NOTE,NATIVE_NOTE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 export const THETA_SYMBOLS='theta_w_precipitation_symbols';
 export const THETA_SYMBOL_FIELDS=[THETA_W,'precipitation','pressure_msl'];
 export function winterSources(meta){return (meta?.sources??(meta?[meta]:[])).filter(source=>Date.parse(source.reference_time)===Date.parse(meta.reference_time));}

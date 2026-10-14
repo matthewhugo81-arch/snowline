@@ -1,5 +1,5 @@
-import {nativeCategory,estimatedCategory,rateBand,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-clean-symbols';
-import {symbolRecipe} from './map-winter.js?v=20261014-clean-symbols';
+import {nativeCategory,estimatedCategory,rateBand,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-interaction-audit';
+import {symbolRecipe} from './map-winter.js?v=20261014-interaction-audit';
 export const isSymbolURL=url=>/[?&]precip_symbols=/.test(url);
 export const symbolURL=(url,source)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style=20261014-clean4';
 export function symbolOverlay(url){return {id:'precip-symbols',source:{type:'raster',url,tileSize:512,maxzoom:10},layers:[{id:'precip-symbols-image',type:'raster',paint:{'raster-opacity':1,'raster-fade-duration':0,'raster-resampling':'linear'}}]};}

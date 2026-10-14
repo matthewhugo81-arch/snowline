@@ -1,4 +1,4 @@
-import {precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
+import {precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 // Retain the original key for existing UKV links.
 export const PRECIPITATION_TYPE='ukv_precipitation_type';
 export const NATIVE_PRECIPITATION_TYPE='native_precipitation_type_intensity';
