@@ -1,0 +1,25 @@
+name: Snowline location browser tests
+on:
+  push:
+    branches: [main]
+    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', '.github/workflows/location-browser-tests.yml']
+  pull_request:
+    branches: [main]
+    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', '.github/workflows/location-browser-tests.yml']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the browser test runner
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: Check forecast inspection, zoom, exports and mobile layout
+        run: python tests/chart-zoom-browser.py

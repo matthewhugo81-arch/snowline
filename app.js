@@ -18,14 +18,15 @@ const datasetDialog=createDatasetDialog(state);
 const linkParams=new URLSearchParams(location.search);let requestedTime=Date.parse(linkParams.get('time'));
 try{if(linkParams.has('lat')&&linkParams.has('lon')){const point=parseCoordinates(linkParams.get('lat')+','+linkParams.get('lon'));if(point)state.location=point;}}catch{}
 
-let chartLayouts=new Map(),renderPending=false;
+let chartLayouts=new Map(),renderPending=false,fullRenderPending=false,inspection=null;
 const chartZoom=createChartZoom({root:document.querySelector('main'),getLayout:id=>chartLayouts.get(id),
  onZoom:range=>{state.zoom=range;state.index=Math.max(range.start,Math.min(range.end,state.index));scheduleRender();},
- onInspect:index=>{if(index!==null){state.index=index;scheduleRender();}},
+ onInspect:index=>{if(index!==null){state.index=index;scheduleRender(true);}},
  onReset:()=>{chartZoom.cancel();state.zoom=null;scheduleRender();},onFinish:scheduleRender});
 function selectedModels(){return MODELS.filter(m=>state.selected.has(m.id)&&state.models.has(m.id)).map(m=>state.models.get(m.id));}
 function setStatus(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
-function scheduleRender(){if(renderPending)return;renderPending=true;requestAnimationFrame(()=>{renderPending=false;render();});}
+// Data, range and size changes take precedence over cursor-only updates in the same frame.
+function scheduleRender(inspectOnly=false){fullRenderPending ||= inspectOnly!==true;if(renderPending)return;renderPending=true;requestAnimationFrame(()=>{const full=fullRenderPending;renderPending=false;fullRenderPending=false;if(full||!inspection)render();else renderInspection();});}
 function populate(){
  $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${m.color}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
@@ -97,18 +98,16 @@ function plot(container,series,config,times){
  for(const i of new Set(dayTicks)){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text class="date-tick" x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))}</text>`;labelEnd=labelStart+labelWidth;}
  for(const s of series){if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="white" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${s.color}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
  html+=`<line class="cursor-line" x1="${x(index)}" x2="${x(index)}" y1="${top}" y2="${height-bottom}"/>`;
- for(const s of series){const v=s.values[index];if(finite(v))html+=`<circle cx="${x(index)}" cy="${y(v)}" r="3" fill="${s.color}"/>`;}
- html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,height,left,inner,top,bottom,n,start,times});
+ for(const s of series){const v=s.values[index];html+=`<circle class="cursor-point" cx="${x(index)}" cy="${finite(v)?y(v):top}" r="3" fill="${s.color}"${finite(v)?'':' display="none"'}/>`;}
+ html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,height,left,inner,top,bottom,n,start,times,x,y,series,cursor:container.querySelector('.cursor-line'),points:[...container.querySelectorAll('.cursor-point')]});
 }
 function render(){
  if(chartZoom.active)return; // Keep the drag geometry stable while model responses arrive.
  const models=selectedModels(),{times,start,end}=chartWindow(state);if(!times.length)return;state.index=Math.max(start,Math.min(state.index,end));
- const index=state.index-start;
  document.querySelectorAll('[data-reset-zoom]').forEach(button=>button.hidden=!state.zoom);
  $('zoom-window').hidden=!state.zoom;
  $('zoom-period').textContent=state.zoom?`Zoomed: ${date.format(new Date(times[0]))} – ${date.format(new Date(times.at(-1)))} UTC · all charts, summary and chart-window data`:'';
- const time=times[index];for(const v of VARIABLES){const label=$('time-'+v.key);label.dateTime=time;label.textContent=date.format(new Date(time))+' UTC';}$('time-slider').min=start;$('time-slider').max=end;$('time-slider').value=state.index;$('selected-time').textContent=date.format(new Date(time))+' UTC';$('time-slider').setAttribute('aria-valuetext',date.format(new Date(time))+' UTC');
- if($('nav-maps'))$('nav-maps').href='maps.html?'+new URLSearchParams({lat:state.location.latitude,lon:state.location.longitude,time});
+ $('time-slider').min=start;$('time-slider').max=end;
  const available=models.filter(m=>VARIABLES.some(v=>times.some(t=>finite(valueAt(m,v.key,t)))));
  $('models-count').textContent=`${available.length} / ${state.selected.size}`;$('models-detail').textContent=state.loading?'Forecasts are still loading':'Selected models with data in this window';
  const votes=times.map(t=>agreement(models,t));const validVotes=votes.filter(v=>v.valid);const peak=validVotes.length?validVotes.reduce((a,b)=>b.percent>a.percent?b:a):null;
@@ -118,20 +117,41 @@ function render(){
  $('snow-max').textContent=maxSnow?`${fmt(maxSnow.value,2)} cm`:'—';$('snow-detail').textContent=maxSnow?(maxSnow.value>0?maxSnow.model:'All available snowfall values are zero'):'No snowfall data';
  $('temp-min').textContent=minTemp?`${fmt(minTemp.value)}°C`:'—';$('temp-detail').textContent=minTemp?minTemp.model:'No temperature data';
  plot($('agreement-chart'),[{values:votes.map(v=>v.percent),color:'#6ce1d6'}],{title:'Hourly snowfall model agreement',floor:0,ceiling:100,minRange:100},times);
- const vote=votes[index];$('agreement-detail').textContent=vote.valid?`${date.format(new Date(time))} UTC · ${vote.snow} of ${vote.valid} available forecasts indicate ≥0.1 cm snowfall (${Math.round(vote.percent)}%).`:'No eligible snowfall forecasts for the inspected hour.';
+ const averages=new Map();
  for(const v of VARIABLES){
  const series=models.map(m=>({...m,values:times.map(t=>valueAt(m,v.key,t))}));
  const average=averageSeries(series,times.length);
+ averages.set(v.key,average);
  plot($('plot-'+v.key),[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
+ $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
+ }
+ const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;return [m.id,text];}));
+ inspection={models,times,start,end,votes,averages,coverage};
+ renderInspection();
+ datasetDialog.render();
+}
+function renderInspection(){
+ if(chartZoom.active)return;
+ const {models,times,start,end,votes,averages,coverage}=inspection;
+ state.index=Math.max(start,Math.min(state.index,end));
+ const index=state.index-start,time=times[index],labelText=date.format(new Date(time))+' UTC';
+ for(const v of VARIABLES){const label=$('time-'+v.key);label.dateTime=time;label.textContent=labelText;}
+ $('time-slider').value=state.index;$('selected-time').textContent=labelText;$('time-slider').setAttribute('aria-valuetext',labelText);
+ if($('nav-maps'))$('nav-maps').href='maps.html?'+new URLSearchParams({lat:state.location.latitude,lon:state.location.longitude,time});
+ for(const layout of chartLayouts.values()){
+  const xx=layout.x(index);layout.cursor.setAttribute('x1',xx);layout.cursor.setAttribute('x2',xx);
+  layout.points.forEach((point,i)=>{const value=layout.series[i].values[index];point.setAttribute('display',finite(value)?'inline':'none');if(finite(value)){point.setAttribute('cx',xx);point.setAttribute('cy',layout.y(value));}});
+ }
+ const vote=votes[index];$('agreement-detail').textContent=vote.valid?`${labelText} · ${vote.snow} of ${vote.valid} available forecasts indicate ≥0.1 cm snowfall (${Math.round(vote.percent)}%).`:'No eligible snowfall forecasts for the inspected hour.';
+ for(const v of VARIABLES){
+ const average=averages.get(v.key);
  const current=models.filter(m=>finite(valueAt(m,v.key,time)));
  const mean=average.values[index],count=average.counts[index];
  const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${valueAttributes(mean,v)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
  $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${m.color}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
- $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
 
- $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let coverage=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)coverage=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage)}</td></tr>`}).join('');
- datasetDialog.render();
+ $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage.get(m.id))}</td></tr>`}).join('');
 }
 let searchController=null;
 async function searchLocations(query){const coords=parseCoordinates(query);if(coords)return [coords];if(query.trim().length<2)throw new Error('Enter at least two characters.');const data=await fetchJSON('https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name:query,count:'8',language:'en',format:'json'}),searchController?.signal);return (data.results??[]).sort((a,b)=>Number(b.country_code==='GB')-Number(a.country_code==='GB')).map(r=>({latitude:r.latitude,longitude:r.longitude,name:[r.name,r.admin2,r.admin1,r.country].filter(Boolean).join(', ')}));}
@@ -157,7 +177,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSearch();});
 document.addEventListener('click',e=>{if(!e.target.closest('#search-form'))closeSearch();});
 $('refresh').addEventListener('click',()=>loadLocation(state.location,true));
 $('horizon').addEventListener('change',e=>{chartZoom.cancel();state.zoom=null;state.hours=Number(e.target.value);scheduleRender();});
-$('time-slider').addEventListener('input',e=>{state.index=Number(e.target.value);scheduleRender();});
+$('time-slider').addEventListener('input',e=>{state.index=Number(e.target.value);scheduleRender(true);});
 for(const [id,filter] of [['select-all',()=>true],['select-global',m=>!m.regional],['select-none',()=>false]])$(id).addEventListener('click',()=>{state.selected=new Set(MODELS.filter(filter).map(m=>m.id));document.querySelectorAll('.model-chip input').forEach(input=>input.checked=state.selected.has(input.value));scheduleRender();});
 $('focus').addEventListener('change',e=>{const group=e.target.value;const snow=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation'];const ice=['temperature_2m','dew_point_2m','soil_temperature_0cm','relative_humidity_2m','precipitation','snow_depth','cloud_cover','wind_speed_10m','wind_gusts_10m'];const wind=['wind_speed_10m','wind_gusts_10m'];for(const v of VARIABLES){const card=$('plot-'+v.key).closest('article');const order=group==='snow'?snow:group==='wind'?wind:ice;card.hidden=group!=='all'&&!order.includes(v.key);card.style.order=group==='all'?0:order.indexOf(v.key);}scheduleRender();});
 let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(scheduleRender,120);});
