@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+from urllib.parse import unquote
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +20,7 @@ def check(name, condition):
 
 def run():
     with sync_playwright() as p:
-        browser = p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH','/usr/bin/chromium'), args=['--no-sandbox'])
+        browser = p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH') or None, args=['--no-sandbox'])
         context = browser.new_context(viewport={'width':1440,'height':1080}, accept_downloads=True)
         page = context.new_page()
         errors=[]
@@ -29,6 +30,7 @@ def run():
         page.set_content(html)
         page.add_style_tag(content=css)
         sources={name:(ROOT/name).read_text() for name in ['app.js','data.js','average.js','cache.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js']}
+        sources['app.js'] += '\nwindow.__inspectionMilliseconds=[];const measuredInspection=renderInspection;renderInspection=function(){const start=performance.now();try{return measuredInspection();}finally{window.__inspectionMilliseconds.push(performance.now()-start);}};'
         page.evaluate(r'''async (sources)=>{
           Date.now=()=>Date.UTC(2026,9,12,19);
           window.__forecastRequests=[];
@@ -41,6 +43,7 @@ def run():
             const keys=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m'];
             const hourly={time},hourly_units={};
             for(const key of keys){hourly[key]=time.map((_,i)=>key==='snowfall'?i/100:key==='snow_depth'?0:key==='cloud_cover'||key==='relative_humidity_2m'?50:key==='precipitation'?i/10:i/10-4);hourly_units[key]=key.includes('wind_')?'mph':key==='snow_depth'?'cm':'°C';}
+            if(new URL(url).searchParams.get('models')==='gfs_global')hourly.temperature_2m[80]=null;
             return new Response(JSON.stringify({hourly,hourly_units,latitude:54,longitude:-2,elevation:200}));
           };
           const urls=new Map();
@@ -69,6 +72,18 @@ def run():
             if release:
                 page.mouse.up(button=button);page.wait_for_timeout(70)
             return axy,bxy
+        page.evaluate("window.__chartPaths=[...document.querySelectorAll('.plot path')]")
+        page.locator('#time-slider').fill('80');page.wait_for_timeout(70)
+        check('Missing forecast values hide their cursor point',page.locator('#plot-temperature_2m .cursor-point[display="none"]').count()==1)
+        page.locator('#time-slider').fill('81');page.wait_for_timeout(70)
+        check('Cursor points return after a forecast gap',page.locator('#plot-temperature_2m .cursor-point[display="none"]').count()==0)
+        check('Slider values, table and map link follow the inspected hour',page.locator('#values-temperature_2m .average-value b').inner_text()=='4.1' and page.locator('#data-table tr').first.locator('td').nth(3).inner_text()=='4.1' and times[81] in unquote(page.locator('#nav-maps').get_attribute('href')))
+        page.evaluate('''async ()=>{const slider=document.querySelector('#time-slider');for(let i=79;i>=0;i--){slider.value=i;slider.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame);}}''')
+        check('Rapid slider movement reuses all forecast paths',page.evaluate("window.__chartPaths.every((path,i)=>path===document.querySelectorAll('.plot path')[i])"))
+        check('Rapid movement ends at the correct hour on every chart',bounds()==[0,167,0] and page.locator('.chart-time time').evaluate_all('(els)=>els.every(e=>e.dateTime===document.querySelector("#time-temperature_2m").dateTime)') and page.locator('#time-temperature_2m').get_attribute('datetime')==times[0])
+        page.evaluate('''()=>{const model=document.querySelector('input[value="gfs_global"]'),slider=document.querySelector('#time-slider');model.checked=false;model.dispatchEvent(new Event('change',{bubbles:true}));slider.value=81;slider.dispatchEvent(new Event('input',{bubbles:true}));}''');page.wait_for_timeout(70)
+        check('Model updates win over cursor-only updates in the same frame',page.evaluate("!window.__chartPaths[0].isConnected") and page.locator('#values-temperature_2m').inner_text().find('GFS global')==-1 and bounds()[2]==81)
+        page.locator('input[value="gfs_global"]').check();page.locator('#time-slider').fill('0');page.wait_for_timeout(70)
         selector='#plot-temperature_2m'
         card=page.locator(selector).locator('..')
         card.screenshot(path=str(ROOT.parent/'zoom-before.png'))
@@ -140,7 +155,8 @@ def run():
         page.locator(selector).locator('..').locator('[data-reset-zoom]').click();page.wait_for_timeout(70)
         check('Reset remains usable at mobile width',bounds()[:2]==[0,167])
         check('No JavaScript errors during interaction tests',not errors)
-        print(json.dumps({'passed':len(RESULTS),'checks':RESULTS,'errors':errors},indent=2))
+        timings=page.evaluate('window.__inspectionMilliseconds.slice().sort((a,b)=>a-b)')
+        print(json.dumps({'passed':len(RESULTS),'checks':RESULTS,'errors':errors,'inspection_ms':{'samples':len(timings),'median':round(timings[len(timings)//2],2),'p95':round(timings[int(len(timings)*.95)],2)}},indent=2))
         browser.close()
 
 if __name__=='__main__':
