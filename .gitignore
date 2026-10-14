@@ -1,4 +1,5 @@
 ensemble-data/
+point-data/
 __pycache__/
 node_modules/
 _site/

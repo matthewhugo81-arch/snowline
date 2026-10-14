@@ -37,6 +37,13 @@ jobs:
           python -m unittest discover -s tests -p 'test_mogreps*.py'
       - uses: actions/cache@v4
         with:
+          path: point-data
+          key: point-forecasts-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: point-forecasts-v1-
+      - name: Refresh shared location forecasts at most once per hour
+        run: node scripts/build_point_forecasts.mjs
+      - uses: actions/cache@v4
+        with:
           path: ensemble-data
           key: ensemble-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ensemble-grids-v1-
@@ -62,6 +69,7 @@ jobs:
           mkdir _site
           git archive HEAD | tar -x -C _site
           rm -rf _site/.github _site/tests _site/scripts _site/review
+          cp -a point-data _site/point-data
           mkdir -p _site/ensemble-data
           cp -a ensemble-data/snowline_gefs_ensemble ensemble-data/snowline_ecmwf_ensemble ensemble-data/snowline_mogreps_uk _site/ensemble-data/
           if [ -f ensemble-data/health.json ]; then cp ensemble-data/health.json _site/ensemble-data/; fi

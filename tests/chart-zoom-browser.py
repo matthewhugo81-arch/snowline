@@ -29,7 +29,7 @@ def run():
         css=re.sub(r"@import[^\n]*\n", '', (ROOT/'styles.css').read_text(encoding='utf-8')) + (ROOT/'chart-zoom.css').read_text(encoding='utf-8')
         page.set_content(html)
         page.add_style_tag(content=css)
-        sources={name:(ROOT/name).read_text(encoding='utf-8') for name in ['app.js','data.js','average.js','cache.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js','chart-panels.js']}
+        sources={name:(ROOT/name).read_text(encoding='utf-8') for name in ['app.js','data.js','average.js','cache.js','point-forecasts.js','point-snapshots.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js','chart-panels.js']}
         sources['app.js'] += '\nwindow.__inspectionMilliseconds=[];const measuredInspection=renderInspection;renderInspection=function(){const start=performance.now();try{return measuredInspection();}finally{window.__inspectionMilliseconds.push(performance.now()-start);}};'
         page.evaluate(r'''async (sources)=>{
           Date.now=()=>Date.UTC(2026,9,12,19);
@@ -202,6 +202,22 @@ def run():
         page.set_viewport_size({'width':1440,'height':1080});page.wait_for_timeout(180)
         check('Returning to desktop restores the requested pairs',paired_layout())
         page.locator('#charts').screenshot(path=str(ROOT.parent/'panels-desktop.png'))
+        # The same UI must retain usable data when a forced refresh encounters a
+        # real 429 response. Advance beyond the fresh-cache window, not its horizon.
+        page.evaluate('''()=>{Date.now=()=>Date.UTC(2026,9,12,21);window.__quotaCalls=0;window.fetch=async()=>{window.__quotaCalls++;return new Response(JSON.stringify({error:true,reason:'Daily API request limit exceeded. Please try again tomorrow.'}),{status:429});};}''')
+        page.locator('#refresh').click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
+        check('Quota failure retains all twelve charts and altitude',page.locator('.plot svg').count()==12 and 'approximately 200' in page.locator('#altitude').inner_text())
+        check('Fallback is explicitly dated and labelled as cached', 'Cached forecasts' in page.locator('#status').inner_text() and '19:00' in page.locator('#status').inner_text() and 'request limit' in page.locator('#status').inner_text())
+        quota_calls=page.evaluate('window.__quotaCalls')
+        check('Quota response stops the remaining model queue',0 < quota_calls <= 3)
+        page.locator('#refresh').click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
+        check('Repeated Refresh honours quota cooldown without more requests',page.evaluate('window.__quotaCalls')==quota_calls)
+        drag(selector,10,30)
+        check('Synchronized right-drag remains usable on fallback forecasts',bounds()[:2]==[10,30])
+        page.locator('#location-search').fill('55, -4');page.locator('#search-form button[type="submit"]').click()
+        page.locator('#search-results button').first.click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
+        check('Uncached locations show the provider limit, never another location forecast','No usable cached forecast exists for this location' in page.locator('#status').inner_text() and page.locator('.plot svg').count()==0)
+        check('New-location and elevation requests also respect the cooldown',page.evaluate('window.__quotaCalls')==quota_calls)
         check('No JavaScript errors during interaction tests',not errors)
         timings=page.evaluate('window.__inspectionMilliseconds.slice().sort((a,b)=>a-b)')
         print(json.dumps({'passed':len(RESULTS),'checks':RESULTS,'errors':errors,'inspection_ms':{'samples':len(timings),'median':round(timings[len(timings)//2],2),'p95':round(timings[int(len(timings)*.95)],2)}},indent=2))

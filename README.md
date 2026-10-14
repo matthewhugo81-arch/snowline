@@ -65,3 +65,16 @@ Weather rasters and enabled contour/MSLP overlays are prepared as complete, cycl
 
 
 The location-chart UKV model remains **UKMO UKV 2 km**. Maps and Forecast Briefing offer **UKV · latest** and **UKV · previous completed**, with dated UTC labels. UKV Previous Run Analysis compares exactly that pair and refreshes it automatically; unrelated models retain their pinned three-run analysis. No cycle or missing forecast hour is stitched to another. See [UKV run retention](docs/ukv-run-choices.md).
+
+
+## Location forecast resilience (14 October 2026)
+
+Location forecasts use a shared, hourly cache for the starting point, Barnoldswick, Thornton-in-Craven, Colne, Rawtenstall and Love Clough. The public town coordinates are listed in `point-snapshots.js`; matching is to four decimal places, and a neighbouring location is never substituted. The existing Pages publisher restores `point-data`, refreshes each model no more than once per hour, and publishes it alongside the site. This is at most 90 ordinary forecast HTTP requests per hourly refresh for six locations, shared by all visitors; Open-Meteo's weighted API-call accounting still applies. The API request, model names, 11 variables, units and eight-day source window remain unchanged.
+
+Other coordinates continue to use the direct point API. Successful browser responses are fresh for one hour and can be used for up to 24 hours after a transient failure, provided they still contain current/future values. Failed refreshes retain the original retrieval timestamp and explicitly say **Cached forecasts — live refresh unavailable**. Partial model failures do not discard the successful models. A fresh shared response is reused even on Refresh, while a direct response has a 60-second minimum refresh interval.
+
+HTTP 429 starts a persistent cooldown for that service, including elevation and queued models. `Retry-After` is honoured; without it, a daily limit waits until the next UTC day plus one minute, an hourly limit until the next UTC hour plus one minute, and other limits one minute. Refresh cannot override it. Up to three already-running model requests may finish. Search and map metadata on different services remain independent. No quota is reset or guaranteed by the site: a never-cached location can remain unavailable until the provider accepts new requests.
+
+Altitude is reused from the forecast response or geocoding result. The separate elevation endpoint is only needed when neither supplies a height. Cached/shared data retains missing values and original units; it never invents forecasts or replaces missing data with zero. Shared snapshots expire after 24 hours and are published only for their requested coordinates.
+
+Validation: `node --test tests/*.test.mjs` includes transport, cooldown, cache expiry, partial failure, coordinate isolation and publisher tests. `python tests/chart-zoom-browser.py` checks all charts, exports, synchronized right-drag, panel state, mobile layouts, and an actual simulated HTTP 429 through the browser fetch/cache path. No chart geometry, zoom implementation, CSS, map rendering or map data sources were changed by this fix.

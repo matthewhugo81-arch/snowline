@@ -1,4 +1,5 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js?v=20261014-panels';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261014-recovery';
+import {loadPointForecasts} from './point-forecasts.js?v=20261014-recovery';
 import {averageSeries} from './average.js';
 import {chartWindow} from './chart-window.js?v=20261012-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261012-zoom';
@@ -13,7 +14,6 @@ const shortDate=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',tim
 const clock=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const fmt=(v,dec=1)=>finite(v)?v.toFixed(dec):'—';
 const state={location:{latitude:53.9239,longitude:-2.1949,name:'Starting location'},selected:new Set(MODELS.map(m=>m.id)),models:new Map(),errors:new Map(),hours:168,index:0,zoom:null,times:[],loading:false,controller:null,generation:0,fetched:null};
-const cache=new Map();
 const datasetDialog=createDatasetDialog(state);
 const linkParams=new URLSearchParams(location.search);let requestedTime=Date.parse(linkParams.get('time'));
 try{if(linkParams.has('lat')&&linkParams.has('lon')){const point=parseCoordinates(linkParams.get('lat')+','+linkParams.get('lon'));if(point)state.location=point;}}catch{}
@@ -39,34 +39,39 @@ function populate(){
 async function loadLocation(location,force=false){
  datasetDialog.close();chartZoom.cancel();state.zoom=null;
  state.controller?.abort();state.controller=new AbortController();const signal=state.controller.signal;const generation=++state.generation;
- state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;
+ state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;state.limit=null;
  $('place').textContent=location.name;$('coordinates').textContent=`${Math.abs(location.latitude).toFixed(4)}° ${location.latitude<0?'S':'N'} · ${Math.abs(location.longitude).toFixed(4)}° ${location.longitude<0?'W':'E'}`;
- $('altitude').textContent='Altitude: loading…';
- fetchJSON('https://api.open-meteo.com/v1/elevation?'+new URLSearchParams({latitude:location.latitude,longitude:location.longitude}),signal).then(result=>{
-  if(generation!==state.generation)return;
-  const altitude=result.elevation?.[0];
-  $('altitude').textContent=finite(altitude)?'Altitude: approximately '+Math.round(altitude).toLocaleString('en-GB')+' m above sea level':'Altitude unavailable';
- }).catch(()=>{if(generation===state.generation)$('altitude').textContent='Altitude unavailable';});
+ let altitude=location.elevation;
+ const showAltitude=()=>{$('altitude').textContent=finite(altitude)?'Altitude: approximately '+Math.round(altitude).toLocaleString('en-GB')+' m above sea level':'Altitude: loading…';};
+ showAltitude();
  $('refresh').disabled=true;$('refresh').textContent='Loading…';
  let start=Math.floor(Date.now()/3600000)*3600000;state.timeNote='';
  const today=Date.parse(new Date().toISOString().slice(0,10)+'T00:00:00Z');
  if(Number.isFinite(requestedTime)&&requestedTime>=today&&requestedTime<start)start=requestedTime;
  state.times=Array.from({length:168},(_,i)=>new Date(start+i*3600000).toISOString().replace('.000Z','Z'));
  if(Number.isFinite(requestedTime)){const idx=state.times.findIndex(t=>Date.parse(t)===requestedTime);if(idx>=0)state.index=idx;else state.timeNote='The selected map time is outside this point-forecast window. ';requestedTime=NaN;}
- const cacheKey=`${location.latitude.toFixed(4)},${location.longitude.toFixed(4)}`;
- const saved=cache.get(cacheKey);
- if(!force&&saved&&Date.now()-saved.at<20*60*1000){state.models=new Map(saved.models);state.errors=new Map(saved.errors);state.fetched=saved.at;state.loading=false;finishStatus();render();return;}
  setStatus('Loading forecasts for this location…');render();
- let done=0,next=0;
- async function worker(){while(next<MODELS.length&&!signal.aborted){const model=MODELS[next++];try{const json=await fetchJSON(forecastURL(location,model),signal,{force});if(generation!==state.generation)return;const parsed=normalise(json,model);if(!VARIABLES.some(v=>parsed.values[v.key].some(finite)))throw new Error('No forecast data for this location.');state.models.set(model.id,parsed);}catch(error){if(generation!==state.generation)return;if(!signal.aborted)state.errors.set(model.id,error.name==='TimeoutError'?'Request timed out. Try Refresh.':error.message);}finally{if(generation===state.generation){done++;setStatus(`Loading forecasts · ${done} of ${MODELS.length} models checked`);scheduleRender();}}}}
- await Promise.all([worker(),worker(),worker()]);if(generation!==state.generation)return;
- state.loading=false;state.fetched=state.models.size?Math.min(...[...state.models.values()].map(m=>m.fetchedAt??Date.now())):Date.now();if(state.models.size)cache.set(cacheKey,{at:state.fetched,models:new Map(state.models),errors:new Map(state.errors)});
+ try{await loadPointForecasts(location,{signal,force,
+  onModel:model=>{if(generation!==state.generation)return;state.models.set(model.id,model);if(!finite(altitude)&&finite(model.elevation)){altitude=model.elevation;showAltitude();}if(model.retryAt)state.limit={retryAt:model.retryAt};},
+  onError:(model,error)=>{if(generation!==state.generation)return;state.errors.set(model.id,error.name==='TimeoutError'?'Request timed out. Try Refresh.':error.message);if(error.status===429)state.limit=error;},
+  onProgress:done=>{if(generation===state.generation){setStatus(`Loading forecasts · ${done} of ${MODELS.length} models checked`);scheduleRender();}}
+ });}catch(error){if(signal.aborted||generation!==state.generation)return;setStatus(error.message,true);}
+ if(generation!==state.generation)return;
+ // Forecast responses already include elevation; avoid a separate API call on every visit.
+ if(!finite(altitude)){
+  try{const result=await fetchJSON('https://api.open-meteo.com/v1/elevation?'+new URLSearchParams({latitude:location.latitude,longitude:location.longitude}),signal,{ttl:30*86400000,staleTtl:365*86400000});altitude=result.elevation?.[0];}catch{}
+  if(generation!==state.generation)return;
+  if(finite(altitude))showAltitude();else $('altitude').textContent='Altitude unavailable';
+ }
+ state.loading=false;state.fetched=state.models.size?Math.min(...[...state.models.values()].map(m=>m.fetchedAt)):null;
  finishStatus();render();
 }
 function finishStatus(){
  $('refresh').disabled=false;$('refresh').textContent='Refresh';
  const suffix=state.errors.size?` · ${state.errors.size} unavailable (see data availability)`:'';
- setStatus(state.models.size?`${state.timeNote??''}Latest available forecasts · retrieved ${date.format(state.fetched)} UTC${suffix}`:'Unable to load forecasts. Check your connection and try Refresh. Details are in data availability.',!state.models.size);
+ const models=[...state.models.values()],stale=models.some(m=>m.stale),shared=models.some(m=>m.source==='shared cache');
+ const retry=state.limit?.retryAt?` Open-Meteo's request limit was reached; live API requests resume after ${date.format(state.limit.retryAt)} UTC.`:'';
+ setStatus(state.models.size?`${state.timeNote??''}${stale?'Cached forecasts — live refresh unavailable':shared?'Shared forecasts':'Latest available forecasts'} · retrieved ${date.format(state.fetched)} UTC${suffix}${retry}`:state.limit?`Forecasts temporarily unavailable: Open-Meteo's request limit was reached. No usable cached forecast exists for this location. Try Refresh after ${date.format(state.limit.retryAt)} UTC.`:'Unable to load forecasts. Try Refresh. Details are in data availability.',!state.models.size||stale);
 }
 function pathFrom(values,x,y){let drawing=false,d='';for(let i=0;i<values.length;i++){if(!finite(values[i])){drawing=false;continue;}d+=`${drawing?'L':'M'}${x(i).toFixed(1)},${y(values[i]).toFixed(1)} `;drawing=true;}return d;}
 function plot(container,series,config,times){
@@ -125,7 +130,7 @@ function render(){
  plot($('plot-'+v.key),[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
- const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;return [m.id,text];}));
+ const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
  inspection={models,times,start,end,votes,averages,coverage};
  renderInspection();
  datasetDialog.render();
@@ -154,7 +159,7 @@ function renderInspection(){
  $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage.get(m.id))}</td></tr>`}).join('');
 }
 let searchController=null;
-async function searchLocations(query){const coords=parseCoordinates(query);if(coords)return [coords];if(query.trim().length<2)throw new Error('Enter at least two characters.');const data=await fetchJSON('https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name:query,count:'8',language:'en',format:'json'}),searchController?.signal);return (data.results??[]).sort((a,b)=>Number(b.country_code==='GB')-Number(a.country_code==='GB')).map(r=>({latitude:r.latitude,longitude:r.longitude,name:[r.name,r.admin2,r.admin1,r.country].filter(Boolean).join(', ')}));}
+async function searchLocations(query){const coords=parseCoordinates(query);if(coords)return [coords];if(query.trim().length<2)throw new Error('Enter at least two characters.');const data=await fetchJSON('https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name:query,count:'8',language:'en',format:'json'}),searchController?.signal);return (data.results??[]).sort((a,b)=>Number(b.country_code==='GB')-Number(a.country_code==='GB')).map(r=>({latitude:r.latitude,longitude:r.longitude,elevation:r.elevation,name:[r.name,r.admin2,r.admin1,r.country].filter(Boolean).join(', ')}));}
 const recentKey='snowline-recent-locations-v1';
 let recentLocations=[];
 try{const saved=JSON.parse(localStorage.getItem(recentKey)||'[]');if(Array.isArray(saved))recentLocations=saved.filter(p=>p&&finite(p.latitude)&&finite(p.longitude)&&Math.abs(p.latitude)<=90&&Math.abs(p.longitude)<=180&&typeof p.name==='string').slice(0,5);}catch{}
