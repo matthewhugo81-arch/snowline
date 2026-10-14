@@ -227,9 +227,18 @@ async function drawGridValues(panel){
 }
 function concreteURL(model,meta,time,field){if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null;
+function refreshStartingTime(message='No forecast times available'){
+ const select=$('map-start-time');if(!select)return;
+ select.replaceChildren(...state.times.map(time=>new Option(stamp(time),time)));
+ select.disabled=!state.times.length;
+ if(state.times.length)select.value=state.times[state.index];
+ else select.append(new Option(message,''));
+ $('map-start-time-note').textContent=state.compare?'Choose a time for both panels; playback begins here.':'Choose a forecast time; playback begins here.';
+}
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
  $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');
+ if($('map-start-time'))$('map-start-time').value=time;
  $('map-time-label').textContent=stamp(time);
  $('previous-time').disabled=index===0;$('next-time').disabled=index===state.times.length-1;
 }
@@ -473,12 +482,14 @@ function refreshTimeline(){
   ?'Short-term models keep every available hour. Comparison uses matching times.'
   :hours?'Only the selected forecast hours load. Coarser model steps are retained.':'Every available forecast hour loads; longer forecasts take more time.';
  if(!state.times.length){
+  refreshStartingTime();
   $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;
   $('map-time').max=0;$('map-time').value=0;$('range-start').textContent='';$('range-end').textContent='';
   throw new Error(state.compare?'The selected panels have no common forecast times. Choose another model or layer.':'The selected layer has no available forecast times for this model run.');
  }
  $('map-time').disabled=false;$('play-map').disabled=false;
  state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
+ refreshStartingTime();
  $('map-time').max=state.times.length-1;$('range-start').textContent=stamp(state.times[0]);$('range-end').textContent=stamp(state.times.at(-1));
 }
 function metadataLoader(force){
@@ -522,6 +533,7 @@ async function configure(force=false){
  failedSelection=null;
  pauseAnimation();++timeGeneration;
  state.times=[];state.index=0;
+ refreshStartingTime('Checking forecast times…');
  $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;$('map-forecast-interval').disabled=true;
  $('map-time-label').textContent='Checking model run…';$('range-start').textContent='';$('range-end').textContent='';
  $('animation-status').textContent='Checking available forecast hours…';
@@ -542,7 +554,7 @@ async function configure(force=false){
   if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
   refreshTimeline();
   setLegend();setTime();
- }catch(error){if(generation===state.generation){state.times=[];for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
+ }catch(error){if(generation===state.generation){state.times=[];refreshStartingTime('Forecast unavailable');for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
  finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;}}
 }
 $('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
@@ -579,6 +591,10 @@ function restyleMaps(){
 }
 function selectBackground(value){background=value;$('map-background').value=value;try{localStorage.setItem('snowline-background',background);}catch{}if(!briefingActive)restyleMaps();}
 $('map-background').addEventListener('change',e=>selectBackground(e.target.value));
+$('map-start-time')?.addEventListener('change',e=>{
+ const index=state.times.indexOf(e.target.value);if(index<0)return;
+ pauseAnimation();state.index=index;e.target.value=state.times[index];setTime();
+});
 $('reload-maps').addEventListener('click',refreshLiveRuns);$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{const preview=Number(e.target.value);pauseAnimation();e.target.value=String(preview);if(state.times.length)$('animation-status').textContent='Preview '+stamp(state.times[preview])+' UTC · release to load';});
 $('previous-time').addEventListener('click',()=>{pauseAnimation();state.index--;setTime();});$('next-time').addEventListener('click',()=>{pauseAnimation();state.index++;setTime();});
 $('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.weatherLayer&&p.map.getLayer(p.weatherLayer)){p.map.setPaintProperty(p.weatherLayer,'raster-opacity',state.opacity);for(const id of p.frameCache?.current?.underlays??[])p.map.setPaintProperty(id,'raster-opacity',state.opacity);}});
