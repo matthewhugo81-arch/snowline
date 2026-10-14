@@ -409,7 +409,7 @@ try{
    await page.locator('#briefing-grid-values').check();
    await page.waitForFunction(()=>document.getElementById('briefing-status').textContent==='6/6 charts ready · 6/6 next charts prepared',{},{timeout:60000});
    assert.notEqual(await page.locator('#briefing-grid img').first().getAttribute('src'),plainImage,'Enabling overlays renders a distinct image');
-   assert.match(await page.locator('#briefing-overlay-note').textContent(),/precipitation.*mm water/i);
+   assert.match(await page.locator('#briefing-legend').textContent(),/precipitation.*mm water/i);
    const preparedImages=await page.locator('#briefing-grid img').evaluateAll(images=>images.map(image=>image.src));
    const preparedRequests=await page.evaluate(()=>window.fixtureRequests.length);
    const expandedGridTop=await page.locator('#briefing-grid').evaluate(grid=>grid.getBoundingClientRect().top);
@@ -451,7 +451,9 @@ try{
    assert.equal(await page.locator('.briefing-card[data-ready="true"]').count(),6,'Returning to UK reuses the square chart cache');
    await page.locator('#briefing-preset').selectOption('airmass');
    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
-   assert.match(await page.locator('#briefing-note').textContent(),/not theta-w/);
+   await page.locator('.briefing-chart').first().click();
+   assert.match(await page.locator('#briefing-enlarged-note').textContent(),/not theta-w/,'The airmass chart retains its not-theta-w explanation');
+   await page.locator('#briefing-enlarged-close').click();
    for(const [preset,variable] of [['theta-w','wet_bulb_potential_temperature_850hPa'],['vorticity-300','relative_vorticity_300hPa'],['vorticity-400','relative_vorticity_400hPa']]){
     await page.locator('#briefing-preset').selectOption(preset);
     await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
@@ -462,7 +464,7 @@ try{
    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
    assert.match(await page.locator('#briefing-legend').textContent(),/mph/);
    assert.match(await page.locator('#briefing-legend').textContent(),/180\+/);
-   assert.match(await page.locator('#briefing-overlay-note').textContent(),/mph/);
+   assert.match(await page.locator('#briefing-legend').textContent(),/mph/);
    assert.equal(await page.locator('#briefing-legend .briefing-band-labels span').count(),9);
    assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=wind_u_component_300hPa')&&decodeURIComponent(r.url).includes('arrow_profile=jet'))),'Briefing uses the wind component pair and jet arrow profile');
    await page.locator('#briefing-preset').selectOption('upper');
@@ -496,7 +498,7 @@ try{
      await page.locator('#briefing-preset').selectOption(preset);
      await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===9,{},{timeout:60000});
      assert.match(await page.locator('#briefing-legend').textContent(),/°C/);
-     assert.match(await page.locator('#briefing-overlay-note').textContent(),/°C/);
+     assert.match(await page.locator('#briefing-legend').textContent(),/°C/);
      assert.equal(await page.locator('.briefing-card[data-failed="true"]').count(),0);
      assert.ok(await page.evaluate(variable=>window.fixtureRequests.some(r=>decodeURIComponent(r.url).includes('variable='+variable)),variable),'UKV briefing uses '+variable);
      assert.ok(await page.evaluate(variable=>window.fixtureGridReads.some(r=>r.variable===variable),variable),'UKV briefing grid labels use the same '+variable);
