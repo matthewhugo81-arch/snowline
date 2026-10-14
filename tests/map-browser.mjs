@@ -556,7 +556,9 @@ try{
    for(const statistic of ['max','min']){
     await page.locator('#briefing-preset').selectOption('temperature-'+statistic);
     await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length>=6,{},{timeout:60000});
-    assert.match(await page.locator('#briefing-note').textContent(),/not a daily extreme/);
+    await page.locator('.briefing-chart').first().click();
+    assert.match(await page.locator('#briefing-enlarged-note').textContent(),/not a daily extreme/,'Native-period extrema explanation appears in the enlarged chart');
+    await page.locator('#briefing-enlarged-close').click();
     assert.match(await page.locator('.briefing-card p').first().textContent(),/duration unspecified/);
    }
    assert.equal(await page.locator('#briefing-model option:checked').textContent(),await page.locator('#map-model option:checked').textContent());
