@@ -1,7 +1,8 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js?v=20261010-ukv';
+import {MODELS,VARIABLES,finite,parseCoordinates,normalise,valueAt,agreement,fetchJSON,forecastURL} from './data.js?v=20261014-panels';
 import {averageSeries} from './average.js';
 import {chartWindow} from './chart-window.js?v=20261012-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261012-zoom';
+import {setupChartPanels} from './chart-panels.js?v=20261014-panels';
 import {createDatasetDialog} from './dataset-dialog.js?v=20261013-compact-tables';
 import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261013-compact-tables';
 
@@ -31,6 +32,7 @@ function populate(){
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
  $('charts').innerHTML=VARIABLES.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div></article>`).join('');
  $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
+ setupChartPanels(document.querySelector('main'),()=>{chartZoom.cancel();scheduleRender();});
  document.querySelectorAll('.plot').forEach(el=>{el.tabIndex=0;el.title='Right-drag (or Shift + left-drag) to zoom all charts. Double-click or press Escape here to reset.';});
  $('data-table').previousElementSibling.innerHTML='<tr><th>Model</th>'+VARIABLES.map(v=>`<th>${v.title}<br>${v.unit}</th>`).join('')+'<th>Coverage / status</th></tr>';
 }
@@ -68,6 +70,8 @@ function finishStatus(){
 }
 function pathFrom(values,x,y){let drawing=false,d='';for(let i=0;i<values.length;i++){if(!finite(values[i])){drawing=false;continue;}d+=`${drawing?'L':'M'}${x(i).toFixed(1)},${y(values[i]).toFixed(1)} `;drawing=true;}return d;}
 function plot(container,series,config,times){
+ // Reopening redraws at the current width, time window and inspected hour.
+ if(container.closest('[hidden]')){chartLayouts.delete(container.id);return;}
  const shortView=times.length<120;
  const start=chartWindow(state).start,index=state.index-start;
  const width=Math.max(280,container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,right=12,top=15,bottom=shortView?46:33,inner=width-left-right,n=times.length;

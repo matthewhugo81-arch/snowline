@@ -7,13 +7,13 @@ export const VARIABLES = [
  {key:'snow_depth',title:'Snow depth',unit:'cm',note:'Snow on the ground, including existing cover',floor:0,minRange:1},
  {key:'temperature_2m',title:'2 m air temperature',unit:'°C',note:'Near-surface air, not road-surface temperature',minRange:4},
  {key:'dew_point_2m',title:'2 m dew point',unit:'°C',note:'Moisture context for frost and evaporative cooling',minRange:4},
- {key:'temperature_850hPa',title:'850 hPa temperature',unit:'°C',note:'Upper-air context; this level may lie below high terrain',minRange:4},
  {key:'precipitation',title:'Total precipitation',unit:'mm / hour',note:'Rain, showers and snow water equivalent',floor:0,minRange:0.5},
- {key:'soil_temperature_0cm',title:'0 cm soil temperature',unit:'°C',note:'Modelled ground proxy; not a road or pavement forecast',minRange:4},
- {key:'relative_humidity_2m',title:'2 m relative humidity',unit:'%',note:'Moisture context alongside the minimum temperature',floor:0,ceiling:100,minRange:20},
  {key:'cloud_cover',title:'Total cloud cover',unit:'%',note:'Watch for clearing after rain and overnight cooling',floor:0,ceiling:100,minRange:20},
  {key:'wind_speed_10m',title:'10 m wind speed',unit:'mph',note:'Wind speed at 10 m above ground',floor:0,minRange:5},
- {key:'wind_gusts_10m',title:'10 m wind gusts',unit:'mph',note:'Maximum gust in the preceding hour; availability varies by model',floor:0,minRange:5}
+ {key:'wind_gusts_10m',title:'10 m wind gusts',unit:'mph',note:'Maximum gust in the preceding hour; availability varies by model',floor:0,minRange:5},
+ {key:'relative_humidity_2m',title:'2 m relative humidity',unit:'%',note:'Moisture context alongside the minimum temperature',floor:0,ceiling:100,minRange:20},
+ {key:'soil_temperature_0cm',title:'0 cm soil temperature',unit:'°C',note:'Modelled ground proxy; not a road or pavement forecast',minRange:4},
+ {key:'temperature_850hPa',title:'850 hPa temperature',unit:'°C',note:'Upper-air context; this level may lie below high terrain',minRange:4}
 ];
 export const finite = value => typeof value === 'number' && Number.isFinite(value);
 export function windMph(value,unit){
