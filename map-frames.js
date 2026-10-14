@@ -30,7 +30,7 @@ export class ForecastFrames{
    frame={url,id,layer:id+'-image',resources:[id],layers:[id+'-image'],underlays:[],pending:false,loaded:false};
    this.frames.set(url,frame);
    try{
-    const mogreps=/\/(ukmo_(global_ensemble_20km|uk_ensemble_2km)|snowline_mogreps_(global|uk))\//.test(url);
+    const mogreps=/\/(ukmo_uk_ensemble_2km|snowline_mogreps_uk)\//.test(url);
     this.map.addSource(id,{type:'raster',url,maxzoom:10,tileSize:512,attribution:mogreps?'Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a>':url.includes('/ensemble-data/')?'Weather: <a href="map-credits.html#ensembles">NOAA / ECMWF</a>':'Weather © Open-Meteo'});
     this.map.addLayer({id:frame.layer,type:'raster',source:id,paint:{'raster-opacity':1,'raster-opacity-transition':{duration:0},'raster-fade-duration':0}},this.firstLayer());
     for(const group of this.decorate(url)){

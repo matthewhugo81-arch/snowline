@@ -15,23 +15,14 @@ spec.loader.exec_module(snow)
 class ProbabilityTests(unittest.TestCase):
     def test_member_fraction_and_inclusive_water_threshold(self):
         values = np.array([[[0, .0001, .0001]], [[0, 0, .0002]], [[0, 0, .0003]]], dtype=np.float32)
-        np.testing.assert_allclose(snow.snowfall_probability([(values, [4, 5, 6])], 1), [[0, 100/3, 100]])
+        np.testing.assert_allclose(snow.snowfall_probability(values, [4, 5, 6], 1), [[0, 100/3, 100]])
 
     def test_period_scaling_and_no_snow_does_not_mean_missing(self):
         values = np.array([[[.00029, .0003, np.nan]], [[.0001, .0004, 0]], [[0, 0, 0]]], dtype=np.float32)
-        result = snow.snowfall_probability([(values, [1, 2, 3])], 3)
+        result = snow.snowfall_probability(values, [1, 2, 3], 3)
         np.testing.assert_allclose(result[:, :2], [[0, 200/3]])
         self.assertTrue(np.isnan(result[0, 2]))
 
-    def test_convective_amounts_are_added_by_member_before_counting(self):
-        large = np.array([[[.00006]], [[0]], [[0]]], dtype=np.float32)
-        convection = np.array([[[.0001]], [[.00006]], [[0]]], dtype=np.float32)
-        # Member 10 crosses the threshold only after adding the two components;
-        # member 12 has convection alone. Component probabilities cannot be added.
-        result = snow.snowfall_probability([(large, [10, 11, 12]), (convection, [12, 10, 11])], 1)
-        np.testing.assert_allclose(result, [[200/3]])
-        with self.assertRaises(ValueError):
-            snow.snowfall_probability([(large, [10, 11, 12]), (convection, [0, 1, 2])], 1)
 
 
 class NetCDFTests(unittest.TestCase):
@@ -80,7 +71,7 @@ class NetCDFTests(unittest.TestCase):
             d['lwe_thickness_of_snowfall_amount'][0, 0, 0] = -1
             d['lwe_thickness_of_snowfall_amount'][1, 0, 1] = np.ma.masked
         values, ids = self.decode()
-        result = snow.snowfall_probability([(values, ids)], 1)
+        result = snow.snowfall_probability(values, ids, 1)
         self.assertTrue(np.isnan(result[0, :2]).all())
         self.assertEqual(result[0, 2], 0)
 

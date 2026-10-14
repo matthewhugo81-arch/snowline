@@ -80,7 +80,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
   result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html">Open-Meteo</a>';
  }
- if(params.type==='json'&&/\/(ukmo_(global_ensemble_20km|uk_ensemble_2km)|snowline_mogreps_(global|uk))\//.test(params.url)){
+ if(params.type==='json'&&/\/(ukmo_uk_ensemble_2km|snowline_mogreps_uk)\//.test(params.url)){
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;

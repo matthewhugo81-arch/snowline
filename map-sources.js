@@ -108,7 +108,7 @@ export async function loadSpatialModel(model,load){
     primary={...matching,domain,baseURL:SPATIAL_BASE};
    }
    other.push(snow);
-   if(Date.now()-Date.parse(snow.reference_time)>(mogreps.regional?8:18)*3600000)warnings.push('MOGREPS snowfall publication is overdue; check the displayed initialization time.');
+   if(Date.now()-Date.parse(snow.reference_time)>8*3600000)warnings.push('MOGREPS snowfall publication is overdue; check the displayed initialization time.');
   }catch{warnings.push('Member snowfall probabilities are currently unavailable; precipitation probability remains available.');}
  }
  return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning};

@@ -116,7 +116,7 @@ export function describeVariable(key,OM){
   key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
   stops:[0,10,25,50,75,90,100],colors:['#ffffff','#d9f0ff','#8fc8f5','#5879db','#7652bd','#a63498','#720c68'],
   contourValues:[10,25,50,75,90],contourLabel:'10, 25, 50, 75 and 90%',
-  note:'Percentage of MOGREPS members forecasting falling snow at an average rate of at least 0.1 mm/hour liquid-water equivalent over the stated period. Global snowfall includes large-scale and convective components. This is a raw member fraction, not a calibrated probability, settling-snow risk or snow depth. Missing members leave a gap; they are never counted as dry.'
+  note:'Percentage of MOGREPS-UK members forecasting falling snow at an average rate of at least 0.1 mm/hour liquid-water equivalent over the stated period. This is a raw member fraction, not a calibrated probability, settling-snow risk or snow depth. Missing members leave a gap; they are never counted as dry.'
  };
  if(isTypeField(key))return precipitationTypeField(key);
  if(key===THETA_SYMBOLS)return thetaSymbolsField();
