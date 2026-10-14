@@ -51,8 +51,8 @@ export function briefingPage(times,start,count=6){return times.slice(Math.max(0,
 export function briefingCaption(meta,preset,time){
  const lead=(Date.parse(time)-Date.parse(meta.reference_time))/3600000;
  const amount=preset.id==='weather'?'precipitation':preset.field;
- const period=[PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
- return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(isTypeField(amount)?'precipitation-type / intensity':amount===THETA_SYMBOLS?'precipitation symbols (mean mm/h)':amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
+ const period=[PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
+ return 'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(isTypeField(amount)?'precipitation-type / intensity':amount===THETA_SYMBOLS?'precipitation symbols (mean mm/h)':amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount==='snowfall_probability'?'snow probability (≥'+Number((period*.1).toFixed(2))+' mm water)':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
 export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={},background='light',appearance={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid,background,appearanceKey(appearance)]);}
 

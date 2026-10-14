@@ -17,9 +17,9 @@ async function get(url){
 const load=url=>{if(!cache.has(url))cache.set(url,get(url));return cache.get(url);};
 // Statistical files are site-generated, not native precipitation amount feeds.
 const models=MAP_MODELS,results=[];let index=0;
-async function sample(meta){
- const field=['pressure_msl_mean','precipitation','precipitation_probability'].find(key=>meta.variables.includes(key));
- const end=meta.valid_times.find(t=>Date.parse(t)>Date.parse(meta.reference_time)),raw=fieldDataURL(meta,field,end);if(!raw)return null;const url=deployed(raw)+(meta.domain?.startsWith('snowline_')?'.png':'');
+async function sample(meta,requested){
+ const field=requested??['pressure_msl_mean','precipitation','precipitation_probability'].find(key=>meta.variables.includes(key));
+ const end=meta.valid_times.find(t=>Date.parse(t)>Date.parse(meta.reference_time)&&fieldDataURL(meta,field,t)),raw=fieldDataURL(meta,field,end);if(!raw)throw Error('No sample frame for '+field);const url=deployed(raw)+(raw.includes('/ensemble-data/')?'.png':'');
  const start=performance.now(),response=await fetch(url,{headers:{Range:'bytes=0-63'},signal:AbortSignal.timeout(15000)});
  const range=response.headers.get('content-range');
  if(response.status!==206){await response.body?.cancel();throw Error('Expected a byte-range response; received '+response.status);}
@@ -37,6 +37,7 @@ async function worker(){while(index<models.length){
   if(ageHours>threshold)record.warnings.push('Initialization age exceeds the '+threshold+' h review threshold.');
   if(elapsed>10000)record.warnings.push('Metadata check took over 10 seconds.');
   if(['precipitation','pressure_msl_mean','precipitation_probability'].some(key=>meta.variables.includes(key))){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
+  if(meta.variables.includes('snowfall_probability')){try{record.snowSample=await sample(meta,'snowfall_probability');}catch(e){record.warnings.push('Forecast byte-range check failed: snowfall: '+e.message);}}
   if(model.id===UKV){record.history=[];for(const back of [3,6]){const reference=new Date(Date.parse(meta.reference_time)-back*3600000).toISOString();try{const prior=await loadSpatialRun(model.id,reference,load);record.history.push({reference_time:prior.reference_time,available:true});}catch(e){record.history.push({reference_time:reference,available:false,error:e.message});record.warnings.push('An immediately previous UKV main cycle is unavailable: '+reference);}}}
   results.push(record);
  }catch(e){results.push({model:model.id,name:model.name,error:e.message});}

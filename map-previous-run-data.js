@@ -52,7 +52,7 @@ export function previousRunTimes(runs,preset,model,interval='3'){
  if(runs.length!==3||!preset||new Set(runs.map(m=>Date.parse(m.reference_time))).size!==runs.length)return [];
  const series=runs.map(meta=>briefingTimes(meta,preset,model,interval)),sets=series.slice(1).map(times=>new Set(times.map(Date.parse)));
  const amount=preset.id==='weather'?'precipitation':preset.field;
- const intervalAmount=[...TYPE_KEYS,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability'].includes(amount);
+ const intervalAmount=[...TYPE_KEYS,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount);
  return series[0].filter(time=>sets.every(set=>set.has(Date.parse(time)))&&(!intervalAmount||new Set(runs.map(meta=>fieldIntervalHours(meta,amount,time))).size===1));
 }
 export function newerRunAvailable(runs,incoming){return !!incoming&&runs.length>0&&Date.parse(incoming.reference_time)>Math.max(...runs.map(meta=>Date.parse(meta.reference_time)));}

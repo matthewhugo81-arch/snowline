@@ -1,7 +1,7 @@
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
 import {fieldSource,fieldDataURL} from './map-sources.js?v=20261014-winter-intensity';
 import {sourceVariable} from './map-catalogue.js?v=20261014-winter-intensity';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-winter-type';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-winter-intensity';
 
 // One clipped native grid supplies every label, including derived diagnostics.
 // There are no point-forecast API calls and no requests per labelled cell.
