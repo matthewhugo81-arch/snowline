@@ -91,7 +91,7 @@ def run():
         check('Missing forecast values hide their cursor point',page.locator('#plot-temperature_2m .cursor-point[display="none"]').count()==1)
         page.locator('#time-slider').fill('81');page.wait_for_timeout(70)
         check('Cursor points return after a forecast gap',page.locator('#plot-temperature_2m .cursor-point[display="none"]').count()==0)
-        check('Slider values, table and map link follow the inspected hour',page.locator('#values-temperature_2m .average-value b').inner_text()=='4.1' and page.locator('#data-table tr').first.locator('td').nth(3).inner_text()=='4.1' and times[81] in unquote(page.locator('#nav-maps').get_attribute('href')))
+        check('Slider values, table and map link follow the inspected hour',page.locator('#values-temperature_2m .average-value b').inner_text()=='4.1' and page.locator('#data-table tr').first.locator('td').nth(3).text_content()=='4.1' and times[81] in unquote(page.locator('#nav-maps').get_attribute('href')))
         page.evaluate('''async ()=>{const slider=document.querySelector('#time-slider');for(let i=79;i>=0;i--){slider.value=i;slider.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame);}}''')
         check('Rapid slider movement reuses all forecast paths',page.evaluate("window.__chartPaths.every((path,i)=>path===document.querySelectorAll('.plot path')[i])"))
         check('Rapid movement ends at the correct hour on every chart',bounds()==[0,167,0] and page.locator('.chart-time time').evaluate_all('(els)=>els.every(e=>e.dateTime===document.querySelector("#time-temperature_2m").dateTime)') and page.locator('#time-temperature_2m').get_attribute('datetime')==times[0])
