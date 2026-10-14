@@ -65,7 +65,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
- if(key===PRECIPITATION_TYPE)return 'Winter Analysis';
+ if(key===PRECIPITATION_TYPE||key==='snowfall_probability')return 'Winter Analysis';
  if(accumulationHours(key))return 'Accumulated precipitation';
  if(key===WEATHER_COMPOSITE)return 'Combined weather';
  if(DIAGNOSTIC_KEYS.includes(key))return 'Derived diagnostics';
@@ -109,6 +109,12 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ if(key==='snowfall_probability')return {
+  key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
+  stops:[0,10,25,50,75,90,100],colors:['#ffffff','#d9f0ff','#8fc8f5','#5879db','#7652bd','#a63498','#720c68'],
+  contourValues:[10,25,50,75,90],contourLabel:'10, 25, 50, 75 and 90%',
+  note:'Percentage of MOGREPS members forecasting falling snow at an average rate of at least 0.1 mm/hour liquid-water equivalent over the stated period. Global snowfall includes large-scale and convective components. This is a raw member fraction, not a calibrated probability, settling-snow risk or snow depth. Missing members leave a gap; they are never counted as dry.'
+ };
  if(key===PRECIPITATION_TYPE)return precipitationTypeField();
  const accumulation=accumulationField(key);if(accumulation)return accumulation;
  const diagnostic=diagnosticField(key);if(diagnostic)return diagnostic;

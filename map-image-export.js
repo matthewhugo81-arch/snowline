@@ -1,18 +1,18 @@
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-winter-type';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261014-mogreps-snow';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
-const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';
+const CREDITS='Snowline Â· Weather: Open-Meteo / model providers Â· Map: OpenFreeMap / OpenMapTiles / OpenStreetMap Â· Coastline: Natural Earth';
 const FONT='Arial, sans-serif';
 // Detached descriptors prevent later model/run changes relabelling a saved image.
 export function chartScales(field,interval='',weather=false){
  if(!field)return [];
  if(weather||field.key===WEATHER_COMPOSITE)return [
-  {name:'Modelled total cloud cover (not satellite observations)',colors:['#414141','#e6e6e6'],labels:['Clear · 0%','Overcast · 100%'],bands:false},
-  {name:'Total precipitation · mm water'+(interval?' · '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm: cloud remains visible; not necessarily dry.'}
+  {name:'Modelled total cloud cover (not satellite observations)',colors:['#414141','#e6e6e6'],labels:['Clear Â· 0%','Overcast Â· 100%'],bands:false},
+  {name:'Total precipitation Â· mm water'+(interval?' Â· '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm: cloud remains visible; not necessarily dry.'}
  ];
  const offset=field.legendStart??0,stops=displayStops(field).slice(offset),colors=field.colors.slice(offset);
  const labels=field.categoryLabels?field.categoryLabels.slice(offset):field.bands?stops.map((v,i)=>v+(i===stops.length-1&&!field.categorical?'+':'')):[String(field.temperatureBands?stops[1]:stops[0]),String(stops.at(-1))];
- return [{name:field.name+(field.categorical?'':' · '+displayUnit(field)),colors,labels,bands:!!field.bands,discrete:!!field.temperatureBands,positions:stops.map(v=>(v-stops[0])/(stops.at(-1)-stops[0]||1)),note:[interval,field.legendNote].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' · ')}];
+ return [{name:field.name+(field.categorical?'':' Â· '+displayUnit(field)),colors,labels,bands:!!field.bands,discrete:!!field.temperatureBands,positions:stops.map(v=>(v-stops[0])/(stops.at(-1)-stops[0]||1)),note:[interval,field.legendNote].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' Â· ')}];
 }
 export function imageFilename(title){return 'Snowline-'+String(title??'chart').normalize('NFKD').replace(/[^a-zA-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,175)+'.png';}
 function lines(ctx,text,width){
@@ -79,7 +79,7 @@ export function createChartImageMenu({root=document}={}){
   if(previewURL)win.URL.revokeObjectURL(previewURL);previewURL=win.URL.createObjectURL(result.blob);preview.querySelector('img').src=previewURL;const link=preview.querySelector('a');link.href=previewURL;link.download=result.filename;if(!preview.open)preview.showModal();
  }
  async function perform(kind){
-  if(!job)return;const pending=job,token=serial;copy.disabled=save.disabled=true;say(kind==='copy'?'Copying image…':'Preparing PNG…');
+  if(!job)return;const pending=job,token=serial;copy.disabled=save.disabled=true;say(kind==='copy'?'Copying imageâ€¦':'Preparing PNGâ€¦');
   try{
    if(kind==='copy'){try{
     if(!win.navigator.clipboard?.write||!win.ClipboardItem)throw Error('Image clipboard unavailable');

@@ -2,3 +2,5 @@ eccodes==2.49.0
 numpy==2.5.4
 omfiles==1.2.0
 requests==2.34.2
+netCDF4==1.7.4
+pyproj==3.8.0

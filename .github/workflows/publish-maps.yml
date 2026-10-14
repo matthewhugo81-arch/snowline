@@ -34,21 +34,28 @@ jobs:
         run: |
           node --test tests/*.test.mjs
           python -m unittest discover -s tests -p 'test_ensemble*.py'
+          python -m unittest discover -s tests -p 'test_mogreps*.py'
       - uses: actions/cache@v4
         with:
           path: ensemble-data
           key: ensemble-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ensemble-grids-v1-
-      - name: Prepare both ensemble feeds independently and concurrently
+      - name: Prepare ensemble and MOGREPS snowfall feeds concurrently
         shell: bash
         run: |
           python scripts/build_ensembles.py --model gefs --workers 4 --max-new-frames 128 &
           gefs=$!
           python scripts/build_ensembles.py --model ecmwf --workers 4 --max-new-frames 128 &
           ecmwf=$!
+          python scripts/build_mogreps_snow.py --model uk --workers 2 &
+          mogreps_uk=$!
+          python scripts/build_mogreps_snow.py --model global --workers 2 &
+          mogreps_global=$!
           failed=0
           wait "$gefs" || failed=1
           wait "$ecmwf" || failed=1
+          wait "$mogreps_uk" || failed=1
+          wait "$mogreps_global" || failed=1
           exit "$failed"
       - name: Record source-to-publication health without changing model timestamps
         continue-on-error: true

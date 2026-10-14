@@ -1,7 +1,7 @@
 import {MODELS} from './data.js?v=20261010-ukv';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-winter-type';
-import {MOGREPS_MODELS} from './map-mogreps.js';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-mogreps-snow';
+import {MOGREPS_MODELS} from './map-mogreps.js?v=20261014-mogreps-snow';
 // One UKV choice: 00/03/06/...Z main cycles; all hourly valid steps retained.
 // Probability products are explicitly labelled and retain percentage units.
 export const MAP_MODELS = [...MODELS.map(model => model.id === UKV ?

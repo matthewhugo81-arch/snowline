@@ -2,10 +2,10 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261014-winter-type';
+import {sourceVariable} from './map-catalogue.js?v=20261014-mogreps-snow';
 import {PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-winter-type';
 import {ENSEMBLE_DOMAINS,ensembleFreshnessWarning} from './map-ensemble.js?v=20261013-operational-feeds';
-import {MOGREPS_MODELS} from './map-mogreps.js';
+import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-mogreps-snow';
 
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
@@ -19,7 +19,7 @@ for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
-const intervalFields=new Set([PRECIPITATION_TYPE,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
+const intervalFields=new Set([PRECIPITATION_TYPE,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
 // GFS 0.13° omits these fields at analysis time, although run-wide metadata lists
 // them. Verified against the provider's Gfs013DownloadSurfaceVariable.skipHour0:
 // https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Gfs/GfsVariableDownloadable.swift
@@ -31,6 +31,8 @@ export function fieldIntervalHours(meta,key,time){
  // Their OM metadata exposes no time bounds: never invent a duration.
  if(/^temperature_2m_(max|min)$/.test(key))return null;
  const source=fieldSource(meta,key,time),times=source?.valid_times??[],index=times.findIndex(t=>Date.parse(t)===Date.parse(time));
+ // Derived snowfall files retain their CF accumulation bounds, including gaps.
+ if(key==='snowfall_probability')return source?.intervals?.[times[index]]??null;
  // Some feeds omit initialization from valid_times; use the actual run boundary.
  const previous=index>0?times[index-1]:source?.reference_time;
  const hours=(Date.parse(time)-Date.parse(previous))/3600000;
@@ -55,6 +57,12 @@ export function fieldDataURL(meta,key,time){
  if(!source)return null;
  return (source.baseURL??SPATIAL_BASE)+source.domain+'/'+runPath(source.reference_time)+time.slice(0,16).replace(':','')+'.om';
 }
+async function mogrepsSnow(model,load,reference){
+ const base=ownBase+model.snowDomain+'/';
+ const meta=await load(base+(reference?runPath(reference)+'meta.json':'latest.json'));
+ if(!verifiedSnowMetadata(meta,model)||(reference&&Date.parse(meta.reference_time)!==Date.parse(reference)))throw Error('Unverified snowfall run');
+ return {...meta,domain:model.snowDomain,baseURL:ownBase};
+}
 export async function loadSpatialModel(model,load){
  const domain=domains[model===UKV_NOWCAST?UKV:model];
  if(!domain)throw new Error('Unknown spatial model');
@@ -67,7 +75,7 @@ export async function loadSpatialModel(model,load){
  if(!published.some(publishedRun))throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
  const latest=await chooseRun(...published);
  const family=ukvRunFamily(model);
- const primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
+ let primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
  const warnings=[...(primary.selectionWarnings??[])];
  if(results.some(result=>result.status==='rejected'&&result.reason?.status!==404))warnings.push('A live run check failed; using verified published data and retrying automatically.');
  const freshnessWarning=ownEnsembles.has(domain)?ensembleFreshnessWarning(primary,results[1]?.status==='fulfilled'?results[1].value:null):null;
@@ -82,6 +90,22 @@ export async function loadSpatialModel(model,load){
    return null;
   }
  }));
+ const mogreps=MOGREPS_MODELS.find(item=>item.id===model);
+ if(mogreps){
+  try{
+   const snow=await mogrepsSnow(mogreps,load);
+   // Both fields always describe one initialization. While snow processing
+   // catches up, obtain precipitation from that precise archived cycle.
+   if(Date.parse(snow.reference_time)!==Date.parse(primary.reference_time)){
+    const matching=await load(SPATIAL_BASE+domain+'/'+runPath(snow.reference_time)+'meta.json');
+    if(!publishedRun(matching)||Date.parse(matching.reference_time)!==Date.parse(snow.reference_time))throw Error('Matching precipitation run unavailable');
+    if(Date.parse(primary.reference_time)>Date.parse(snow.reference_time))warnings.push('A newer MOGREPS run is being prepared for snowfall; both charts show the stated verified run.');
+    primary={...matching,domain,baseURL:SPATIAL_BASE};
+   }
+   other.push(snow);
+   if(Date.now()-Date.parse(snow.reference_time)>(mogreps.regional?8:18)*3600000)warnings.push('MOGREPS snowfall publication is overdue; check the displayed initialization time.');
+  }catch{warnings.push('Member snowfall probabilities are currently unavailable; precipitation probability remains available.');}
+ }
  return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning};
 }
 
@@ -102,5 +126,7 @@ export async function loadSpatialRun(model,referenceTime,load){
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
   catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}
  }));
+ const mogreps=MOGREPS_MODELS.find(item=>item.id===model);
+ if(mogreps){try{other.push(await mogrepsSnow(mogreps,load,referenceTime));}catch{warnings.push('Member snowfall probabilities are unavailable for this archived run.');}}
  return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings};
 }

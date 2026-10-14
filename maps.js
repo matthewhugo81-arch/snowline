@@ -4,6 +4,7 @@ import {forecastValidity} from './map-validity.js?v=20261013-nw-europe-periods';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261012-accum-history';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261012-accum-speed';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
+import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-mogreps-snow';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
@@ -16,23 +17,23 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261014-winter-type';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261014-mogreps-snow';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-winter-type';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261014-winter-type';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261014-mogreps-snow';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261014-winter-type';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261014-mogreps-snow';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261011-jet-arrows';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261014-winter-type';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261014-winter-type';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261014-mogreps-snow';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261014-mogreps-snow';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261014-winter-type';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261014-mogreps-snow';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
@@ -62,7 +63,7 @@ const fields=[
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
-const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...MOGREPS_SNOW_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);
 installDiagnostics(OM,settings);
@@ -77,7 +78,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
   result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html">Open-Meteo</a>';
  }
- if(params.type==='json'&&/\/ukmo_(global_ensemble_20km|uk_ensemble_2km)\//.test(params.url)){
+ if(params.type==='json'&&/\/(ukmo_(global_ensemble_20km|uk_ensemble_2km)|snowline_mogreps_(global|uk))\//.test(params.url)){
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
@@ -412,7 +413,7 @@ function setLegend(){
   const legendOffset=f.legendStart??0,legendColors=f.colors.slice(legendOffset),displayBreaks=displayStops(f).slice(legendOffset),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
   if(panels[key].legendField!==field){
   panels[key].legendField=field;
-  el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm)':field==='precipitation_probability'?'Chance (%)':f.categoryLabels?'Estimated precipitation type':displayUnit(f);
+  el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm)':['precipitation_probability','snowfall_probability'].includes(field)?'Chance (%)':f.categoryLabels?'Estimated precipitation type':displayUnit(f);
   gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
   gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
   [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
@@ -427,11 +428,11 @@ function setLegend(){
   el('temperature-scale-note').textContent=f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
   let note=f.note+(state.metas[model]?.ensembleNote?' '+state.metas[model].ensembleNote:''),interval=accumulationPeriod(field,state.times[state.index])||f.legendNote||'';
-  if([WEATHER_COMPOSITE,PRECIPITATION_TYPE,'precipitation','precipitation_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
+  if([WEATHER_COMPOSITE,PRECIPITATION_TYPE,'precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
    const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
    interval=hours?hours+' h ending at valid time':'Period unavailable';
-   if(field==='precipitation_probability'&&hours)interval='≥'+Number((hours*.1).toFixed(2))+' mm / '+interval;
-   note+=' '+(hours?(field==='precipitation_probability'?'Probability threshold: ':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
+   if(['precipitation_probability','snowfall_probability'].includes(field)&&hours)interval='≥'+Number((hours*.1).toFixed(2))+(field==='snowfall_probability'?' mm water / ':' mm / ')+interval;
+   note+=' '+(hours?(['precipitation_probability','snowfall_probability'].includes(field)?'Probability threshold: ':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
   }
   if(/^temperature_2m_(max|min)$/.test(field))interval='Native period ending at valid time · duration unspecified';
   el('legend-interval').textContent=f.ensembleStatistic==='spread'?'Standard deviation · higher = more disagreement':f.ensembleStatistic==='mean'?'Ensemble mean':interval;
@@ -607,7 +608,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261014-winter-type');
+   const {createBriefing}=await import('./map-briefing.js?v=20261014-mogreps-snow');
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},
