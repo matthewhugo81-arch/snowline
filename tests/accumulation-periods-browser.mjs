@@ -71,7 +71,6 @@ try{
    assert.deepEqual(await page.locator('#briefing-interval option').allTextContents(),['24-hour periods']);
    assert.deepEqual(await ends(),['2026-10-13T12:00:00.000Z','2026-10-14T12:00:00.000Z']);
    assert.match(await page.locator('#briefing-grid h3').first().textContent(),/12 Oct.*12:00.*13 Oct.*12:00/);
-   assert.match(await page.locator('#briefing-note').textContent(),/do not overlap/);
    assert.equal(await page.locator('#briefing-next').isDisabled(),true);
    const expectedPeriod='VALID 12 Oct 12:00 to 13 Oct 12:00 UTC';
    assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · latest · '+expectedPeriod);
@@ -82,6 +81,8 @@ try{
    assert.ok(sequenceNW[0]>-28&&sequenceNW[2]<26&&sequenceNW[1]>40&&sequenceNW[3]<70,JSON.stringify(sequenceNW));
    await page.locator('#briefing-grid img').first().click();
    assert.equal(await page.locator('#briefing-enlarged-title').textContent(),exported.title);
+   // The compact briefing layout moved explanatory text into the enlarged chart.
+   assert.match(await page.locator('#briefing-enlarged-note').textContent(),/do not overlap/);
    await page.screenshot({path:`review-output/nw-europe-enlarged-${viewport.width}.png`,fullPage:true});
    await page.locator('#briefing-enlarged-close').click();
    await page.screenshot({path:`review-output/fixed-24h-${viewport.width}.png`,fullPage:true});
