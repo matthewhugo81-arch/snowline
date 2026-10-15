@@ -16,3 +16,5 @@ jobs:
           node-version: '22'
       - name: Run map and chart regression tests
         run: node --test tests/*.test.mjs
+      - name: Check native Cloudflare forecast transport and cache reuse
+        run: python tests/worker-runtime/check.py

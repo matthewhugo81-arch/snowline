@@ -62,3 +62,15 @@ test('bounded persistent cache evicts old entries and refuses provider data with
  f.setProvider(async()=>Response.json({hourly:{time:['2020-01-01T00:00'],temperature_2m:[1]}}));
  await assert.rejects(restarted.get(f.point(80)),{status:502});
 });
+test('default transport preserves Worker global receiver and uses supported manual redirects',async()=>{
+ const original=globalThis.fetch,now=Date.now(),values=new Map();
+ const db={get:async k=>values.get(k),put:async(k,v)=>values.set(k,v),delete:async()=>{},list:async()=>new Map()};
+ try{
+  globalThis.fetch=async function(url,options){assert.equal(this,globalThis,'Cloudflare global fetch requires its native receiver');assert.equal(options.redirect,'manual');return Response.json({hourly:{time:[new Date(now).toISOString()],temperature_2m:[2]}});};
+  const cache=new ForecastCache(db,{now:()=>now});const result=await cache.get(parsePoint('https://test/forecast?latitude=53&longitude=-2&model=ecmwf_ifs'));assert.equal(result.hourly.temperature_2m[0],2);
+ }finally{globalThis.fetch=original;}
+});
+test('unexpected upstream redirects fail as 502 without following the new destination',async()=>{
+ const f=fixture(),cache=f.restart();f.setProvider(async()=>new Response(null,{status:302,headers:{Location:'https://other.test/'}}));
+ await assert.rejects(cache.get(f.point()),{status:502,message:'Forecast provider unexpectedly redirected the request.'});assert.equal(f.calls,1);
+});

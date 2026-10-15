@@ -122,6 +122,7 @@ its Durable Object storage discards cached data and counters.
 
 ```sh
 node --test tests/*.test.mjs
+python tests/worker-runtime/check.py
 npx wrangler deploy --dry-run --config worker/wrangler.toml
 ```
 
@@ -135,3 +136,14 @@ Cloudflare references:
 - https://developers.cloudflare.com/durable-objects/get-started/
 - https://developers.cloudflare.com/durable-objects/api/state/
 - https://developers.cloudflare.com/durable-objects/platform/limits/
+
+## Worker transport correction (15 October 2026)
+
+The first deployed forecast request exposed two runtime-specific transport defects:
+ambient `fetch` had been stored as an instance method (an invalid receiver in
+workerd), and `redirect: "error"` is unsupported by Workers. The transport now
+wraps global fetch and uses `manual`, refusing unexpected redirects as HTTP 502.
+The native workerd fixture exercises a complete cache miss and cache hit through
+the real fetch implementation using a local data URL, without contacting Open-Meteo.
+It runs in regression CI alongside the Node tests. Prior health/packaging checks
+did not exercise this outbound path.

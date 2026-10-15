@@ -12,7 +12,7 @@ export function parsePoint(url){
  return {location,model,key:pointKey(location)+'/'+model.id};
 }
 export class ForecastCache {
- constructor(storage,{fetcher=fetch,now=()=>Date.now(),dailyBudget=1000}={}){
+ constructor(storage,{fetcher=(...args)=>globalThis.fetch(...args),now=()=>Date.now(),dailyBudget=1000}={}){
   this.storage=storage;this.fetcher=fetcher;this.now=now;
   this.budget=Number.isInteger(Number(dailyBudget))&&Number(dailyBudget)>0?Number(dailyBudget):1000;
   this.inflight=new Map();this.active=0;this.waiters=[];
@@ -47,11 +47,12 @@ export class ForecastCache {
    // Persist the reservation before the outbound request, including across restarts.
    state.upstream++;await this.persist();
    let response;
-   try{response=await this.fetcher(forecastURL(point.location,point.model),{signal:AbortSignal.timeout(18000),redirect:'error'});}catch{throw Object.assign(Error('Forecast provider temporarily unavailable.'),{status:502});}
+   try{response=await this.fetcher(forecastURL(point.location,point.model),{signal:AbortSignal.timeout(18000),redirect:'manual'});}catch{throw Object.assign(Error('Forecast request failed. Try again shortly.'),{status:502});}
    const json=await response.json().catch(()=>null);
    if(!response.ok||json?.error){
-    const message=json?.reason??`Forecast provider returned ${response.status}`;
-    const status=response.ok?502:response.status;
+    const redirected=response.status>=300&&response.status<400;
+    const message=redirected?'Forecast provider unexpectedly redirected the request.':json?.reason??`Forecast provider returned ${response.status}`;
+    const status=response.ok||redirected?502:response.status;
     const retryAt=status===429?retryTime(response,message,this.now()):this.now()+(status===400?300000:60000);
     if(status===429)this.state.cooldown={message,retryAt};
     throw Object.assign(Error(message),{status,retryAt});
