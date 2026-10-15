@@ -80,3 +80,12 @@ HTTP 429 starts a persistent cooldown for that service, including elevation and 
 Altitude is reused from the forecast response or geocoding result. The separate elevation endpoint is only needed when neither supplies a height. Cached/shared data retains missing values and original units; it never invents forecasts or replaces missing data with zero. Shared snapshots expire after 24 hours and are published only for their requested coordinates.
 
 Validation: `node --test tests/*.test.mjs` includes transport, cooldown, cache expiry, partial failure, coordinate isolation and publisher tests. `python tests/chart-zoom-browser.py` checks all charts, exports, synchronized right-drag, panel state, mobile layouts, and an actual simulated HTTP 429 through the browser fetch/cache path. No chart geometry, zoom implementation, CSS, map rendering or map data sources were changed by this fix.
+
+## Shared cache for searched locations (prepared, not activated)
+
+An optional Cloudflare Worker extends forecast sharing to searched coordinates,
+with one-hour reuse, globally coordinated simultaneous requests, persistent
+provider cooldowns, a daily HTTP safety budget, dated stale fallback and protected
+usage counters. The existing six town snapshots remain first choice. The Worker
+must be deployed and verified before setting `FORECAST_SERVICE_URL`; the empty
+setting preserves current operation. See [setup, validation and rollback](docs/shared-forecast-cache.md).

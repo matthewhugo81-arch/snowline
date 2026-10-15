@@ -29,7 +29,7 @@ def run():
         css=re.sub(r"@import[^\n]*\n", '', (ROOT/'styles.css').read_text(encoding='utf-8')) + (ROOT/'chart-zoom.css').read_text(encoding='utf-8')
         page.set_content(html)
         page.add_style_tag(content=css)
-        sources={name:(ROOT/name).read_text(encoding='utf-8') for name in ['app.js','data.js','average.js','cache.js','point-forecasts.js','point-snapshots.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js','chart-panels.js']}
+        sources={name:(ROOT/name).read_text(encoding='utf-8') for name in ['app.js','data.js','average.js','cache.js','point-forecasts.js','forecast-service.js','point-snapshots.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js','chart-panels.js']}
         sources['app.js'] += '\nwindow.__inspectionMilliseconds=[];const measuredInspection=renderInspection;renderInspection=function(){const start=performance.now();try{return measuredInspection();}finally{window.__inspectionMilliseconds.push(performance.now()-start);}};'
         page.evaluate(r'''async (sources)=>{
           Date.now=()=>Date.UTC(2026,9,12,19);
