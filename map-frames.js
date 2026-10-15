@@ -26,6 +26,9 @@ export class ForecastFrames{
  prepare(url){
   let frame=this.frames.get(url);
   if(frame?.pending)return frame;
+  // Reusing a prepared frame must not reorder its layers or invalidate its
+  // already-loaded sources. Only show() changes the visible forecast.
+  if(this.isReady(url)){frame.ready=Promise.resolve(true);return frame;}
   if(frame?.failed){this.discard(frame);frame=null;}
   if(!frame){
    const id=this.prefix+'-'+(++this.sequence);
@@ -202,25 +205,34 @@ export class ForecastFrames{
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
   if(!this.queue.length||!this.isActive())return;
   if(this.prefetch){
-   // A bounded group overlaps network latency, while distant frames never enter
-   // the map's display/GPU pipeline. Foreground acquire() can interrupt it.
+   // Nearby display frames must not wait behind slow distant downloads. Finish
+   // their bounded window first, then rejoin (not duplicate) the existing distant
+   // jobs before starting more. The two queues have separate waiters, so an
+   // already-running distant request cannot occupy every nearby preparation slot.
    this.timer=setTimeout(()=>{
-    const queue=this.queue;
-    const worker=async()=>{
+    const nearby=this.queue.filter(url=>this.keep.has(url));
+    const distant=this.queue.filter(url=>!this.keep.has(url));
+    const worker=async queue=>{
      while(epoch===this.epoch&&this.isActive()&&queue.length){
       const url=queue.shift();
+      // retain() can remove changed companion data while this queue awaits a
+      // download. Do not start a retired URL from either copied work list.
+      const queued=this.queue.indexOf(url);if(queued<0)continue;
+      this.queue.splice(queued,1);
+      if(this.isReady(url))continue;
       if(!this.keep.has(url)&&(!this.canPreload()||this.preloaded.has(url)))continue;
       let frame,ready=false;
       try{
        if(this.keep.has(url)){frame=this.prepare(url);ready=await frame.ready;}
        else ready=await this.preload(url);
        if(epoch!==this.epoch)break;
-       if(!ready){if(frame)this.discard(frame);if(this.canRetry(url)&&this.failures.has(url))queue.push(url);}
+       if(!ready){if(frame)this.discard(frame);if(this.canRetry(url)&&this.failures.has(url)){queue.push(url);this.queue.push(url);}}
        else if(frame&&frame!==this.current)this.cover(frame);
       }catch{if(frame)this.discard(frame);}
      }
     };
-    for(let i=0;i<this.preloadConcurrency;i++)void worker();
+    const workers=queue=>Array.from({length:this.preloadConcurrency},()=>worker(queue));
+    void Promise.all(workers(nearby)).then(()=>Promise.all(workers(distant)));
    },delay);
    return;
   }
