@@ -6,7 +6,7 @@ import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnost
 import {isJetWind,JET_WIND_SCALE,is850Temperature} from './map-chart-style.js?v=20261012-chart-style';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261014-interaction-audit';
-import {VERTICAL_MOTION,verticalMotionVariable,verticalMotionField} from './map-vertical-motion.js?v=20261015-vertical-motion';
+import {VERTICAL_MOTION,verticalMotionVariable,verticalMotionField} from './map-vertical-motion.js?v=20261015-direct-vertical';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.

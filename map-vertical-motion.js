@@ -1,6 +1,7 @@
 // Match the reference chart: pressure velocity in 0.1 Pa/s (microbar/s).
 // Negative = ascent (red); positive = descent (blue). JMA's spatial arrays
 // retain omega in Pa/s; the other five feeds store geometric w in m/s.
+import {verifiedDirectVertical,DIRECT_VERTICAL_DOMAINS} from './map-direct-vertical.js?v=20261015-direct-vertical';
 export const VERTICAL_MOTION='vertical_motion_700hPa';
 export const VERTICAL_DOMAINS=Object.freeze(['ncep_gfs025','ecmwf_ifs025','ecmwf_aifs025_single','ncep_aigfs025','ukmo_global_deterministic_10km','jma_gsm']);
 export const HEIGHT_700='geopotential_height_700hPa';
@@ -12,6 +13,7 @@ export function verticalMotionInputs(domain){
   ...(domain==='ukmo_global_deterministic_10km'?['wind_speed_700hPa','wind_direction_700hPa']:['wind_u_component_700hPa','wind_v_component_700hPa'])];
 }
 export function verticalMotionVariable(meta){
+ if(DIRECT_VERTICAL_DOMAINS.some(d=>d.value===meta?.domain))return verifiedDirectVertical(meta)?'omega_700hPa':null;
  const inputs=verticalMotionInputs(meta?.domain);
  return inputs?.every(key=>meta.variables?.includes(key))?(meta.domain==='jma_gsm'?'omega_700hPa_from_pressure':'omega_700hPa_from_w'):null;
 }
@@ -22,7 +24,7 @@ export function verticalMotionField(){return {
  contourValues:[-80,-40,-20,-10,-5,-2.5,-1,1,2.5,5,10,20,40,80],
  contourLabel:'optional grey vertical-motion contours at the colour thresholds; black 700 hPa heights every 4 dam',
  legendNote:'Black contours: 700 hPa height (dam), every 4 dam · blue wind barbs: knots. Red / negative = ascent · blue / positive = descent · white: −1 to +1 · 1 unit = 0.1 Pa/s = 1 μbar/s. End colours extend beyond ±80.',
- note:'700 hPa pressure vertical velocity (omega). Red/negative = rising air; blue/positive = sinking air. Black height contours every 4 dam (40 m); blue wind barbs in knots (half barb 5, full barb 10, pennant 50). All layers use the same model, run and valid time. Geometric velocity is converted with same-time 700 hPa temperature using hydrostatic dry-air density; JMA already supplies pressure velocity. Ascent can highlight active fronts, convection or terrain forcing; interpret with humidity and precipitation. This pressure surface can lie below high terrain.'
+ note:'700 hPa pressure vertical velocity (omega). Red/negative = rising air; blue/positive = sinking air. Black height contours every 4 dam (40 m); blue wind barbs in knots (half barb 5, full barb 10, pennant 50). All layers use the same model, run and valid time. Geometric velocity is converted with same-time 700 hPa temperature using hydrostatic dry-air density; JMA and the direct GEM/ICON Europe feeds already supply pressure velocity. Ascent can highlight active fronts, convection or terrain forcing; interpret with humidity and precipitation. This pressure surface can lie below high terrain.'
 };}
 export function omegaMicrobars(velocity,temperature,pressureNative=false){
  if(!Number.isFinite(velocity)||!Number.isFinite(temperature)||temperature<=-273.15)return NaN;
