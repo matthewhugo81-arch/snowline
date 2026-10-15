@@ -16,7 +16,7 @@ const fakeOM=`
  export const GridFactory={create:config=>({...config,originLat:config.latMin,originLon:config.lonMin,longitudeWrap:true,getInterpolatedValue:values=>values[0]})};
  export const getRanges=()=>[{start:0,end:181},{start:0,end:360}];
  window.fixtureGridReads=[];
- export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{},readVariable:async(url,variable,ranges,signal)=>{signal?.throwIfAborted();window.fixtureGridReads.push({url,variable});return {values:new Float32Array(360*181).fill(10)};}}});
+ export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{},readVariable:async(url,variable,ranges,signal)=>{signal?.throwIfAborted();window.fixtureGridReads.push({url,variable,purpose:new Error().stack.includes('briefingValueLabels')?'label':'native'});return {values:new Float32Array(360*181).fill(10)};}}});
  export const updateCurrentBounds=()=>{};
  export const getValueFromLatLong=async()=>({value:10});
  export const getColorScale=key=>defaultOmProtocolSettings.colorScales[key]??fixtureScale(key.startsWith('geopotential_height_')?'m':'m/s');
@@ -425,8 +425,9 @@ try{
    assert.equal(await page.locator('#briefing-grid-values').isChecked(),true);
    assert.deepEqual(await page.locator('#briefing-grid img').evaluateAll(images=>images.map(image=>image.src)),preparedImages,'Collapsing controls retains prepared imagery');
    assert.equal(await page.evaluate(()=>window.fixtureRequests.length),preparedRequests,'Toggling controls does not fetch or redraw the charts');
-   const gridReads=await page.evaluate(()=>window.fixtureGridReads);
+   const gridReads=await page.evaluate(()=>window.fixtureGridReads.filter(read=>read.purpose==='label'));
    assert.ok(gridReads.length>=12);assert.ok(gridReads.every(r=>r.variable==='precipitation'));
+   assert.ok(await page.evaluate(()=>window.fixtureGridReads.some(read=>read.purpose==='native'&&read.variable==='cloud_cover')),'Composite prefetch prepares its cloud input separately from precipitation labels');
    assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=precipitation'))),'Composite contours use precipitation in every view');
    await page.locator('.briefing-chart').first().click();
    assert.equal(await page.locator('#briefing-enlarged-image').getAttribute('src'),await page.locator('#briefing-grid img').first().getAttribute('src'),'Enlargement retains both overlays');
