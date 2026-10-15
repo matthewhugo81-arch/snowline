@@ -57,6 +57,7 @@ try{
    window.setInterval=(callback,delay,...args)=>{if(delay===60000)window.fixtureRefreshers.push(callback);return original(callback,delay,...args);};
   });
   await page.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
+  await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'maps.js'),'utf8'))+'\nwindow.fixturePanel=panels.a;'}));
   await page.route('**/map-tile-cache.js*',async route=>{
    const code=await readFile(resolve(root,'map-tile-cache.js'),'utf8');
    // Exercise restoration from disk, not only the hot memory cache.
@@ -527,10 +528,12 @@ try{
    assert.match(await page.locator('#run-update-status').textContent(),/Updating/);
    assert.equal(await page.locator('#map-time').getAttribute('max'),'5');
    const selectedValid=await page.locator('#map-time-label').textContent();
+   await page.evaluate(()=>{window.fixtureCache=window.fixturePanel.frameCache;window.fixtureCurrent=window.fixtureCache.current;});
    livePhase=2;
    await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
    assert.equal(await page.locator('#map-time').getAttribute('max'),'11','New forecast hours arrive without a page reload');
    assert.equal(await page.locator('#map-time-label').textContent(),selectedValid,'Refreshing retains the selected valid time');
+   assert.equal(await page.evaluate(()=>window.fixturePanel.frameCache===window.fixtureCache&&window.fixturePanel.frameCache.current===window.fixtureCurrent),true,'Appending hours retains the same decoded current frame and cache');
    assert.equal(await page.locator('.map-error:visible').count(),0);
    await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.getElementById('briefing-run').textContent.includes('1200Z'));

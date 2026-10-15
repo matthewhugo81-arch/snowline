@@ -81,7 +81,7 @@ export class ForecastFrames{
   if(!valid())return null;
   // A selected frame takes priority over unfinished speculative frames. Keep
   // its downloads, but give it a fresh deadline when promoted from background.
-  if(!this.isReady(url))this.stop(url);
+  if(!this.isReady(url))this.stop(url,this.keep);
   for(let attempt=0;attempt<2&&valid();attempt++){
    const frame=this.prepare(url);frame.renewTimeout?.();
    const ready=await frame.ready;
@@ -156,10 +156,21 @@ export class ForecastFrames{
   if(this.frames.get(frame.url)===frame)this.frames.delete(frame.url);
   this.retired.delete(frame);if(this.current===frame)this.current=null;
  }
- stop(exceptURL){
+ // A same-cycle timeline may grow without invalidating any existing pixels.
+ retain(urls){
+  this.cancelPrefetches(urls);
+  for(const frame of [...this.frames.values()])if(!urls.has(frame.url)){
+   if(frame===this.current){this.frames.delete(frame.url);this.retired.add(frame);}
+   else this.discard(frame);
+  }
+  for(const set of [this.preloaded,this.failures,this.keep])for(const url of set)if(!urls.has(url))set.delete(url);
+  for(const url of this.failureAttempts.keys())if(!urls.has(url))this.failureAttempts.delete(url);
+  this.queue.splice(0,this.queue.length,...this.queue.filter(url=>urls.has(url)));this.onProgress();
+ }
+ stop(exceptURL,keep=new Set()){
   clearTimeout(this.timer);this.epoch++;this.queue=[];
-  this.cancelPrefetches(new Set([exceptURL]));
-  for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.pending&&frame.url!==exceptURL)this.discard(frame);
+  this.cancelPrefetches(new Set([...keep,exceptURL]));
+  for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.pending&&frame.url!==exceptURL&&!keep.has(frame.url))this.discard(frame);
  }
  cancelPrefetches(keep=new Set()){
   for(const [url,job]of this.prefetches)if(!keep.has(url)){job.controller.abort();this.prefetches.delete(url);}

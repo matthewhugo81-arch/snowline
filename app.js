@@ -18,7 +18,8 @@ const datasetDialog=createDatasetDialog(state);
 const linkParams=new URLSearchParams(location.search);let requestedTime=Date.parse(linkParams.get('time'));
 try{if(linkParams.has('lat')&&linkParams.has('lon')){const point=parseCoordinates(linkParams.get('lat')+','+linkParams.get('lon'));if(point)state.location=point;}}catch{}
 
-let chartLayouts=new Map(),renderPending=false,fullRenderPending=false,inspection=null;
+let chartLayouts=new Map(),plotWidths=new Map(),renderPending=false,fullRenderPending=false,inspection=null;
+const coverageCache=new WeakMap();
 const chartZoom=createChartZoom({root:document.querySelector('main'),getLayout:id=>chartLayouts.get(id),
  getWindow:()=>{const {start,end}=chartWindow(state);return {start,end,length:Math.min(state.times.length,state.hours)};},
  onZoom:range=>{state.zoom=range.start===0&&range.end===Math.min(state.times.length,state.hours)-1?null:range;state.index=Math.max(range.start,Math.min(range.end,state.index));scheduleRender();},
@@ -82,7 +83,7 @@ function plot(container,series,config,times){
  if(container.closest('[hidden]')){chartLayouts.delete(container.id);return;}
  const shortView=times.length<120;
  const start=chartWindow(state).start,index=state.index-start;
- const width=Math.max(280,container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,right=12,top=15,bottom=shortView?46:33,inner=width-left-right,n=times.length;
+ const width=Math.max(280,plotWidths.get(container.id)??container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,right=12,top=15,bottom=shortView?46:33,inner=width-left-right,n=times.length;
  const valid=series.flatMap(s=>s.values).filter(finite);
  if(!valid.length){container.innerHTML=`<div class="plot-empty">${state.loading?'Loading available forecasts…':state.selected.size?'No data available for the selected models.':'Select a model to see its forecast.'}</div>`;chartLayouts.delete(container.id);return;}
  let min=config.floor??Math.min(...valid),max=config.ceiling??Math.max(...valid);
@@ -111,6 +112,9 @@ function plot(container,series,config,times){
 }
 function render(){
  if(chartZoom.active)return; // Keep the drag geometry stable while model responses arrive.
+ // Read all chart widths before any SVG/summary writes. Reading clientWidth
+ // between twelve replacements forces twelve complete page layouts on a phone.
+ plotWidths=new Map([...document.querySelectorAll('.plot')].filter(el=>!el.closest('[hidden]')).map(el=>[el.id,el.clientWidth]));
  const models=selectedModels(),{times,start,end}=chartWindow(state);if(!times.length)return;state.index=Math.max(start,Math.min(state.index,end));
  document.querySelectorAll('[data-reset-zoom]').forEach(button=>button.hidden=!state.zoom);
  $('zoom-window').hidden=!state.zoom;
@@ -133,7 +137,7 @@ function render(){
  plot($('plot-'+v.key),[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
- const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);const validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
+ const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);let validTimes=data?coverageCache.get(data):null;if(!validTimes){validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];if(data)coverageCache.set(data,validTimes);}let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
  inspection={models,times,start,end,votes,averages,coverage};
  renderInspection();
  datasetDialog.render();

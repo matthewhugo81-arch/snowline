@@ -28,8 +28,9 @@ const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  signal.addEventListener('abort',cancelled,{once:true});
 });
 export class ForecastTileCache{
- constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120}={}){
-  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay});
+ constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3}={}){
+  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts});
+  this.contexts=new Map();this.contextSequence=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
   this.session=Date.now()+'-'+Math.random().toString(36).slice(2);
   // Only remove this feature's abandoned caches, never other site data.
@@ -37,17 +38,23 @@ export class ForecastTileCache{
  }
  setContext(context){
   if(context===this.context)return false;
-  this.release();this.context=context;this.limited=false;
-  const name=PREFIX+this.session+'-'+this.generation;this.name=name;
-  this.disk=this.storage?.open(name).catch(()=>null)??Promise.resolve(null);
+  this.resetPending();this.context=context;this.limited=false;
+  let entry=this.contexts.get(context);
+  if(!entry){const name=PREFIX+this.session+'-'+(++this.contextSequence);entry={name,disk:this.storage?.open(name).catch(()=>null)??Promise.resolve(null)};}
+  this.contexts.delete(context);this.contexts.set(context,entry);
+  this.name=entry.name;this.disk=entry.disk;
+  while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
   return true;
  }
- release(){
+ resetPending(){
   this.generation++;
   for(const job of this.pending.values()){clearTimeout(job.abortTimer);job.controller.abort();}
   this.pending.clear();this.writes.clear();this.memory.clear();this.bytes=0;
-  const old=this.disk,name=this.name;
-  if(old&&name)old.then(()=>this.storage?.delete(name)).catch(()=>{});
+ }
+ release(){
+  this.resetPending();
+  for(const entry of this.contexts.values())entry.disk.then(()=>this.storage?.delete(entry.name)).catch(()=>{});
+  this.contexts.clear();this.context=null;
   this.disk=null;this.name=null;
  }
  limit(){if(!this.limited){this.limited=true;this.onLimit();}}
@@ -93,7 +100,9 @@ export class ForecastTileCache{
   let result;
   for(let attempt=0;;attempt++){
    if(controller.signal.aborted||generation!==this.generation)throw abort();
-   try{result=await cacheable(await this.load(params,controller));break;}
+   try{
+    result=await cacheable(await this.load(params,controller));break;
+   }
    catch(error){
     if(controller.signal.aborted||generation!==this.generation)throw abort();
     if(attempt>=this.retries||!retryable(error))throw error;

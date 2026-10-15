@@ -2,10 +2,10 @@ import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261015-ensemble-history';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261015-loading-performance';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261015-ensemble-history';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261015-ensemble-history';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261015-loading-performance';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261015-ensemble-history';
@@ -149,7 +149,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
     if(signal.aborted||!active)return;
     const card=cards.get(time),cached=images.get(key(time));
     try{
-     const src=cached??await renderer.render({...selection,time,signal});
+     const sequence=[...visible,...upcoming],nextTime=sequence[sequence.indexOf(time)+1];
+     const src=cached??await renderer.render({...selection,time,signal,nextFrame:nextTime&&!images.get(key(nextTime))?{time:nextTime}:null});
      if(signal.aborted){if(!cached)URL.revokeObjectURL(src);return;}
      if(!cached)images.set(key(time),src);
      if(card&&!card.card.dataset.ready)card.show(src);
