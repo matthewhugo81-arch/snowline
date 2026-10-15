@@ -16,6 +16,8 @@ SITE='https://matthewhugo81-arch.github.io/snowline/'
 MODELS={'gefs':('snowline_gefs_ensemble',6),'ecmwf':('snowline_ecmwf_ensemble',12)}
 REQUIRED={('gh','pl','500'),('t','pl','850'),('msl','sfc',None)}
 ECMWF_BASES=('https://data.ecmwf.int/forecasts','https://storage.googleapis.com/ecmwf-open-data')
+VARIABLES={f'{field}_{stat}' for field in ('geopotential_height_500hPa','temperature_850hPa','pressure_msl') for stat in ('mean','spread')}
+HOURS={'gefs':list(range(0,241,3))+list(range(246,385,6)), 'ecmwf':list(range(0,145,3))+list(range(150,361,6))}
 def iso(t):return t.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 def get(url):
  with urlopen(Request(url,headers={'User-Agent':'Snowline-ensemble-health/1.0','Cache-Control':'no-cache'}),timeout=20) as r:return r.read()
@@ -88,27 +90,67 @@ def assess(model,published,source_run,source_hours,now):
  # when every hour verified in the official index is already on the site.
  update=newer or (reference==source_run and bool(missing))
  return dict(model=MODELS[model][0],published_reference=published.get('reference_time') if published else None,source_reference=iso(source_run),source_hours=source_hours,published_frames=len(available),completed=published.get('completed') if published else None,status='newer-source-run' if newer else 'hours-pending' if update else 'current',refresh_needed=update,missing_source_hours=missing,checked_at=iso(now))
-def check_model(model,site,now):
+def check_archive(model,published,read_json):
+ # Retention is checked independently of whether the live cycle is current.
+ # Only a definite missing/invalid archive requests repair; transport errors
+ # remain visible instead of being mistaken for absent historical forecasts.
+ references=[]
+ try:
+  if not published:raise ValueError('No current ensemble is published')
+  archive=read_json('history.json')
+  if archive.get('format_version')!=1 or not isinstance(archive.get('runs'),list):raise ValueError('Invalid archive index')
+  references=[datetime.fromisoformat(t.replace('Z','+00:00')) for t in archive['runs']]
+  latest=datetime.fromisoformat(published['reference_time'].replace('Z','+00:00'))
+  if len(references)!=3 or references!=sorted(set(references),reverse=True) or references[0]!=latest:
+   raise ValueError('Archive must retain the latest run and two distinct predecessors')
+  for i,reference in enumerate(references):
+   if reference.timestamp()%(MODELS[model][1]*3600) or not timedelta(0)<=latest-reference<=timedelta(hours=48):
+    raise ValueError('Archive cycle is outside its native cadence or 48-hour window')
+   meta=read_json(reference.strftime('%Y/%m/%d/%H00Z/meta.json'))
+   if meta.get('format_version')!=1 or datetime.fromisoformat(meta['reference_time'].replace('Z','+00:00'))!=reference:
+    raise ValueError('Archived metadata does not match its exact cycle')
+   if not VARIABLES<=set(meta.get('variables',[])) or not meta.get('valid_times'):
+    raise ValueError('Archived ensemble fields or forecast times are missing')
+   if i and (meta.get('completed') is not True or meta['valid_times']!=[iso(reference+timedelta(hours=h)) for h in HOURS[model]]):
+    raise ValueError('A previous ensemble run is incomplete')
+  return dict(archive_status='current',archive_runs=[iso(t) for t in references],archive_refresh_needed=False)
+ except (HTTPError,URLError,TimeoutError,FileNotFoundError,ValueError,KeyError,TypeError,AttributeError) as error:
+  transport=isinstance(error,(URLError,TimeoutError)) and getattr(error,'code',None)!=404
+  return dict(archive_status='check-failed' if transport else 'repair-needed',archive_runs=[iso(t) for t in references],archive_refresh_needed=not transport,archive_error=str(error))
+
+def publication_check_overdue(site,now):
+ try:
+  health=json.loads(get(site.rstrip('/')+'/ensemble-data/health.json'))
+  checked=datetime.fromisoformat(health['checked_at'].replace('Z','+00:00'))
+  return now-checked>timedelta(minutes=30) or checked-now>timedelta(minutes=5)
+ except (URLError,TimeoutError,ValueError,KeyError,TypeError):return True
+
+def check_model(model,site,now,local_root=None):
+ def read_json(relative):
+  if local_root:return json.loads((local_root/MODELS[model][0]/relative).read_text())
+  return json.loads(get(site.rstrip('/')+'/ensemble-data/'+MODELS[model][0]+'/'+relative))
  run,hours=newest_source(model,now)
- try:published=json.loads(get(site.rstrip('/')+'/ensemble-data/'+MODELS[model][0]+'/latest.json'))
- except HTTPError as e:
-  if e.code!=404:raise
+ try:published=read_json('latest.json')
+ except (HTTPError,FileNotFoundError) as e:
+  if isinstance(e,HTTPError) and e.code!=404:raise
   published=None
- return assess(model,published,run,hours,now)
+ result=assess(model,published,run,hours,now)
+ result.update(check_archive(model,published,read_json))
+ result['refresh_needed']|=result['archive_refresh_needed']
+ return result
 def main():
  p=argparse.ArgumentParser();p.add_argument('--site',default=SITE);p.add_argument('--output',type=Path,default=Path('health-output/ensembles.json'));p.add_argument('--local-root',type=Path);args=p.parse_args();now=datetime.now(timezone.utc)
  def check(model):
   try:
-   if args.local_root:
-    run,hours=newest_source(model,now);path=args.local_root/MODELS[model][0]/'latest.json';published=json.loads(path.read_text()) if path.exists() else None
-    return assess(model,published,run,hours,now)
-   return check_model(model,args.site,now)
+   return check_model(model,args.site,now,args.local_root)
   except Exception as e:return dict(model=MODELS[model][0],status='check-failed',error=str(e),refresh_needed=False,checked_at=iso(now))
  with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(check,MODELS))
- report=dict(checked_at=iso(now),scope='Official statistical indexes versus published native grids; not image latency.',models=results)
+ overdue=False if args.local_root else publication_check_overdue(args.site,now)
+ refresh=overdue or any(r['refresh_needed'] for r in results)
+ report=dict(checked_at=iso(now),scope='Official statistical indexes and three-run archives versus published native grids; not image latency.',publication_check_overdue=overdue,refresh_needed=refresh,models=results)
  args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(report,indent=2)+'\n')
  if os.environ.get('GITHUB_OUTPUT'):
-  with open(os.environ['GITHUB_OUTPUT'],'a') as stream:stream.write('refresh_needed='+str(any(r['refresh_needed'] for r in results)).lower()+'\n')
- for r in results:print(r['model']+': '+r['status']+' | site '+str(r.get('published_reference'))+' | official '+str(r.get('source_reference'))+(' | '+r['error'] if 'error' in r else ''))
- if any(r['status']=='check-failed' or r['refresh_needed'] for r in results):raise SystemExit(1)
+  with open(os.environ['GITHUB_OUTPUT'],'a') as stream:stream.write('refresh_needed='+str(refresh).lower()+'\n')
+ for r in results:print(r['model']+': '+r['status']+' | site '+str(r.get('published_reference'))+' | official '+str(r.get('source_reference'))+' | archive '+r.get('archive_status','unchecked')+(' | '+r['error'] if 'error' in r else ''))
+ if refresh or any(r['status']=='check-failed' or r.get('archive_status')=='check-failed' for r in results):raise SystemExit(1)
 if __name__=='__main__':main()

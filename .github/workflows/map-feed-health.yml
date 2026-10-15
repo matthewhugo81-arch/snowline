@@ -1,10 +1,9 @@
 name: Map feed health
 on:
-  # Check on an independent three-hour schedule, not after every five-minute
-  # publication. The publisher remains frequent; health checks must not spam
-  # the repository owner while a normal ensemble cycle is still filling in.
+  # Independent recovery catches missed publication, later hours and archive
+  # loss. GitHub schedules are best-effort; the local heartbeat is a backup.
   schedule:
-    - cron: '17 */3 * * *'
+    - cron: '7-57/10 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,7 +33,7 @@ jobs:
             echo 'skip=true' >> "$GITHUB_OUTPUT"
             echo '::notice::Publisher is still running; health will be checked after publication completes.'
           fi
-      - name: Compare published ensembles with official statistical source indexes
+      - name: Check official ensemble sources, three-run retention and publication age
         id: ensembles
         if: steps.publisher.outputs.skip != 'true'
         continue-on-error: true
@@ -59,7 +58,7 @@ jobs:
             echo 'Publisher already active or checked in the last ten minutes; no duplicate recovery.'
           else
             gh workflow run publish-maps.yml --repo "$GITHUB_REPOSITORY" --ref main
-            echo 'Requested a publisher refresh for verified missing ensemble data.'
+            echo 'Requested publication for a missing run/hour, archive repair or overdue source check.'
           fi
       - name: Check all offered models, including ensemble binary transport
         if: steps.publisher.outputs.skip != 'true'
@@ -77,6 +76,10 @@ jobs:
           problems = []
           for model in rows:
               status = model.get('status')
+              if model.get('archive_status') == 'check-failed':
+                  problems.append(f"{model['model']}: archive verification failed ({model.get('archive_error', 'unknown error')})")
+              elif model.get('archive_status') == 'repair-needed':
+                  print(f"::notice::{model['model']}: three-run archive repair requested")
               if status == 'check-failed':
                   problems.append(f"{model['model']}: official-source health check failed ({model.get('error', 'unknown error')})")
               elif status == 'newer-source-run':

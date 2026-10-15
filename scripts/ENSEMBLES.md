@@ -27,6 +27,11 @@ a scheduled run every five minutes, and supports manual runs. GitHub scheduled
 timing is best-effort and can leave gaps longer than the requested interval.
 A forecast hour is exposed only after all six arrays succeed. Missing hours
 are retried on the next build, while verified frames remain available.
+An independent health workflow requests checks every ten minutes and dispatches
+the publisher when an official cycle/hour is missing, the three-run archive
+needs repair, or the published source check is over 30 minutes old. Recovery
+skips active publishers and uses a ten-minute cooldown to prevent duplicate
+builds. Provider/network failures remain visible; they never alter run times.
 
 The publisher retains the latest run and two completed predecessors within
 48 hours, including their full available native horizons. Missing predecessors
