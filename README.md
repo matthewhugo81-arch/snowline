@@ -4,6 +4,8 @@ UK model maps and local multi-model weather charts: snowfall, snow depth, temper
 
 A static website using Open-Meteo. No build step is required. GitHub Pages serves the main branch from the repository root.
 
+The header's **Theme** menu offers **System**, **Light** and **Dark** on location charts, UK maps and credits. System follows the device's appearance; an explicit choice is saved in this browser and shared across pages and open tabs. Dark mode includes chart lines and labels, data dialogs, map controls, Briefing and Previous Run Analysis. Forecast colour bands, map imagery and downloaded tables/images keep their existing palettes. Switching themes preserves the forecast selection, inspected hour and chart zoom.
+
 Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK maps](https://matthewhugo81-arch.github.io/snowline/maps.html). The map page includes model comparison, weather layers, MSLP isobars, forecast animation and point event analysis. Maps default to the latest published initialization and show their actual UTC run date/cycle. UKV additionally offers exactly one previous completed main run. Click a map location to open its charts; navigation retains the chosen location and valid time.
 
 Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Wind speeds and gusts display in mph on maps, legends, contours, grid-value labels and point readouts; source grids and renderer scales retain native m/s.
