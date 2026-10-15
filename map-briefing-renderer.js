@@ -4,20 +4,21 @@ import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {ForecastFrames} from './map-frames.js?v=20261015-loading-performance';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performance';
-import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261015-ensemble-history';
+import {overlayGroups} from './map-overlay-specs.js?v=20261015-vertical-motion';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261015-vertical-motion';
 import {installDewPoint} from './map-dew-point.js';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261015-ensemble-history';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261015-vertical-motion';
 
 import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
-import {fieldSource} from './map-sources.js?v=20261015-ensemble-history';
-import {sourceVariable} from './map-catalogue.js?v=20261015-ensemble-history';
+import {fieldSource} from './map-sources.js?v=20261015-vertical-motion';
+import {sourceVariable} from './map-catalogue.js?v=20261015-vertical-motion';
 import {forecastInputWork} from './map-work-queue.js';
+import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-vertical-motion';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
@@ -38,6 +39,7 @@ export class BriefingRenderer{
  constructor({maplibre,OM,settings,fields,createURL,background='light',appearance={}}){
   Object.assign(this,{maplibre,OM,fields,createURL,background});this.appearance=mapAppearance(appearance);this.appearanceKey=appearanceKey(appearance);this.baseSettings=settings;this.settings=briefingSettings(settings);
   installDiagnostics(OM,this.settings);
+  installVerticalMotion(OM,this.settings);
   installDewPoint(OM,this.settings);
   installPrecipitationType(OM,this.settings);
   installEnsembleTransport(OM,this.settings);
@@ -105,7 +107,7 @@ export class BriefingRenderer{
   const decorate=()=>[
    ...(preset.field===THETA_SYMBOLS?[symbolOverlay(symbolURL(url('precipitation'),fieldSource(meta,'precipitation',time)))]:[]),
    ...(weather?[compositeUnderlay(url('cloud_cover'))]:[]),
-   ...overlayGroups({field,url:main,pressureURL,contours:!!overlays.contours,isobars:true})
+   ...overlayGroups({field,url:main,pressureURL,...verticalMotionOverlayURLs(preset.field,url),contours:!!overlays.contours,isobars:true})
   ];
   const frames=this.frames=new ForecastFrames(this.map,'briefing-frame',{timeout:accumulationHours(preset.field)?120000:25000,decorate,rasterBefore:this.rasterBefore,overlayBefore:this.overlayBefore,isActive:()=>!signal.aborted});
   const cancel=()=>frames.clear();signal.addEventListener('abort',cancel,{once:true});

@@ -1,10 +1,25 @@
 import {isWindField,MPH_PER_MS} from './map-wind-units.js';
 import {isJetWind,JET_MIN_MS,contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
+import {VERTICAL_MOTION} from './map-vertical-motion.js?v=20261015-vertical-motion';
 
 // Construct the enabled overlays once per cached frame, rather than re-creating
 // them after the raster has already changed. Source URLs remain cycle-specific.
-export function overlayGroups({field,url,pressureURL,contours,isobars}){
+export function overlayGroups({field,url,pressureURL,heightURL,windURL,contours,isobars}){
  const groups=[],layers=[];
+ if(field.key===VERTICAL_MOTION){
+  if(contours)groups.push({id:'omega',source:{type:'vector',url,maxzoom:10},layers:[
+   {id:'omega-lines',type:'line','source-layer':'contours',paint:{'line-color':'#666666','line-width':.55,'line-opacity':.7}}
+  ]});
+  if(heightURL)groups.push({id:'height700',source:{type:'vector',url:heightURL,maxzoom:10},layers:[
+   {id:'height700-lines',type:'line','source-layer':'contours',layout:{'line-join':'round'},paint:{'line-color':'#000000','line-width':1,'line-opacity':1}},
+   {id:'height700-labels',type:'symbol','source-layer':'contours',layout:{'symbol-placement':'line','symbol-spacing':160,'text-max-angle':85,'text-font':['Noto Sans Regular'],'text-field':['to-string',['round',['/',['to-number',['get','value']],10]]],'text-size':11,'text-padding':6,'text-offset':[0,-.5]},paint:{'text-color':'#000000','text-halo-color':'rgba(255,255,255,0.8)','text-halo-width':1}}
+  ]});
+  if(windURL)groups.push({id:'wind700',source:{type:'vector',url:windURL,maxzoom:10},layers:[
+   {id:'wind700-pennants',type:'fill','source-layer':'wind-barb-pennants',paint:{'fill-color':'#5555ff','fill-opacity':.85}},
+   {id:'wind700-barbs',type:'line','source-layer':'wind-arrows',paint:{'line-color':'#5555ff','line-width':.7,'line-opacity':.85}}
+  ]});
+  return groups;
+ }
  if(!field.categorical){
   if(/^wind_speed_|^ocean_current_speed$/.test(field.key)){
    const jet=isJetWind(field.key);

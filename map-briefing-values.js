@@ -1,6 +1,6 @@
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261015-ensemble-history';
-import {sourceVariable} from './map-catalogue.js?v=20261015-ensemble-history';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261015-vertical-motion';
+import {sourceVariable} from './map-catalogue.js?v=20261015-vertical-motion';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-clean-symbols';
 
 // One clipped native grid supplies every label, including derived diagnostics.

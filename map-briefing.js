@@ -2,15 +2,15 @@ import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261015-loading-performance';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261015-vertical-motion';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261015-ensemble-history';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261015-loading-performance';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261015-vertical-motion';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261015-vertical-motion';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261015-ensemble-history';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261015-vertical-motion';
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {chartScales} from './map-image-export.js?v=20261015-ensemble-history';
+import {chartScales} from './map-image-export.js?v=20261015-vertical-motion';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
@@ -30,8 +30,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <div id="briefing-legend" class="briefing-legend" role="group" aria-label="Chart colour scale"></div></div>
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
- <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html">Data and map credits</a>.</p>
- <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong><button id="briefing-enlarged-close" class="secondary">Close chart</button></div><img id="briefing-enlarged-image" alt=""><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
+ <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html?v=20261015-vertical-motion">Data and map credits</a>.</p>
+ <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong><button id="briefing-enlarged-close" class="secondary">Close chart</button></div><img id="briefing-enlarged-image" alt=""><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html?v=20261015-vertical-motion">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
  const $=id=>host.querySelector('#briefing-'+id);
  const choices=models;
  for(const [label,items] of [['Short-term models',choices.filter(model=>model.regional&&!model.ensemble)],['Medium-term models',choices.filter(model=>!model.regional&&!model.ensemble)],['Ensemble models',choices.filter(model=>model.ensemble)]] ){
