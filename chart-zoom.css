@@ -2,12 +2,7 @@
 .location-page .plot{touch-action:pan-y;cursor:crosshair}
 .location-page .plot svg{pointer-events:none}
 .location-page .zoom-pinching{user-select:none;-webkit-user-select:none}
-.location-page .chart-zoom-controls{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;margin:8px 0 3px}
-.location-page .chart-zoom-controls>span{margin-right:auto;font-size:11px;color:var(--muted)}
-.location-page .agreement-card .chart-zoom-controls>span{color:#aac1d5}
-.location-page .zoom-reset{font-size:12px;padding:8px 10px;min-height:44px;white-space:nowrap}
-.location-page .zoom-step{font-size:22px;line-height:1;width:44px;min-height:44px;padding:8px}
-.location-page .chart-zoom-controls button:disabled,.location-page .zoom-reset:disabled{cursor:default;opacity:.45}
+.location-page .zoom-reset{font-size:11px;padding:5px 8px;min-height:30px;white-space:nowrap}
 .location-page .zoom-reset[hidden],.location-page #zoom-window[hidden]{display:none}
 .location-page .chart-card:has(.zoom-reset:not([hidden])) .chart-tools{flex-wrap:wrap;justify-content:flex-end;max-width:58%}
 .location-page .agreement-card .chart-tools{flex-wrap:wrap;justify-content:flex-end}
