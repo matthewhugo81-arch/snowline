@@ -5,6 +5,40 @@ import {ForecastFrames} from '../map-frames.js';
 import {FakeMap,loaded} from './frame-fake.mjs';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
+test('advancing playback prepares the new nearby frame before unfinished distant downloads',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),jobs=new Map(),started=[];
+ const cache=new ForecastFrames(map,'a',{preloadConcurrency:2,prefetch:(url,controller)=>new Promise((resolve,reject)=>{
+  started.push(url);jobs.set(url,{resolve,controller});controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));
+ })});
+ for(const url of ['t0','t1','t2'])await loaded(cache,map,url);
+ cache.show(cache.frames.get('t0'),.8,'linear');
+ cache.warm({keep:new Set(['t0','t1','t2']),upcoming:['t1','t2'],all:['far1','far2','far3'],delay:0});t.mock.timers.tick(0);await flush();
+ assert.deepEqual(started,['far1','far2']);
+ cache.show(await cache.acquire('t1'),.8,'linear');
+ cache.warm({keep:new Set(['t0','t1','t2','t3']),upcoming:['t2','t3'],all:['far1','far2','far3'],delay:0});t.mock.timers.tick(0);await flush();
+ const next=cache.frames.get('t3');assert.ok(next?.pending,'The next frame starts while both distant downloads are unresolved');
+ assert.equal(jobs.get('far1').controller.signal.aborted,false);assert.deepEqual(started,['far1','far2']);
+ map.load(next);await next.ready;await flush();assert.equal(cache.isReady('t3'),true);
+ jobs.get('far1').resolve();await flush();assert.deepEqual(started,['far1','far2','far3']);cache.clear();
+});
+
+test('a live timeline update cannot launch retired URLs from the nearby or distant queues',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),started=[];
+ const cache=new ForecastFrames(map,'a',{preloadConcurrency:1,prefetch:async url=>{started.push(url);}});
+ cache.show(await loaded(cache,map,'now'),.8,'linear');
+ cache.warm({keep:new Set(['now','next','retired-near']),upcoming:['next','retired-near'],all:['retired-far','valid-far'],delay:0});t.mock.timers.tick(0);await flush();
+ cache.retain(new Set(['now','next','valid-far']));map.load(cache.frames.get('next'));await flush();await flush();
+ assert.equal(cache.frames.has('retired-near'),false);assert.deepEqual(started,['valid-far']);cache.clear();
+});
+
+test('acquiring an already prepared frame does not reorder its layers',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');
+ const frame=await loaded(cache,map,'ready'),moves=map.moves.length;
+ assert.equal(await cache.acquire('ready'),frame);assert.equal(map.moves.length,moves);cache.clear();
+});
+
 test('prefetch matches raster rounding, vector flooring and each map view',()=>{
  const calls=[];
  const map={coveringTiles:options=>{calls.push(options);return [{canonical:{z:3,x:3,y:2}},{canonical:{z:3,x:3,y:2}},{canonical:{z:3,x:4,y:2}}];}};
