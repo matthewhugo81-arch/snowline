@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chartWindow, indexAtX, selectionRange} from '../chart-window.js';
+import {chartWindow, indexAtX, selectionRange, transformRange} from '../chart-window.js';
 import {buildDataset, datasetCSV, datasetHTML} from '../export.js';
 import {normalise, VARIABLES} from '../data.js';
 
@@ -49,6 +49,25 @@ test('reset restores the chosen horizon',()=>{
   assert.equal(chartWindow(state).times.length,21);
   state.zoom=null;
   assert.deepEqual(chartWindow(state).times,times.slice(0,72));
+});
+
+test('pinch keeps the hour under the finger midpoint anchored',()=>{
+  assert.deepEqual(transformRange({start:20,end:100},{length:168,scale:2,anchor:.25}),{start:30,end:70});
+  assert.deepEqual(transformRange({start:30,end:70},{length:168,scale:.5,anchor:.25}),{start:20,end:100});
+});
+test('two-finger translation pans the window in either direction',()=>{
+  assert.deepEqual(transformRange({start:40,end:80},{length:168,anchor:.5,midpoint:.75}),{start:30,end:70});
+  assert.deepEqual(transformRange({start:40,end:80},{length:168,anchor:.5,midpoint:.25}),{start:50,end:90});
+});
+test('pinch and buttons clamp to the chosen horizon and adjacent hourly samples',()=>{
+  assert.deepEqual(transformRange({start:20,end:40},{length:72,scale:.01}),{start:0,end:71});
+  assert.deepEqual(transformRange({start:20,end:40},{length:72,scale:100}),{start:30,end:31});
+  assert.deepEqual(transformRange({start:20,end:40},{length:72,midpoint:100}),{start:0,end:20});
+  assert.deepEqual(transformRange({start:20,end:40},{length:72,midpoint:-100}),{start:51,end:71});
+});
+test('degenerate pinch input never creates an invalid shared range',()=>{
+  for(const scale of [0,-1,NaN,Infinity]) assert.equal(transformRange({start:0,end:23},{length:24,scale}),null);
+  assert.equal(transformRange({start:0,end:0},{length:1}),null);
 });
 test('UTC timestamps retain the correct midnight/day boundary',()=>{
   const view=chartWindow({times,zoom:{start:4,end:7}});
