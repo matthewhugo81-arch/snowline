@@ -1,3 +1,4 @@
+import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-vertical-motion';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer} from './map-appearance.js?v=20261013-shared-appearance';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
@@ -17,24 +18,24 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performa
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
-import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261015-ensemble-history';
+import {overlayGroups} from './map-overlay-specs.js?v=20261015-vertical-motion';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261015-vertical-motion';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-clean-symbols';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261015-ensemble-history';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261015-vertical-motion';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261015-ensemble-history';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261015-vertical-motion';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261014-interaction-audit';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261015-ensemble-history';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261015-ensemble-history';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261015-vertical-motion';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261015-vertical-motion';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261015-loading-performance';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261015-ensemble-history';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261015-vertical-motion';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
@@ -70,6 +71,7 @@ const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptio
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);
 installDiagnostics(OM,settings);
+installVerticalMotion(OM,settings);
 installPrecipitationType(OM,settings);
 const accumulationReader=installAccumulations(OM,settings);
 const renderMapTile=(params,controller)=>isSymbolURL(params.url)?precipitationSymbolProtocol(params,controller,OM,settings):OM.omProtocol(params,controller,isCompositeURL(params.url)?compositeSettings(settings):settings);
@@ -79,7 +81,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
  const result=await renderMapTile(params,controller);
  if(params.type==='json'&&params.url.includes('/ensemble-data/')){
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
-  result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html">Open-Meteo</a>';
+  result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html?v=20261015-vertical-motion">Open-Meteo</a>';
  }
  if(params.type==='json'&&/\/(ukmo_uk_ensemble_2km|snowline_mogreps_uk)\//.test(params.url)){
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
@@ -183,6 +185,10 @@ function contourLevels(field){
 }
 function pressureNote(){
  for(const {key,model,field}of panelSelections(state)){
+  if(field===VERTICAL_MOTION){
+   $('mslp-note-'+key).textContent='Black: 700 hPa heights every 4 dam · blue: 700 hPa wind barbs in knots. MSLP is not part of this chart.';
+   $('map-mslp-'+key).disabled=true;$('map-mslp-'+key).checked=false;$('map-mslp-'+key).title='This chart includes 700 hPa heights and winds.';continue;
+  }
   const composite=field===WEATHER_COMPOSITE||field===THETA_SYMBOLS;
   const missing=!hasFieldTime(state.metas[model],'pressure_msl',state.times[state.index]),warnings=state.metas[model]?.sourceWarnings??[];
   $('mslp-note-'+key).textContent=warnings.length?warnings.join(' '):missing?'MSLP is unavailable at this time.':'MSLP isobars every 4 hPa.';
@@ -288,7 +294,7 @@ function panelCache(panel,model,field){
  panel.frameURLs=state.times.map(time=>{
   if(!hasFieldTime(meta,field,time))return null;
   const url=concreteURL(model,meta,time,field);
-  descriptors.set(url,{field:f,url,symbolURL:field===THETA_SYMBOLS?symbolURL(concreteURL(model,meta,time,'precipitation'),fieldSource(meta,'precipitation',time)):null,contours:overlay.contours,cloudURL:composite?compositeURL(concreteURL(model,meta,time,'cloud_cover')):null,isobars:composite||field===THETA_SYMBOLS||overlay.isobars,pressureURL:(composite||field===THETA_SYMBOLS||overlay.isobars)&&hasFieldTime(meta,'pressure_msl',time)?concreteURL(model,meta,time,'pressure_msl'):null});
+  descriptors.set(url,{field:f,url,...verticalMotionOverlayURLs(field,key=>concreteURL(model,meta,time,key)),symbolURL:field===THETA_SYMBOLS?symbolURL(concreteURL(model,meta,time,'precipitation'),fieldSource(meta,'precipitation',time)):null,contours:overlay.contours,cloudURL:composite?compositeURL(concreteURL(model,meta,time,'cloud_cover')):null,isobars:composite||field===THETA_SYMBOLS||overlay.isobars,pressureURL:(composite||field===THETA_SYMBOLS||overlay.isobars)&&hasFieldTime(meta,'pressure_msl',time)?concreteURL(model,meta,time,'pressure_msl'):null});
   return url;
  });
  if(reusable){
@@ -650,7 +656,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261015-loading-performance');
+   const {createBriefing}=await import('./map-briefing.js?v=20261015-vertical-motion');
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

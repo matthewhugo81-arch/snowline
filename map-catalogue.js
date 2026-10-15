@@ -6,6 +6,7 @@ import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnost
 import {isJetWind,JET_WIND_SCALE,is850Temperature} from './map-chart-style.js?v=20261012-chart-style';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261014-interaction-audit';
+import {VERTICAL_MOTION,verticalMotionVariable,verticalMotionField} from './map-vertical-motion.js?v=20261015-vertical-motion';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
@@ -46,6 +47,7 @@ export function sourceVariable(meta,key){
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
+ if(key===VERTICAL_MOTION)return verticalMotionVariable(meta);
  if(key===NATIVE_PRECIPITATION_TYPE)return typeMethod(meta)==='native'?NATIVE_TYPE_SOURCE:null;
  if(key===PRECIPITATION_TYPE)return canDerivePrecipitationType(meta)?PRECIPITATION_TYPE_SOURCE:null;
  if(DIAGNOSTIC_KEYS.includes(key))return diagnosticVariable(meta,key);
@@ -68,6 +70,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
+ if(key===VERTICAL_MOTION)return 'Derived diagnostics';
  if(isTypeField(key)||key===THETA_SYMBOLS||key==='snowfall_probability')return 'Winter Analysis';
  if(accumulationHours(key))return 'Accumulated precipitation';
  if(key===WEATHER_COMPOSITE)return 'Combined weather';
@@ -112,6 +115,7 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ if(key===VERTICAL_MOTION)return verticalMotionField();
  if(key==='snowfall_probability')return {
   key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
   stops:[0,10,25,50,75,90,100],colors:['#ffffff','#d9f0ff','#8fc8f5','#5879db','#7652bd','#a63498','#720c68'],
@@ -168,6 +172,7 @@ export function availableFields(fields,metas){
 }
 export function extendCatalogue(fields,metas,OM,settings){
  const keys=[...new Set(metas.flatMap(m=>m.variables??[]).map(canonicalVariable))];
+ if(metas.some(meta=>sourceVariable(meta,VERTICAL_MOTION)))keys.push(VERTICAL_MOTION);
  for(const key of ACCUMULATION_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of DIAGNOSTIC_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of [...TYPE_KEYS,THETA_SYMBOLS])if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);

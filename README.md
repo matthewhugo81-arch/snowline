@@ -99,3 +99,14 @@ Briefing and previous-run views pre-read one next chart's native inputs while th
 Location chart redraws read all plot widths before DOM writes and cache per-model coverage calculations. Event analysis uses the same exact-location shared forecast loader as location charts, preserving retrieval timestamps, stale labels, cancellation and missing-hour rules.
 
 Regression checks: `node --test tests/*.test.mjs`, `node tests/map-browser.mjs`, `python tests/chart-zoom-browser.py`, and `python tests/event-analysis-browser.py`. Live-provider timing results are observational: upstream files, publication progress, hardware and network still constrain cold playback.
+
+
+## 700 hPa vertical motion
+
+The vertical-motion chart is available for GFS (the matching 0.25-degree upper-air companion), IFS 0.25°, AIFS, NOAA AIGFS, UKMO Global and JMA GSM. The catalogue requires velocity, temperature, height and both wind components in one supported source. UKV, HGEFS mean and other unverified feeds are deliberately excluded. Native forecast times are preserved.
+
+Shading is pressure velocity in 0.1 Pa/s (microbar/s): red/negative ascent, blue/positive descent, white from −1 to +1. Black 700 hPa height contours are 4 dam apart; blue wind barbs are in knots. The Contours switch adds grey omega contours. These overlays also appear in Briefing, Previous Run Analysis and saved images. MSLP is omitted for this chart.
+
+JMA spatial files retain pressure velocity in Pa/s. The other five feeds store geometric velocity in m/s; conversion uses matching 700 hPa temperature and the inverse of Open-Meteo's hydrostatic dry-air conversion. Missing values remain missing. Geometric-to-pressure conversion is an approximation for native geometric velocity; do not treat it as an independent model omega field. The chart highlights model ascent, including frontal, convective and orographic contributions, rather than identifying fronts automatically.
+
+Validation: `node --test tests/*.test.mjs` and the optional live-browser check `node tests/vertical-motion-live.mjs` (Playwright required). Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an installed browser if necessary. `SNOWLINE_LIVE_URL` checks a deployed origin; `SNOWLINE_TEST_OUTPUT` selects the output directory. All 531 forecast files in the six audited runs contained the required fields on 15 October 2026; first/middle/last UK-area derived samples were finite. Runtime source availability can change.

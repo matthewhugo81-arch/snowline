@@ -1,12 +1,13 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261014-interaction-audit';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261015-ensemble-history';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261015-vertical-motion';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261015-ensemble-history';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261015-vertical-motion';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
+import {VERTICAL_MOTION,verticalMotionField} from './map-vertical-motion.js?v=20261015-vertical-motion';
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, precipitation & MSLP',field:WEATHER_COMPOSITE,required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
  {id:'temperature',name:'2 m air temperature & pressure',field:'temperature_2m',required:['temperature_2m','pressure_msl'],note:'2 m air temperature in °C at the chart valid time, with MSLP isobars every 4 hPa. This is instantaneous air temperature, not a maximum or minimum.'},
@@ -17,6 +18,7 @@ export const BRIEFING_PRESETS=[
  {id:'upper',name:'500 hPa height & pressure',field:'geopotential_height_500hPa',required:['geopotential_height_500hPa','pressure_msl'],note:'500 hPa geopotential height with MSLP isobars every 4 hPa.'},
  {id:'jet',name:'300 hPa wind speed & direction',field:'wind_speed_300hPa',required:['wind_speed_300hPa','pressure_msl'],note:'300 hPa wind speed in mph, with arrows pointing along the flow and MSLP isobars every 4 hPa. White below 60 mph; coloured bands every 15 mph from 60 to 180+ mph. Arrows and optional grid labels are shown only at 60 mph and above. Longer arrows indicate stronger winds.'},
  {id:'theta-w',name:'850 hPa theta-w & pressure',field:'wet_bulb_potential_temperature_850hPa',required:['wet_bulb_potential_temperature_850hPa','pressure_msl'],note:'Derived 850 hPa wet-bulb potential temperature (theta-w), in °C at 1000 hPa, with MSLP isobars every 4 hPa.'},
+ {id:'vertical-motion-700',name:verticalMotionField().name,field:VERTICAL_MOTION,required:[VERTICAL_MOTION],note:verticalMotionField().note},
  ...[300,400].map(level=>({id:'vorticity-'+level,name:level+' hPa relative vorticity & pressure',field:'relative_vorticity_'+level+'hPa',required:['relative_vorticity_'+level+'hPa','pressure_msl'],note:'Derived '+level+' hPa relative vorticity (10⁻⁵ s⁻¹), with MSLP isobars every 4 hPa. Yellow through red = positive (anticlockwise); purple highlights 35–40 and above. Cyan = negative (clockwise). Smoothed over approximately 20 km (Gaussian standard deviation) to reduce grid-scale striping.'}))
 ];
 export {MAP_AREAS as BRIEFING_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
