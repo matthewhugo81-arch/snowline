@@ -6,6 +6,8 @@ import {MAP_MODELS} from '../map-models.js';
 import {loadSpatialModel,loadSpatialRun,fieldDataURL} from '../map-sources.js';
 import {UKV} from '../ukv-run-selection.js';
 import {ACCUMULATION_HOURS,accumulationKey,accumulationSource} from '../map-accumulation.js';
+import {ENSEMBLE_DOMAINS} from '../map-ensemble.js';
+import {discoverPreviousRuns} from '../map-previous-run-data.js';
 const timings=[],cache=new Map(),output=process.argv[2]??'map-feed-health.json';
 const deployed=url=>url.startsWith('file:')&&url.includes('/ensemble-data/')?'https://matthewhugo81-arch.github.io/snowline/ensemble-data/'+url.split('/ensemble-data/')[1]:url;
 async function get(url){
@@ -39,6 +41,15 @@ async function worker(){while(index<models.length){
   if(['precipitation','pressure_msl_mean','precipitation_probability'].some(key=>meta.variables.includes(key))){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
   if(meta.variables.includes('snowfall_probability')){try{record.snowSample=await sample(meta,'snowfall_probability');}catch(e){record.warnings.push('Forecast byte-range check failed: snowfall: '+e.message);}}
   if(model.id===UKV){record.history=[];for(const back of [3,6]){const reference=new Date(Date.parse(meta.reference_time)-back*3600000).toISOString();try{const prior=await loadSpatialRun(model.id,reference,load);record.history.push({reference_time:prior.reference_time,available:true});}catch(e){record.history.push({reference_time:reference,available:false,error:e.message});record.warnings.push('An immediately previous UKV main cycle is unavailable: '+reference);}}}
+  if(ENSEMBLE_DOMAINS.some(domain=>domain.value===model.id)){
+   const archive=await discoverPreviousRuns({model:model.id,latest:meta,load});record.history=[];
+   if(archive.runs.length<3)record.warnings.push('Ensemble comparison has fewer than three verified runs.');
+   for(const error of archive.errors)record.warnings.push('Ensemble archive check failed: '+error.message);
+   for(const prior of archive.runs.slice(1)){
+    try{record.history.push({reference_time:prior.reference_time,available:true,sample:await sample(prior)});}
+    catch(e){record.history.push({reference_time:prior.reference_time,available:false,error:e.message});record.warnings.push('Forecast byte-range check failed: ensemble archive '+prior.reference_time+': '+e.message);}
+   }
+  }
   results.push(record);
  }catch(e){results.push({model:model.id,name:model.name,error:e.message});}
 }}

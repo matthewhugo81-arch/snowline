@@ -1,8 +1,8 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261014-interaction-audit';
-import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261014-interaction-audit';
+import {hasFieldTime,fieldIntervalHours} from './map-sources.js?v=20261015-ensemble-history';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261014-interaction-audit';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261015-ensemble-history';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 

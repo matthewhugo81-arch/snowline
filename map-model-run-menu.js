@@ -1,4 +1,4 @@
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261014-interaction-audit';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261015-ensemble-history';
 // Decorate native model options only: model IDs and selections stay unchanged.
 const runDate = new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short', timeZone: 'UTC'});
 
@@ -14,7 +14,7 @@ export function formatModelRun(meta) {
 export function modelOptionLabel(model, result) {
   const run = formatModelRun(result?.meta);
   const label = run
-    ? run + (result.error ? ' · check failed' : result.meta.freshnessWarning ? ' · refresh overdue' : result.meta.completed === false ? ' · updating' : '')
+    ? run + (result.error ? ' · check failed' : result.meta.publicationStatus ? ' · '+result.meta.publicationStatus.label : result.meta.freshnessWarning ? ' · source warning' : result.meta.completed === false ? ' · updating' : '')
     : result?.error ? 'run unavailable' : 'checking…';
   return `${model.name} (${label})`;
 }
