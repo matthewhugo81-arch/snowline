@@ -1,5 +1,5 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261014-recovery';
-import {loadPointForecasts} from './point-forecasts.js?v=20261014-recovery';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261015-shared-cache';
+import {loadPointForecasts} from './point-forecasts.js?v=20261015-shared-cache';
 import {averageSeries} from './average.js';
 import {chartWindow} from './chart-window.js?v=20261012-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261012-zoom';

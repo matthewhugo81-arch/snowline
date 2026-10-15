@@ -43,3 +43,10 @@ test('Retry-After seconds/date take precedence; short quota limits do not block 
  assert.equal(cache.retryTime(new Response('',{headers:{'Retry-After':'Wed, 14 Oct 2026 19:00:00 GMT'}}),'Limit',now),now+3600000);
  assert.equal(cache.retryTime(new Response(''),'Minutely limit',now),now+60000);
 });
+test('backend retrieval timestamps survive browser cache and stale reuse without extending expiry',async()=>{
+ const backendTime=now-7200000;
+ globalThis.fetch=async()=>Response.json({_retrievedAt:backendTime,_stale:true,_source:'shared cache',hourly:{time:['2026-10-15T00:00'],temperature_2m:[5]}});
+ assert.equal((await cache.cachedJSON(url,{...options,preserveRetrievedAt:true}))._retrievedAt,backendTime);
+ now+=1000;globalThis.fetch=async()=>{throw Error('Offline');};assert.equal((await cache.cachedJSON(url,{...options,preserveRetrievedAt:true}))._retrievedAt,backendTime);
+ now=backendTime+86400001;await assert.rejects(cache.cachedJSON(url,{...options,preserveRetrievedAt:true}),/Offline/);
+});

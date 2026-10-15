@@ -1,0 +1,17 @@
+name = "snowline-forecast-cache"
+main = "index.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "https://matthewhugo81-arch.github.io"
+# Safety ceiling counts outbound HTTP requests, NOT Open-Meteo weighted usage units.
+DAILY_HTTP_BUDGET = "1000"
+
+[[durable_objects.bindings]]
+name = "SHARED_FORECASTS"
+class_name = "SharedForecasts"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SharedForecasts"]
