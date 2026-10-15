@@ -143,15 +143,7 @@ export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, 
     if (chartFor(event) && event.pointerType !== 'touch' && !event.shiftKey && (event.button === 2 || drag)) event.preventDefault();
   });
   listen(root, 'click', event => {
-    const control = event.target.closest?.('[data-reset-zoom], [data-zoom-in], [data-zoom-out]');
-    if (control) {
-      if (control.disabled) return;
-      cancel(); lastClick = null;
-      if (control.hasAttribute('data-reset-zoom')) { onReset(); return; }
-      const window = getWindow(), range = transformRange(window, {length:window.length, scale:control.hasAttribute('data-zoom-in') ? 2 : .5});
-      if (range) onZoom(range);
-      return;
-    }
+    if (event.target.closest?.('[data-reset-zoom]')) { cancel(); lastClick = null; onReset(); return; }
     const chart = chartFor(event);
     if (!chart || event.button !== 0 || drag || pinch || performance.now() < suppressClickUntil) return;
     // Re-rendering replaces the SVG after inspection; track the stable plot for double-click reset.
