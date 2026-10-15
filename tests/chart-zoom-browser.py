@@ -21,7 +21,7 @@ def check(name, condition):
 def run():
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH') or None, args=['--no-sandbox'])
-        context = browser.new_context(viewport={'width':1440,'height':1080}, accept_downloads=True)
+        context = browser.new_context(viewport={'width':1440,'height':1080}, accept_downloads=True, has_touch=True)
         page = context.new_page()
         errors=[]
         page.on('pageerror', lambda e: errors.append(str(e)))
@@ -173,13 +173,95 @@ def run():
         check('Refresh resets zoom for the newly loaded timeline',bounds()[:2]==[0,23])
         page.locator('#horizon').select_option('168');page.wait_for_timeout(70)
         drag(selector,30,60)
-        # Resize to touch dimensions; no mouse zoom is added to touch gestures.
+        # Check the existing mouse controls at mobile dimensions before native touch input.
         page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(250)
         check('Mobile layout has no horizontal page overflow',page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
         card.screenshot(path=str(ROOT.parent/'zoom-mobile.png'))
         check('Native vertical touch scrolling is retained',page.locator(selector+' svg').evaluate("el=>getComputedStyle(el).touchAction")=='pan-y')
         card.locator('[data-reset-zoom]').click();page.wait_for_timeout(70)
         check('Reset remains usable at mobile width',bounds()[:2]==[0,167])
+        # CDP dispatches browser-native multi-touch events, including scrolling
+        # arbitration and compatibility clicks, rather than JS-only event mocks.
+        cdp=context.new_cdp_session(page)
+        cdp.send('Emulation.setTouchEmulationEnabled',{'enabled':True,'maxTouchPoints':5})
+        def touch(kind, points):
+            cdp.send('Input.dispatchTouchEvent',{'type':kind,'touchPoints':[dict(x=x,y=y,id=i+1) for i,(x,y) in enumerate(points)]})
+            page.wait_for_timeout(45)
+        def touch_center(target=selector):
+            page.locator(target).evaluate("el=>el.scrollIntoView({block:'center'})")
+            page.wait_for_timeout(100)
+            return page.locator(target).evaluate("el=>{const svg=el.querySelector('svg'),w=svg.viewBox.baseVal.width,p=new DOMPoint(43+(w-55)/2,65).matrixTransform(svg.getScreenCTM());return {x:p.x,y:p.y}}")
+        def pinch_gesture(start_gap,end_gap,shift=0,target=selector,finish=True):
+            c=touch_center(target)
+            touch('touchStart',[(c['x']-start_gap/2,c['y']),(c['x']+start_gap/2,c['y'])])
+            for step in range(1,7):
+                gap=start_gap+(end_gap-start_gap)*step/6
+                x=c['x']+shift*step/6
+                touch('touchMove',[(x-gap/2,c['y']),(x+gap/2,c['y'])])
+            if finish:
+                touch('touchEnd',[])
+            return c
+        check('Every graph has labelled touch-size zoom buttons',page.locator('[data-zoom-in]').count()==12 and page.locator('.chart-zoom-controls button').evaluate_all('els=>els.every(el=>{const r=el.getBoundingClientRect();return r.width>=44&&r.height>=44})'))
+        check('Zoom out and reset are disabled at the full horizon',card.locator('[data-zoom-out]').is_disabled() and card.locator('[data-reset-zoom]').is_disabled())
+        pinch_gesture(64,128,finish=False)
+        check('Spreading two fingers zooms live before release',bounds()[:2]==[42,126])
+        check('Every graph redraws to the same pinch time range',page.locator('.plot svg').evaluate_all('els=>new Set(els.map(el=>[el.querySelector(".time-tick")?.textContent,[...el.querySelectorAll(".time-tick")].at(-1)?.textContent,[...el.querySelectorAll(".date-tick")].map(t=>t.textContent).join() ].join("|"))).size===1'))
+        touch('touchEnd',[])
+        check('Finger release preserves zoom without inspecting or resetting',bounds()==[42,126,42] and page.locator('.zoom-pinching').count()==0)
+        check('Pinch updates overview statistics and all inspected times',page.locator('#snow-max').inner_text()=='1.26 cm' and page.locator('#temp-min').inner_text()=='0.2°C' and page.locator('.chart-time time').evaluate_all('(els)=>new Set(els.map(e=>e.dateTime)).size')==1)
+        check('Time labels remain separated at intermediate pinch ranges',page.locator(selector+' .time-tick').evaluate_all('els=>els.every((el,i)=>!i||els[i-1].getBoundingClientRect().right+2<=el.getBoundingClientRect().left)'))
+        card.screenshot(path=str(ROOT.parent/'zoom-mobile-pinch.png'))
+        page.locator('[data-variable="temperature_2m"]').click()
+        check('Pinch updates the exported chart window',page.locator('#dataset-table tbody tr').count()==85 and page.locator('#dataset-table tbody time').first.get_attribute('datetime')==times[42])
+        page.locator('.dataset-close').click()
+        pinch_gesture(128,64)
+        check('Pinching inward restores the full selected horizon',bounds()[:2]==[0,167] and card.locator('[data-zoom-out]').is_disabled())
+        card.locator('[data-zoom-in]').tap();page.wait_for_timeout(100)
+        check('Plus button zooms all graphs around the visible midpoint',bounds()[:2]==[42,126])
+        before=bounds();pinch_gesture(80,80,shift=24)
+        check('Two fingers pan through time without changing zoom span',bounds()[0]<before[0] and bounds()[1]-bounds()[0]==84)
+        pinch_gesture(80,80,shift=-48)
+        check('Two-finger panning works in the opposite direction',bounds()[0]>before[0] and bounds()[1]-bounds()[0]==84)
+        card.locator('[data-zoom-out]').tap();page.wait_for_timeout(100)
+        check('Minus button restores the full horizon at its limit',bounds()[:2]==[0,167])
+        # A staggered two-finger start must also survive SVG replacements.
+        c=touch_center()
+        touch('touchStart',[(c['x']-32,c['y'])])
+        touch('touchStart',[(c['x']-32,c['y']),(c['x']+32,c['y'])])
+        touch('touchMove',[(c['x']-64,c['y']),(c['x']+64,c['y'])])
+        check('Staggered fingers activate pinch zoom',bounds()[:2]==[42,126])
+        before=bounds()
+        touch('touchEnd',[(c['x']-64,c['y'])]);touch('touchMove',[(c['x']-40,c['y'])]);touch('touchEnd',[])
+        check('Lifting fingers separately does not inspect a new hour',bounds()==before)
+        card.locator('[data-reset-zoom]').tap();page.wait_for_timeout(100)
+        check('Touch Reset zoom restores all graphs',bounds()[:2]==[0,167])
+        pinch_gesture(64,128,finish=False);touch('touchCancel',[])
+        check('Browser cancellation clears the gesture and leaves a valid window',page.locator('.zoom-pinching').count()==0 and bounds()[:2]==[42,126])
+        card.locator('[data-reset-zoom]').tap();page.wait_for_timeout(100)
+        pinch_gesture(64,128,target='#agreement-chart')
+        check('The agreement graph supports native pinch zoom too',bounds()[:2]==[42,126])
+        page.locator('.agreement-card [data-reset-zoom]').tap();page.wait_for_timeout(100)
+        for _ in range(12):
+            if card.locator('[data-zoom-in]').is_disabled(): break
+            card.locator('[data-zoom-in]').tap();page.wait_for_timeout(60)
+        check('Repeated plus stops at two hourly samples on every graph',bounds()[1]-bounds()[0]==1 and page.locator('[data-zoom-in]:disabled').count()==12)
+        card.locator('[data-reset-zoom]').tap();page.wait_for_timeout(100)
+        page.locator('#horizon').select_option('24');page.wait_for_timeout(100)
+        pinch_gesture(64,128)
+        check('Pinch respects the chosen one-day horizon',bounds()[:2]==[6,18])
+        card.locator('[data-reset-zoom]').tap();page.wait_for_timeout(100)
+        check('Reset restores the chosen one-day horizon',bounds()[:2]==[0,23])
+        page.locator('#horizon').select_option('168');page.wait_for_timeout(100)
+        # Single-finger gestures must retain native scrolling and tap inspection.
+        c=touch_center();scroll=page.evaluate('scrollY');before=bounds()
+        touch('touchStart',[(c['x'],c['y'])])
+        for step in range(1,9): touch('touchMove',[(c['x'],c['y']-step*15)])
+        touch('touchEnd',[]);page.wait_for_timeout(350)
+        check('One finger scrolls the page naturally over a graph',page.evaluate('scrollY')>scroll+40 and bounds()==before)
+        c=touch_center();page.wait_for_timeout(550)
+        page.touchscreen.tap(c['x'],c['y']);page.wait_for_timeout(100)
+        check('A single tap still inspects an hour across all graphs',bounds()[2] in [83,84] and page.locator('.chart-time time').evaluate_all('(els)=>new Set(els.map(e=>e.dateTime)).size')==1)
+        check('Pinch never magnifies the page or fetches more forecasts',page.evaluate('visualViewport.scale')==1 and page.evaluate('window.__forecastRequests.length')==initial_requests)
         card.locator('.chart-toggle').click();page.wait_for_timeout(70)
         page.locator('#focus').select_option('wind');page.wait_for_timeout(70)
         check('Focus filters retain the paired wind charts',page.locator('#charts .chart-card:visible h2').all_text_contents()==['10 m wind speed','10 m wind gusts'])

@@ -22,3 +22,12 @@ export function selectionRange(x1, x2, layout) {
   if (a === null || b === null || a === b) return null;
   return {start: Math.min(a, b), end: Math.max(a, b)};
 }
+
+// Scale around a fractional position in the starting window, then move that
+// anchor with the fingers. Snap to whole hours and preserve the span at edges.
+export function transformRange({start, end}, {length, scale = 1, anchor = .5, midpoint = anchor}) {
+  if (!Number.isInteger(length) || length < 2 || ![start, end, scale, anchor, midpoint].every(Number.isFinite) || end <= start || scale <= 0) return null;
+  const span = Math.max(1, Math.min(length - 1, Math.round((end - start) / scale)));
+  const first = Math.max(0, Math.min(length - 1 - span, Math.round(start + anchor * (end - start) - midpoint * span)));
+  return {start:first, end:first + span};
+}

@@ -1,12 +1,13 @@
-import {indexAtX, selectionRange} from './chart-window.js?v=20261012-zoom';
+import {indexAtX, selectionRange, transformRange} from './chart-window.js?v=20261015-touch-zoom';
 
-// No wheel or touch-drag interception: normal scrolling and tap-to-inspect remain.
-export function createChartZoom({root, getLayout, onZoom, onInspect, onReset, onFinish}) {
+// Single-finger scrolling stays native. Only a two-finger gesture that starts
+// inside one graph is consumed; wheel events and page zoom outside stay native.
+export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, onReset, onFinish}) {
   const svgNS = 'http://www.w3.org/2000/svg';
   const format = new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', timeZone:'UTC'});
   const listeners = new AbortController();
-  let drag = null, suppressClickUntil = 0, lastClick = null;
-  const listen = (target, event, handler) => target.addEventListener(event, handler, {signal:listeners.signal});
+  let drag = null, pinch = null, suppressClickUntil = 0, lastClick = null;
+  const listen = (target, event, handler, options = {}) => target.addEventListener(event, handler, {...options, signal:listeners.signal});
   function chartFor(event) {
     const chart = event.target.closest?.('.plot');
     return chart && root.contains(chart) && getLayout(chart.id) ? chart : null;
@@ -20,6 +21,55 @@ export function createChartZoom({root, getLayout, onZoom, onInspect, onReset, on
   function inside(p, layout) {
     return p && p.x >= layout.left && p.x <= layout.left + layout.inner && p.y >= layout.top && p.y <= layout.height - layout.bottom;
   }
+  function clearPinch() {
+    if (!pinch) return;
+    pinch.chart.classList.remove('zoom-pinching');
+    pinch = null;
+    lastClick = null;
+    suppressClickUntil = performance.now() + 500;
+    onFinish();
+  }
+  function cancel() { clearDrag(); clearPinch(); }
+  function touchGeometry(chart, touches, layout) {
+    const a = point(chart, touches[0]), b = point(chart, touches[1]);
+    if (!a || !b) return null;
+    return {midpoint:((a.x + b.x) / 2 - layout.left) / layout.inner,
+      distance:Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY)};
+  }
+  listen(root, 'touchstart', event => {
+    if (pinch) { if (event.cancelable) event.preventDefault(); return; }
+    if (drag || event.touches.length !== 2 || !event.cancelable) return;
+    const touches = [...event.touches], chart = chartFor(event), layout = chart && getLayout(chart.id);
+    if (!layout || layout.n < 2 || !touches.every(t => chart.contains(t.target) && inside(point(chart, t), layout))) return;
+    const geometry = touchGeometry(chart, touches, layout);
+    if (!geometry || geometry.distance < 24) return;
+    event.preventDefault();
+    lastClick = null;
+    pinch = {chart, layout, window:getWindow(), ids:touches.map(t => t.identifier), ...geometry, finished:false};
+    chart.classList.add('zoom-pinching');
+  }, {passive:false});
+  listen(root, 'touchmove', event => {
+    if (!pinch) return;
+    if (!event.cancelable) { clearPinch(); return; }
+    event.preventDefault();
+    // Wait for all fingers to lift after either original finger is released.
+    if (pinch.finished || event.touches.length !== 2) return;
+    const touches = pinch.ids.map(id => [...event.touches].find(t => t.identifier === id));
+    if (touches.some(t => !t)) return;
+    const geometry = touchGeometry(pinch.chart, touches, pinch.layout);
+    if (!geometry) return;
+    const range = transformRange(pinch.window, {length:pinch.window.length, scale:geometry.distance / pinch.distance,
+      anchor:pinch.midpoint, midpoint:geometry.midpoint});
+    const current = getWindow();
+    if (range && (range.start !== current.start || range.end !== current.end)) onZoom(range);
+  }, {passive:false});
+  listen(root, 'touchend', event => {
+    if (!pinch) return;
+    if (event.cancelable) event.preventDefault();
+    if ([...event.changedTouches].some(t => pinch.ids.includes(t.identifier))) pinch.finished = true;
+    if (!event.touches.length) clearPinch();
+  }, {passive:false});
+  listen(root, 'touchcancel', clearPinch);
   function clearDrag() {
     if (!drag) return;
     const previous = drag;
@@ -41,7 +91,7 @@ export function createChartZoom({root, getLayout, onZoom, onInspect, onReset, on
     label.textContent = `${format.format(new Date(layout.times[lo - layout.start]))} → ${format.format(new Date(layout.times[hi - layout.start]))} UTC`;
   }
   listen(root, 'pointerdown', event => {
-    if (drag || event.pointerType === 'touch') return;
+    if (drag || pinch || event.pointerType === 'touch') return;
     const right = event.button === 2 && !event.shiftKey;
     const alternate = event.button === 0 && event.shiftKey;
     if (!right && !alternate) return;
@@ -86,16 +136,24 @@ export function createChartZoom({root, getLayout, onZoom, onInspect, onReset, on
   });
   listen(window, 'pointercancel', event => { if (drag?.pointerId === event.pointerId) clearDrag(); });
   listen(root, 'lostpointercapture', event => { if (drag?.pointerId === event.pointerId) clearDrag(); });
-  listen(window, 'blur', clearDrag);
-  listen(window, 'resize', clearDrag);
-  listen(document, 'visibilitychange', () => { if (document.hidden) clearDrag(); });
+  listen(window, 'blur', cancel);
+  listen(window, 'resize', cancel);
+  listen(document, 'visibilitychange', () => { if (document.hidden) cancel(); });
   listen(root, 'contextmenu', event => {
     if (chartFor(event) && event.pointerType !== 'touch' && !event.shiftKey && (event.button === 2 || drag)) event.preventDefault();
   });
   listen(root, 'click', event => {
-    if (event.target.closest?.('[data-reset-zoom]')) { onReset(); return; }
+    const control = event.target.closest?.('[data-reset-zoom], [data-zoom-in], [data-zoom-out]');
+    if (control) {
+      if (control.disabled) return;
+      cancel(); lastClick = null;
+      if (control.hasAttribute('data-reset-zoom')) { onReset(); return; }
+      const window = getWindow(), range = transformRange(window, {length:window.length, scale:control.hasAttribute('data-zoom-in') ? 2 : .5});
+      if (range) onZoom(range);
+      return;
+    }
     const chart = chartFor(event);
-    if (!chart || event.button !== 0 || drag || performance.now() < suppressClickUntil) return;
+    if (!chart || event.button !== 0 || drag || pinch || performance.now() < suppressClickUntil) return;
     // Re-rendering replaces the SVG after inspection; track the stable plot for double-click reset.
     const now = performance.now();
     if (lastClick?.chart === chart && now - lastClick.at < 350 && Math.abs(event.clientX - lastClick.x) < 6 && Math.abs(event.clientY - lastClick.y) < 6) {
@@ -108,8 +166,10 @@ export function createChartZoom({root, getLayout, onZoom, onInspect, onReset, on
   listen(root, 'dblclick', event => { if (chartFor(event) && !event.shiftKey) { event.preventDefault(); onReset(); } });
   listen(document, 'keydown', event => {
     if (event.key !== 'Escape') return;
-    if (drag) { event.preventDefault(); clearDrag(); return; }
+    if (drag || pinch) { event.preventDefault(); cancel(); return; }
     if (document.activeElement?.matches('.plot') && root.contains(document.activeElement)) onReset();
   });
-  return {get active() { return Boolean(drag); }, cancel:clearDrag, destroy() { clearDrag(); listeners.abort(); }};
+  // Touch targets are the stable .plot containers, so pinch can render live.
+  // Mouse selection keeps its original SVG/band until release.
+  return {get active() { return Boolean(drag); }, cancel, destroy() { cancel(); listeners.abort(); }};
 }
