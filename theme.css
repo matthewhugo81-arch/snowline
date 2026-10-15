@@ -1,0 +1,94 @@
+/* Shared UI theme. Weather rasters, fixed value bands and exported images keep
+   their scientific palettes; only the surrounding interface changes. */
+:root { color-scheme: light; }
+.theme-control { display:inline-flex; align-items:center; gap:7px; flex:none; margin-left:8px; font-size:12px; color:#c8dbe9; }
+.theme-control select { background:#20394d; color:#f0f7ff; border-color:#496073; padding:6px 8px; min-height:34px; font-size:12px; }
+.theme-control select:focus-visible { outline-color:#6ce1d6; }
+@media(max-width:650px) {
+  header:has(.theme-control), .map-page header:has(.theme-control) { flex-wrap:wrap; gap:8px; }
+  header:has(.theme-control) > :is(.brand, .map-heading) { flex-basis:100%; }
+  header:has(.theme-control) .page-nav { order:2; width:auto; flex:1 1 auto; justify-content:flex-start; margin-left:0; }
+  header:has(.theme-control) .theme-control { order:2; margin-left:auto; }
+  .theme-control select { min-height:40px; font-size:16px; padding:6px; }
+}
+:root[data-theme="dark"] {
+  color-scheme:dark;
+  color:var(--ink);
+  background:#0b1522;
+  --ink:#e4edf6;
+  --muted:#a8bbce;
+  --line:#304458;
+  --teal:#6ce1d6;
+  --surface:#142437;
+  --surface-raised:#1d3247;
+  --surface-hover:#29455d;
+  --control-border:#526b82;
+  --chart-average:#f1f6fc;
+  --chart-halo:#142437;
+  --model-ecmwf_ifs:#4ac7ce;
+  --model-ecmwf_aifs025_single:#c18aef;
+  --model-icon_global:#eca44f;
+  --model-gem_global:#73b0f3;
+  --model-gfs_global:#f3798a;
+  --model-ukmo_global_deterministic_10km:#70c991;
+  --model-ncep_aigfs025:#df83b8;
+  --model-jma_gsm:#c4c77b;
+  --model-knmi_harmonie_arome_europe:#50c6ee;
+  --model-meteofrance_arpege_europe:#dca27d;
+  --model-icon_eu:#aaa0ff;
+  --model-ukmo_uk_deterministic_2km:#54d4bf;
+  --model-ncep_hgefs025_ensemble_mean:#b2bfce;
+  --model-ecmwf_ifs025:#8f9bea;
+  --model-meteofrance_arome_france:#e9b553;
+}
+/* Explicit component selectors avoid changing inline frost/rain colour bands. */
+:root[data-theme="dark"] :is(input[type=search], select, .event-analysis input) { background:var(--surface); color:var(--ink); border-color:var(--control-border); }
+:root[data-theme="dark"] input::placeholder { color:var(--muted); }
+:root[data-theme="dark"] button { background:#31556e; color:#f4f8fc; border-color:#526f87; }
+:root[data-theme="dark"] button:hover { background:#406b87; }
+:root[data-theme="dark"] :is(.secondary, .model-chip, .recent-locations button) { background:var(--surface); color:var(--ink); border-color:var(--control-border); }
+:root[data-theme="dark"] :is(.secondary:hover, .recent-locations button:hover) { background:var(--surface-hover); }
+:root[data-theme="dark"] :is(.summary article, .chart-card, .data-detail, .dataset-dialog, .search-results-open, .map-sidebar, .map-stage, .panel-controls, .panel-overlays, .layer-legend, .map-guide, .event-analysis, .briefing-controls, .briefing-overlays, .briefing-legend, .briefing-card, .previous-controls, #briefing-enlarged, #previous-enlarged, #expanded-map[open], .chart-image-menu, .chart-image-preview) { background:var(--surface); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(#search-results button, .chart-image-menu button) { background:var(--surface); color:var(--ink); }
+:root[data-theme="dark"] :is(#search-results button:hover, .chart-image-menu button:hover, .chart-image-menu button:focus-visible) { background:var(--surface-hover); }
+:root[data-theme="dark"] .text-button { background:transparent; color:var(--teal); border-color:transparent; }
+:root[data-theme="dark"] .text-button:hover { background:var(--surface-hover); }
+:root[data-theme="dark"] .model-chip:has(input:not(:checked)) { background:transparent; }
+:root[data-theme="dark"] .model-chip input { accent-color:var(--teal); }
+:root[data-theme="dark"] :is(.chart-values, th, td, .forecast-table th, .forecast-table td) { border-color:var(--line); }
+:root[data-theme="dark"] :is(.chart-time, .winter-legend-note) { color:var(--muted); }
+:root[data-theme="dark"] .chart-time time { color:var(--ink); }
+:root[data-theme="dark"] .average-swatch { background:var(--chart-average); }
+:root[data-theme="dark"] .chart-card .plot text { fill:var(--muted); }
+:root[data-theme="dark"] .chart-card .gridline { stroke:var(--line); }
+:root[data-theme="dark"] .plot .day-boundary { stroke:#728ba3; }
+:root[data-theme="dark"] .chart-card .cursor-line { stroke:#c0d8e6; }
+:root[data-theme="dark"] .chart-card .zero-line { stroke:#9bb4cb; }
+:root[data-theme="dark"] .chart-toggle { background:transparent; color:var(--muted); border-color:transparent; }
+:root[data-theme="dark"] .chart-toggle:hover { background:var(--surface-hover); color:var(--ink); }
+:root[data-theme="dark"] #zoom-window { background:#173b42; color:var(--ink); border-color:#35626a; }
+:root[data-theme="dark"] .chart-card .zoom-selection rect { fill:#6ce1d626; stroke:var(--teal); }
+:root[data-theme="dark"] .chart-card .zoom-selection text { fill:var(--ink); stroke:var(--surface); }
+:root[data-theme="dark"] :is(.forecast-table caption, .forecast-table tbody th) { background:var(--surface); }
+:root[data-theme="dark"] :is(.forecast-table thead th, .forecast-table .average-column, .map-start-controls, .mobile-map-toolbar) { background:var(--surface-raised); }
+:root[data-theme="dark"] #status.error { color:#ffab9f; }
+:root[data-theme="dark"] :is(.map-panel-label, .zoom-readout, .grid-note) { background:#142437f0; color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] .map-error { background:#3c2d20; color:#f3cf98; border-color:#84613c; }
+:root[data-theme="dark"] .map-canvas { background:var(--surface-raised); }
+:root[data-theme="dark"] #mobile-return-map { background:#31556e; color:#f4f8fc; border-color:#526f87; }
+:root[data-theme="dark"] .previous-notice { background:#173b42; }
+:root[data-theme="dark"] .briefing-mode-row [aria-pressed="false"] { background:var(--surface); color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] .briefing-mode-row [aria-pressed="true"] { background:#31556e; color:white; border-color:#7796b0; }
+:root[data-theme="dark"] .briefing-chart { background:var(--surface-raised); color:var(--muted); }
+:root[data-theme="dark"] .briefing-card[data-failed] .briefing-chart { background:#3c2d20; color:#f3cf98; }
+:root[data-theme="dark"] :is(.maplibregl-popup-content, .maplibregl-popup-close-button, .maplibregl-ctrl-group, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib-button) { background:var(--surface); color:var(--ink); }
+:root[data-theme="dark"] .maplibregl-popup-content .event-link { background:#31556e; color:white; }
+:root[data-theme="dark"] .maplibregl-ctrl-attrib a { color:var(--muted); }
+:root[data-theme="dark"] .maplibregl-ctrl-group button { background:transparent; border-color:var(--line); }
+:root[data-theme="dark"] .maplibregl-ctrl-group button:hover { background:var(--surface-hover); }
+:root[data-theme="dark"] :is(.maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button) { filter:invert(1) hue-rotate(180deg); }
+:root[data-theme="dark"] :is(.maplibregl-popup-anchor-top, .maplibregl-popup-anchor-top-left, .maplibregl-popup-anchor-top-right) .maplibregl-popup-tip { border-bottom-color:var(--surface); }
+:root[data-theme="dark"] :is(.maplibregl-popup-anchor-bottom, .maplibregl-popup-anchor-bottom-left, .maplibregl-popup-anchor-bottom-right) .maplibregl-popup-tip { border-top-color:var(--surface); }
+:root[data-theme="dark"] .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color:var(--surface); }
+:root[data-theme="dark"] .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color:var(--surface); }
+:root[data-theme="dark"] .theme-control select { background:#20394d; color:#f0f7ff; border-color:#617c92; }

@@ -28,8 +28,10 @@ function selectedModels(){return MODELS.filter(m=>state.selected.has(m.id)&&stat
 function setStatus(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
 // Data, range and size changes take precedence over cursor-only updates in the same frame.
 function scheduleRender(inspectOnly=false){fullRenderPending ||= inspectOnly!==true;if(renderPending)return;renderPending=true;requestAnimationFrame(()=>{const full=fullRenderPending;renderPending=false;fullRenderPending=false;if(full||!inspection)render();else renderInspection();});}
+// CSS variables recolour existing SVGs immediately without resetting chart state.
+const modelColour = model => model.average ? 'var(--chart-average, #102235)' : model.id ? `var(--model-${model.id}, ${model.color})` : model.color;
 function populate(){
- $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${m.color}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
+ $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${modelColour(m)}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
  $('charts').innerHTML=VARIABLES.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div></article>`).join('');
  $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
@@ -102,9 +104,9 @@ function plot(container,series,config,times){
  const dayTicks=!state.zoom&&dayStarts.length&&x(dayStarts[0])-left<74?dayStarts:[0,...dayStarts];
  let labelEnd=-Infinity;
  for(const i of new Set(dayTicks)){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text class="date-tick" x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))}</text>`;labelEnd=labelStart+labelWidth;}
- for(const s of series){if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="white" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${s.color}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
+ for(const s of series){if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="var(--chart-halo, white)" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${modelColour(s)}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
  html+=`<line class="cursor-line" x1="${x(index)}" x2="${x(index)}" y1="${top}" y2="${height-bottom}"/>`;
- for(const s of series){const v=s.values[index];html+=`<circle class="cursor-point" cx="${x(index)}" cy="${finite(v)?y(v):top}" r="3" fill="${s.color}"${finite(v)?'':' display="none"'}/>`;}
+ for(const s of series){const v=s.values[index];html+=`<circle class="cursor-point" cx="${x(index)}" cy="${finite(v)?y(v):top}" r="3" fill="${modelColour(s)}"${finite(v)?'':' display="none"'}/>`;}
  html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,height,left,inner,top,bottom,n,start,times,x,y,series,cursor:container.querySelector('.cursor-line'),points:[...container.querySelectorAll('.cursor-point')]});
 }
 function render(){
@@ -154,10 +156,10 @@ function renderInspection(){
  const current=models.filter(m=>finite(valueAt(m,v.key,time)));
  const mean=average.values[index],count=average.counts[index];
  const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${valueAttributes(mean,v)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
- $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${m.color}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
+ $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${modelColour(m)}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
  }
 
- $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);return `<tr><td><i class="swatch" style="--color:${m.color}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage.get(m.id))}</td></tr>`}).join('');
+ $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);return `<tr><td><i class="swatch" style="--color:${modelColour(m)}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage.get(m.id))}</td></tr>`}).join('');
 }
 let searchController=null;
 async function searchLocations(query){const coords=parseCoordinates(query);if(coords)return [coords];if(query.trim().length<2)throw new Error('Enter at least two characters.');const data=await fetchJSON('https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name:query,count:'8',language:'en',format:'json'}),searchController?.signal);return (data.results??[]).sort((a,b)=>Number(b.country_code==='GB')-Number(a.country_code==='GB')).map(r=>({latitude:r.latitude,longitude:r.longitude,elevation:r.elevation,name:[r.name,r.admin2,r.admin1,r.country].filter(Boolean).join(', ')}));}
