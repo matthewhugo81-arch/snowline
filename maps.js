@@ -12,10 +12,10 @@ import {installDewPoint} from './map-dew-point.js';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261014-interaction-audit';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261015-loading-performance';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performance';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
-import {ForecastPlayback} from './map-playback.js?v=20261011-frame-handover';
+import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261015-ensemble-history';
@@ -32,7 +32,7 @@ import {finite} from './data.js?v=20261010-ukv';
 import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261015-ensemble-history';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261015-ensemble-history';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
-import {selectEventPoint} from './event-analysis.js';
+import {selectEventPoint} from './event-analysis.js?v=20261015-loading-performance';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
 import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261015-ensemble-history';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
@@ -280,9 +280,10 @@ function orderForecastBasemap(panel){
 function panelCache(panel,model,field){
  const meta=state.metas[model],overlay=state.overlays[panel.key],composite=field===WEATHER_COMPOSITE;
  // Changing the other panel's field can change the shared timeline too.
- const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars,state.times,state.times.map(time=>hasFieldTime(meta,field,time)),overlay.isobars?fieldSource(meta,'pressure_msl')?.valid_times:null]);
- if(panel.frameCache&&panel.cacheKey===signature)return panel.frameCache;
- panel.frameCache?.clear();orderForecastBasemap(panel);
+ const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars]);
+ const reusable=panel.frameCache&&panel.cacheKey===signature;
+ if(reusable&&panel.cacheTimes===state.times&&panel.cacheMeta===meta)return panel.frameCache;
+ if(!reusable){panel.frameCache?.clear();orderForecastBasemap(panel);}
  const f=fields.find(item=>item.key===field),descriptors=new Map();
  panel.frameURLs=state.times.map(time=>{
   if(!hasFieldTime(meta,field,time))return null;
@@ -290,7 +291,16 @@ function panelCache(panel,model,field){
   descriptors.set(url,{field:f,url,symbolURL:field===THETA_SYMBOLS?symbolURL(concreteURL(model,meta,time,'precipitation'),fieldSource(meta,'precipitation',time)):null,contours:overlay.contours,cloudURL:composite?compositeURL(concreteURL(model,meta,time,'cloud_cover')):null,isobars:composite||field===THETA_SYMBOLS||overlay.isobars,pressureURL:(composite||field===THETA_SYMBOLS||overlay.isobars)&&hasFieldTime(meta,'pressure_msl',time)?concreteURL(model,meta,time,'pressure_msl'):null});
   return url;
  });
+ if(reusable){
+  // Appending hours keeps complete, unchanged frames. If a companion overlay
+  // becomes available for an old hour, rebuild only that hour's full chart.
+  const unchanged=new Set([...descriptors].filter(([url,descriptor])=>JSON.stringify(panel.frameDescriptors.get(url))===JSON.stringify(descriptor)).map(([url])=>url));
+  panel.frameCache.retain(unchanged);
+  panel.frameDescriptors.clear();for(const [url,descriptor]of descriptors)panel.frameDescriptors.set(url,descriptor);
+  panel.cacheTimes=state.times;panel.cacheMeta=meta;return panel.frameCache;
+ }
  panel.cacheKey=signature;
+ panel.cacheTimes=state.times;panel.cacheMeta=meta;panel.frameDescriptors=descriptors;
  const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.symbolURL?[symbolOverlay(descriptor.symbolURL)]:[]),...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
  panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
  panel.frames=panel.frameCache.frames;return panel.frameCache;
@@ -617,7 +627,7 @@ $('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.valu
 $('map-area').addEventListener('change',()=>{for(const p of Object.values(panels))fitArea(p.map,400);});
 $('reset-map').addEventListener('click',()=>{$('map-area').value='uk';for(const p of Object.values(panels))fitArea(p.map,400);});
 $('play-map').addEventListener('click',()=>{
- if(playing){pauseAnimation();$('animation-status').textContent='Paused';return;}
+ if(playing){pauseAnimation();for(const {key}of panelSelections(state))warmUpcoming(panels[key]);$('animation-status').textContent='Paused';return;}
  if(!state.times.length)return;
  for(const {key}of panelSelections(state))clearGridValues(panels[key]);
  playback.start();
@@ -640,7 +650,7 @@ async function openBriefing(){
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261015-ensemble-history');
+   const {createBriefing}=await import('./map-briefing.js?v=20261015-loading-performance');
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},

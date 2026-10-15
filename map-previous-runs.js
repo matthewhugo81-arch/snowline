@@ -6,7 +6,7 @@ import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
 import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261015-ensemble-history';
 import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261015-ensemble-history';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261015-ensemble-history';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261015-loading-performance';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261015-ensemble-history';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -113,9 +113,10 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   work=work.catch(()=>{}).then(async()=>{
    if(signal.aborted)return;if(renderer&&(renderer.background!==opts.background||renderer.appearanceKey!==appearanceKey(opts.appearance))){renderer.destroy();renderer=null;}
    renderer??=new BriefingRenderer({...renderOptions,fields,background:opts.background,appearance:opts.appearance});
-   for(const item of tasks){
+   for(const [position,item]of tasks.entries()){
     if(signal.aborted||!active)return;if(item.cached)continue;
-    try{const src=await renderer.render({...opts,meta:item.meta,time,signal,onProgress:({done,total})=>{
+    const nextTask=tasks.slice(position+1).find(task=>!task.cached);
+    try{const src=await renderer.render({...opts,meta:item.meta,time,signal,nextFrame:nextTask?{meta:nextTask.meta,time}:null,onProgress:({done,total})=>{
      if(signal.aborted)return;item.c.button.textContent=done<total?'Preparing '+accumulationHours(p.field)+' h total · '+done+'/'+total+' native intervals':'Drawing map and grid values…';
     }});if(signal.aborted){URL.revokeObjectURL(src);return;}images.set(item.key,src);show(item.c,src,item.meta);}
     catch(error){if(signal.aborted)return;item.c.button.textContent='This run/time is unavailable. Use Retry charts.';item.c.card.dataset.failed='true';failed++;$('retry').hidden=false;}

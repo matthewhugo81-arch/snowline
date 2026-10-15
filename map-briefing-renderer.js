@@ -2,8 +2,8 @@ import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rast
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
-import {ForecastFrames} from './map-frames.js?v=20261014-interaction-audit';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261011-parallel-preload';
+import {ForecastFrames} from './map-frames.js?v=20261015-loading-performance';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performance';
 import {overlayGroups} from './map-overlay-specs.js?v=20261012-chart-style';
 import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261015-ensemble-history';
 import {installDewPoint} from './map-dew-point.js';
@@ -16,6 +16,8 @@ import {compositeSettings as briefingSettings,compositeUnderlay} from './map-wea
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
 import {fieldSource} from './map-sources.js?v=20261015-ensemble-history';
+import {sourceVariable} from './map-catalogue.js?v=20261015-ensemble-history';
+import {forecastInputWork} from './map-work-queue.js';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
@@ -64,7 +66,18 @@ export class BriefingRenderer{
   this.ready.catch(()=>{});
  }
  cancel(){this.frames?.clear();}
- async render({model,meta,preset,bounds,size=[960,660],time,signal,overlays={},onProgress}){
+ async prepareInputs({meta,preset,time,clip,signal}){
+  if(!time||accumulationHours(preset.field)||!preset.required.every(key=>hasFieldTime(meta,key,time)))return;
+  const reader=this.OM.getProtocolInstance(this.settings).omFileReader;
+  for(const key of preset.required){
+   signal.throwIfAborted();
+   const source=fieldSource(meta,key,time),domain=this.settings.domainOptions.find(domain=>domain.value===source?.domain);
+   if(!domain)continue;
+   const url=fieldDataURL(meta,key,time),variable=sourceVariable(source,key)??key,ranges=this.OM.getRanges(domain.grid,clip);
+   await forecastInputWork.run(()=>reader.readVariable(url,variable,ranges,signal),signal);
+  }
+ }
+ async render({model,meta,preset,bounds,size=[960,660],time,signal,overlays={},onProgress,nextFrame}){
   await this.ready;if(signal.aborted)throw aborted();
   // A newly selected model may add a pressure-level scale to the catalogue.
   const weather=preset.id==='weather';
@@ -80,6 +93,9 @@ export class BriefingRenderer{
   }
   const extent=this.map.getBounds(),clip=[extent.getWest(),extent.getSouth(),extent.getEast(),extent.getNorth()];
   this.OM.updateCurrentBounds(clip);this.cache.setContext(JSON.stringify(clip));
+  // One next chart's native inputs overlap the current chart's GPU render and
+  // PNG export. The same renderer still commits complete, matching-time images.
+  if(nextFrame)void this.prepareInputs({meta,preset,clip,signal,...nextFrame}).catch(()=>{});
   // Worker requests are shared across both views. Distinguish the composite's
   // colours even if an interactive tile is still finishing cancellation.
   const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=20261013-catalogue-'+(weather?'white90':'field');

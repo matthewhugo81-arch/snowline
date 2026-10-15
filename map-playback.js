@@ -24,14 +24,18 @@ export class ForecastPlayback{
    let deadline=this.now()+this.interval;
    while(active()){
     this.onState('playing');
+    // Prepare during the presentation interval, not after it. Attach a rejection
+    // handler immediately so pausing during the wait cannot leak a rejection.
+    const next=(this.index()+1)%length;
+    const preparation=Promise.resolve().then(()=>this.prepare(next)).catch(()=>false);
     await this.sleep(Math.max(0,deadline-this.now()));
     if(!active())return;
-    const next=(this.index()+1)%length;
     this.onState('next');
-    if(!await this.prepare(next)||!active()){if(active()){this.pause();this.onState('failed');}return;}
+    if(!await preparation||!active()){if(active()){this.pause();this.onState('failed');}return;}
+    // Anchor to this presentation, allowing display work to consume the next
+    // interval. A late frame starts a new cadence; no skipped times or catch-up.
+    deadline=this.now()+this.interval;
     if(!await this.show(next)||!active()){if(active()){this.pause();this.onState('failed');}return;}
-    // Do not add the decode time to every ready frame, and never race to catch up.
-    deadline=Math.max(deadline+this.interval,this.now()+this.interval);
    }
   }catch(error){if(active()){this.pause();this.onState('failed',error);}}
  }
