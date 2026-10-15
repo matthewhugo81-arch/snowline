@@ -2,9 +2,9 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261014-interaction-audit';
+import {sourceVariable} from './map-catalogue.js?v=20261015-ensemble-history';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {ENSEMBLE_DOMAINS,ensembleFreshnessWarning} from './map-ensemble.js?v=20261013-operational-feeds';
+import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261015-ensemble-history';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
 
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
@@ -19,6 +19,10 @@ for(const model of MOGREPS_MODELS)domains[model.id]=model.id;
 const ownEnsembles=new Set(ENSEMBLE_DOMAINS.map(d=>d.value));
 for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
+export function ensembleHistoryURL(model){
+ if(!ownEnsembles.has(model))throw Error('Unknown statistical ensemble model');
+ return ownBase+model+'/history.json';
+}
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
 const intervalFields=new Set([...TYPE_KEYS,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
@@ -98,7 +102,8 @@ export async function loadSpatialModel(model,load){
  const warnings=[...(primary.selectionWarnings??[])];
  if(domain==='ecmwf_ifs025')warnings.push('IFS 0.25° gusts are unavailable from T+93 to T+144 h in the source feed; those gust steps are omitted. Other fields retain their full timelines.');
  if(results.some(result=>result.status==='rejected'&&result.reason?.status!==404))warnings.push('A live run check failed; using verified published data and retrying automatically.');
- const freshnessWarning=ownEnsembles.has(domain)?ensembleFreshnessWarning(primary,results[1]?.status==='fulfilled'?results[1].value:null):null;
+ const publicationStatus=ownEnsembles.has(domain)?ensemblePublicationStatus(primary,results[1]?.status==='fulfilled'?results[1].value:null):null;
+ const freshnessWarning=publicationStatus?.message??null;
  if(freshnessWarning)warnings.push(freshnessWarning);
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{
@@ -126,22 +131,23 @@ export async function loadSpatialModel(model,load){
    if(Date.now()-Date.parse(snow.reference_time)>8*3600000)warnings.push('MOGREPS snowfall publication is overdue; check the displayed initialization time.');
   }catch{warnings.push('Member snowfall probabilities are currently unavailable; precipitation probability remains available.');}
  }
- return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning};
+ return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning,publicationStatus};
 }
 
 // Deliberate historical selection never falls back to latest.json or a different
 // run family. Any GFS companion is looked up at this exact initialization.
 export async function loadSpatialRun(model,referenceTime,load){
  const domain=domains[model===UKV_NOWCAST?UKV:model];
- if(!domain||ownEnsembles.has(domain))throw Error('Archived runs are not supported for this model.');
+ if(!domain)throw Error('Archived runs are not supported for this model.');
  const reference=Date.parse(referenceTime);if(!Number.isFinite(reference))throw Error('Invalid archive run time.');
  const family=ukvRunFamily(model);
  if(family&&((new Date(reference).getUTCHours()%3===0?'main':'nowcast')!==family))throw Error('Archived UKV run is in a different run family.');
- const base=SPATIAL_BASE+domain+'/',data=await load(base+runPath(referenceTime)+'meta.json');
+ const baseURL=ownEnsembles.has(domain)?ownBase:SPATIAL_BASE;
+ const base=baseURL+domain+'/',data=await load(base+runPath(referenceTime)+'meta.json');
  if(model===UKV&&Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
- const primary={...data,domain,baseURL:SPATIAL_BASE,runFamily:family},warnings=[];
+ const primary={...data,domain,baseURL,runFamily:family},warnings=[];
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
   catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}

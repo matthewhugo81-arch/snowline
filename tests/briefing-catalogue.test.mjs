@@ -54,6 +54,6 @@ test('ensemble catalogue is exposed in sequence; absent archives are explained w
  const m=meta('snowline_ecmwf_ensemble',['temperature_850hPa_mean','temperature_850hPa_spread','pressure_msl_mean']),fields=catalogue([m]);
  assert.deepEqual(briefingPresets(m,fields).map(p=>p.key),availableFields(fields,[m]).map(f=>f.key));
  assert.ok(briefingPresets(m,fields).some(p=>p.key==='temperature_850hPa_spread'));
- const result=await discoverPreviousRuns({model:m.domain,latest:m,loadRun:()=>{throw Error('No archive scan expected');}});
- assert.deepEqual(result.runs,[m]);assert.match(result.notice,/only its current run/);
+ const result=await discoverPreviousRuns({model:m.domain,latest:m,load:async()=>({format_version:1,runs:[m.reference_time]}),loadRun:()=>{throw Error('No unlisted archive scan expected');}});
+ assert.deepEqual(result.runs,[m]);assert.match(result.notice,/Only 1 verified ensemble runs/);
 });

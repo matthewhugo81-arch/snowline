@@ -23,12 +23,19 @@ export function ensembleField(key){
 }
 
 // Publication health never changes the initialization time of actual pixels.
-export function ensembleFreshnessWarning(meta,health,now=Date.now()){
+export function ensemblePublicationStatus(meta,health,now=Date.now()){
  const checked=Date.parse(health?.checked_at),row=health?.models?.find(r=>r.model===meta?.domain);
- if(Number.isFinite(checked)&&now-checked>45*60000)return 'Ensemble publication check overdue';
- if(row?.status==='check-failed')return 'Official ensemble source check failed; showing verified data';
- if(row?.source_reference&&Date.parse(row.source_reference)>Date.parse(meta?.reference_time))return 'Newer official ensemble run awaits publication';
+ const status=(code,label,message)=>({code,label,message,checked_at:health?.checked_at??null});
+ if(row?.source_reference&&Date.parse(row.source_reference)>Date.parse(meta?.reference_time))return status('newer-run','new run pending','Newer official ensemble run awaits publication');
+ const published=new Set((meta?.valid_times??[]).map(Date.parse));
+ if(Date.parse(row?.source_reference)===Date.parse(meta?.reference_time)&&row?.source_hours?.some(h=>!published.has(Date.parse(meta.reference_time)+h*3600000)))return status('hours-pending','more hours pending','Additional official forecast hours await publication');
+ if(row?.status==='check-failed')return status('check-failed','source check failed','Official ensemble source check failed; showing verified data');
  const age=now-Date.parse(meta?.reference_time),limit=meta?.domain==='snowline_gefs_ensemble'?12:20;
- if(age>limit*3600000)return 'Ensemble initialization age exceeds the '+limit+' h review threshold';
+ if(age>limit*3600000)return status('run-age','older run','Ensemble initialization age exceeds the '+limit+' h review threshold');
+ if(!Number.isFinite(checked)||!row)return status('check-unavailable','check unavailable','Ensemble source check is unavailable; showing verified published data');
+ if(now-checked>45*60000)return status('check-overdue','check overdue','Ensemble source check is over 45 minutes old. Scheduled publication may be delayed; this does not by itself establish that a newer model run is available.');
  return null;
+}
+export function ensembleFreshnessWarning(meta,health,now=Date.now()){
+ return ensemblePublicationStatus(meta,health,now)?.message??null;
 }

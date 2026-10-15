@@ -18,12 +18,26 @@ is retained in geopotential metres. Grids are reordered to south-to-north and
 −180° to +180°, without regridding or temporal interpolation. OM precision is
 1 m for mean height, 0.1 for most other arrays and 0.01°C for temperature SD.
 
-The `Publish Snowline and ensemble maps` workflow runs on main pushes, hourly
-at minute 23, or manually. A new run is exposed only after all six arrays for
-every forecast time succeed. Any failure prevents the Pages deployment and
-leaves the existing site intact. Grids are cached between workflows; current
-and preceding prepared cycles are retained. The UI warns on runs over 36 hours
-old. GitHub scheduled workflow timing is best-effort.
+The `Publish Snowline and ensemble maps` workflow runs on main pushes, requests
+a scheduled run every five minutes, and supports manual runs. GitHub scheduled
+timing is best-effort and can leave gaps longer than the requested interval.
+A forecast hour is exposed only after all six arrays succeed. Missing hours
+are retried on the next build, while verified frames remain available.
+
+The publisher retains the latest run and two completed predecessors within
+48 hours, including their full available native horizons. Missing predecessors
+are backfilled from official exact-cycle GRIB products. Archive preparation
+cannot change `latest.json`; failed or incomplete predecessors never stand in
+for another initialization. `history.json` lists the retained verified cycles.
+Previous Run Analysis loads each cycle's own metadata and compares all six
+mean/spread fields at common valid times. Metadata discovery does not preload
+the entire archive. One incomplete backfill is also retained for retry.
+
+The menu distinguishes `new run pending`, `more hours pending`, `source check
+failed`, `older run`, and `check overdue`. The last means the published official
+source check is over 45 minutes old, not that a newer run is known to exist.
+Run-age review thresholds are 12 hours for GEFS and 20 hours for ECMWF. None of
+these statuses changes the initialization time attached to the actual grids.
 
 Pages must use **GitHub Actions** as its build source. The deployment artifact
 contains the site plus prepared data; forecast binaries are never committed to

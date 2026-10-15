@@ -121,5 +121,76 @@ class EnsembleDataTests(unittest.TestCase):
         self.assertEqual(b.MODELS['gefs']['hours'][-1],384)
         self.assertEqual(b.MODELS['ecmwf']['hours'][-1],360)
 
+    def test_history_backfills_three_cycles_without_rolling_back_latest(self):
+        for model in b.MODELS:
+            with self.subTest(model=model), tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                config={**b.MODELS[model], 'hours':[0,3]}
+                run=datetime(2026,10,15,tzinfo=timezone.utc)
+                downloaded=[]
+                def source(name, reference):
+                    return SimpleNamespace(run=reference,config=config,available_hours=lambda:[0,3])
+                def write(source,hour,path):
+                    downloaded.append((source.run,hour));path.write_bytes(b'verified');return 8
+                with patch.dict(b.MODELS,{model:config}), patch.object(b,'Source',side_effect=source), patch.object(b,'write_frame',side_effect=write):
+                    b.build_model(model,root,run,1)
+                    live_path=root/config['domain']/'latest.json'
+                    original=live_path.read_bytes()
+                    history=b.prepare_history(model,root,run,1)
+                    expected=[b.iso(run-b.timedelta(hours=config['cycle']*i)) for i in range(3)]
+                    self.assertEqual(history['runs'],expected)
+                    self.assertEqual(live_path.read_bytes(),original)
+                    self.assertEqual(len(downloaded),6)
+                    b.prepare_history(model,root,run,1)
+                    self.assertEqual(len(downloaded),6,'Complete archived cycles are reused')
+                    newer=run+b.timedelta(hours=config['cycle'])
+                    b.build_model(model,root,newer,1)
+                    rolled=b.prepare_history(model,root,newer,1)
+                    self.assertEqual(rolled['runs'],[b.iso(newer)]+expected[:2])
+                    self.assertEqual(json.loads(live_path.read_text())['reference_time'],b.iso(newer))
+                    self.assertEqual(len(list((root/config['domain']).glob('*/*/*/*Z'))),3)
+                    for reference in rolled['runs']:
+                        for hour in config['hours']:
+                            self.assertTrue(b.frame_path(root,config['domain'],datetime.fromisoformat(reference),hour).exists())
+
+    def test_history_skips_unpublished_cycles_without_substituting_their_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);run=datetime(2026,10,15,tzinfo=timezone.utc)
+            config={**b.MODELS['gefs'],'hours':[0,3]};missing=run-b.timedelta(hours=6)
+            requested=[]
+            def source(name,reference):
+                requested.append(reference)
+                return SimpleNamespace(run=reference,config=config,available_hours=lambda:[] if reference==missing else [0,3])
+            def write(source,hour,path):
+                path.write_bytes(b'verified');return 8
+            with patch.dict(b.MODELS,gefs=config),patch.object(b,'Source',side_effect=source),patch.object(b,'write_frame',side_effect=write):
+                b.build_model('gefs',root,run,1)
+                history=b.prepare_history('gefs',root,run,1)
+            self.assertEqual(history['runs'],[b.iso(run-b.timedelta(hours=h)) for h in [0,12,18]])
+            self.assertEqual(requested.count(missing),1)
+            self.assertFalse((b.frame_path(root,config['domain'],missing,0).parent/'meta.json').exists())
+            self.assertEqual(json.loads((root/config['domain']/'latest.json').read_text())['reference_time'],b.iso(run))
+
+    def test_incomplete_archived_frames_are_retained_for_retry_but_not_comparison(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);run=datetime(2026,10,15,tzinfo=timezone.utc)
+            config={**b.MODELS['gefs'],'hours':[0,3]};partial=run-b.timedelta(hours=6)
+            failed=True;downloaded=[]
+            def source(name,reference):
+                return SimpleNamespace(run=reference,config=config,available_hours=lambda:[0,3])
+            def write(source,hour,path):
+                downloaded.append((source.run,hour))
+                if failed and source.run==partial and hour==3:raise ValueError('temporary source failure')
+                path.write_bytes(b'verified');return 8
+            with patch.dict(b.MODELS,gefs=config),patch.object(b,'Source',side_effect=source),patch.object(b,'write_frame',side_effect=write):
+                b.build_model('gefs',root,run,1)
+                history=b.prepare_history('gefs',root,run,1)
+                self.assertNotIn(b.iso(partial),history['runs'])
+                self.assertTrue(b.frame_path(root,config['domain'],partial,0).exists())
+                failed=False
+                recovered=b.prepare_history('gefs',root,run,1)
+                self.assertEqual(recovered['runs'],[b.iso(run-b.timedelta(hours=h)) for h in [0,6,12]])
+                self.assertEqual(downloaded.count((partial,0)),1)
+
 
 if __name__ == '__main__': unittest.main()

@@ -1,7 +1,7 @@
-import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261014-interaction-audit';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261014-interaction-audit';
-import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261013-operational-feeds';
-import {fieldIntervalHours,loadSpatialRun} from './map-sources.js?v=20261014-interaction-audit';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261015-ensemble-history';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261015-ensemble-history';
+import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261015-ensemble-history';
+import {fieldIntervalHours,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261015-ensemble-history';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
@@ -15,7 +15,7 @@ export function runCandidates(model,reference,lookbackHours=48){
  return out;
 }
 export async function discoverPreviousRuns({model,latest,load,signal,lookbackHours=48,concurrency=3,loadRun=loadSpatialRun,retainedRuns=[]}){
- if(ENSEMBLE_DOMAINS.some(domain=>domain.value===model))return {runs:[latest],unavailable:[],errors:[],notice:'This ensemble feed retains only its current run. All available fields can be viewed in Forecast sequence; previous-run comparison needs three archived runs.'};
+ const ensemble=ENSEMBLE_DOMAINS.some(domain=>domain.value===model);
  if(model===UKV){
   const result=await previousCompletedUKV(latest,load,loadRun,latest.previousCompletedRun,{lookbackHours,signal});
   const runs=[latest,...(result.previous?[result.previous]:[])],warnings=[...result.warnings];
@@ -30,7 +30,19 @@ export async function discoverPreviousRuns({model,latest,load,signal,lookbackHou
   }
   return {runs,unavailable:[],errors:warnings.map(message=>({message}))};
  }
- const candidates=runCandidates(model,latest.reference_time,lookbackHours),runs=[latest],unavailable=[],errors=[];let index=0;
+ let candidates=runCandidates(model,latest.reference_time,lookbackHours);
+ const runs=[latest],unavailable=[],errors=[];let index=0;
+ if(ensemble){
+  try{
+   const archive=await load(ensembleHistoryURL(model));signal?.throwIfAborted();
+   if(archive?.format_version!==1||!Array.isArray(archive.runs)||archive.runs.some(t=>typeof t!=='string'||!Number.isFinite(Date.parse(t))))throw Error('Invalid ensemble archive index');
+   const reference=Date.parse(latest.reference_time),cadence=model==='snowline_ecmwf_ensemble'?12:6;
+   candidates=[...new Set(archive.runs.map(Date.parse))].filter(t=>t<reference&&reference-t<=lookbackHours*HOUR&&t%(cadence*HOUR)===0).sort((a,b)=>b-a).map(t=>new Date(t).toISOString());
+  }catch(error){
+   if(signal?.aborted)throw error;
+   return {runs,unavailable,errors:[{message:error.message}],notice:'Ensemble archive index could not be checked. Retry Load latest three runs; no substitute runs are used.'};
+  }
+ }
  async function worker(){
   while(index<candidates.length&&!signal?.aborted){
    const time=candidates[index++];
@@ -40,7 +52,7 @@ export async function discoverPreviousRuns({model,latest,load,signal,lookbackHou
  }
  await Promise.all(Array.from({length:Math.max(1,Math.min(3,concurrency))},worker));signal?.throwIfAborted();
  const unique=[...new Map(runs.map(meta=>[Date.parse(meta.reference_time),meta])).values()].sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time));
- return {runs:unique,unavailable,errors};
+ return {runs:unique,unavailable,errors,...(ensemble&&unique.length<3?{notice:'Only '+unique.length+' verified ensemble runs are published. Three distinct runs are needed for comparison; Forecast sequence remains available.'}:{})};
 }
 export function previousRunPresets(runs,count=3,fields){
  if(runs.length!==count||new Set(runs.map(meta=>Date.parse(meta.reference_time))).size!==count)return [];

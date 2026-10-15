@@ -237,19 +237,20 @@ def frame_path(root, domain, run, hour):
     return root / domain / run.strftime('%Y/%m/%d/%H00Z') / ((run + timedelta(hours=hour)).strftime('%Y-%m-%dT%H%M') + '.om')
 
 
-def build_model(model, root, now, workers, hours=None, max_new_frames=128):
+def build_model(model, root, now, workers, hours=None, max_new_frames=128, *, archive=False):
     config = MODELS[model]
-    latest_path = root / config['domain'] / 'latest.json'
-    previous = json.loads(latest_path.read_text()) if latest_path.exists() else None
     run = now.replace(hour=now.hour // config['cycle'] * config['cycle'], minute=0, second=0, microsecond=0)
+    latest_path = (frame_path(root, config['domain'], run, 0).parent / 'meta.json'
+                   if archive else root / config['domain'] / 'latest.json')
+    previous = json.loads(latest_path.read_text()) if latest_path.exists() else None
     source = None
-    for offset in range(8):
+    for offset in range(1 if archive else 8):
         candidate = run - timedelta(hours=offset * config['cycle'])
         if (previous and previous.get('format_version') == VERSION and iso(candidate) == previous['reference_time']
                 and previous.get('variables') == VARIABLES and len(previous.get('valid_times', [])) == len(config['hours'])
                 and all(frame_path(root, config['domain'], datetime.fromisoformat(previous['reference_time']), h).exists() for h in config['hours'])):
             print(f'{model}: latest run already prepared ({previous["reference_time"]})', flush=True)
-            return
+            return previous
         if previous and iso(candidate) < previous['reference_time']:
             break  # Never roll a published feed back to an older initialization.
         try:
@@ -264,7 +265,7 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=128):
     if source is None:
         if previous:
             print(f'::warning::{model}: live source unavailable; retaining {previous["reference_time"]}', flush=True)
-            return
+            return previous
         raise RuntimeError(f'{model}: no published forecast hours available')
     requested = config['hours'] if hours is None else hours
     paths = [(h, frame_path(root, config['domain'], source.run, h)) for h in requested if h in available]
@@ -294,7 +295,7 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=128):
     if not paths:
         if previous:
             print(f'::warning::{model}: keeping previous published run until a new frame is verified', flush=True)
-            return
+            return previous
         raise ValueError('No verified ensemble frames could be prepared')
     prepared = [h for h, _ in paths]
     preceding = (previous['reference_time'] if previous['reference_time'] != iso(source.run)
@@ -302,7 +303,7 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=128):
     meta = dict(format_version=VERSION, reference_time=iso(source.run), completed=prepared == config['hours'],
                 variables=VARIABLES, valid_times=[iso(source.run + timedelta(hours=h)) for h in prepared],
                 expected_forecast_hours=config['hours'][-1],
-                generated_at=iso(now), source='NOAA GEFS' if model == 'gefs' else 'ECMWF IFS ENS',
+                generated_at=iso(datetime.now(timezone.utc) if archive else now), source='NOAA GEFS' if model == 'gefs' else 'ECMWF IFS ENS',
                 grid_resolution=config['step'], statistic='Ensemble mean and standard deviation',
                 source_url='https://www.nco.ncep.noaa.gov/pmb/products/gens/' if model == 'gefs' else 'https://www.ecmwf.int/en/forecasts/datasets/open-data')
     if preceding:
@@ -313,17 +314,54 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=128):
     run_meta.with_suffix('.tmp').replace(run_meta)
     latest_path.with_suffix('.tmp').write_text(text)
     latest_path.with_suffix('.tmp').replace(latest_path)
-    # Retain the preceding prepared cycle so already-open pages can finish a loop.
-    keep = {paths[0][1].parent}
-    if preceding:
-        keep.add(root / config['domain'] / datetime.fromisoformat(preceding).strftime('%Y/%m/%d/%H00Z'))
-    for folder in (root / config['domain']).glob('*/*/*/*Z'):
-        if folder not in keep:
-            if not folder.resolve().is_relative_to((root / config['domain']).resolve()):
-                raise ValueError('Refusing to clean a directory outside generated model data')
-            shutil.rmtree(folder)
     total = sum(path.stat().st_size for _, path in paths)
     print(f'{model}: published {len(paths)} native global frames, {total/1024/1024:.1f} MiB, {iso(source.run)}', flush=True)
+    return meta
+
+
+def prepare_history(model, root, now, workers, max_new_frames=128):
+    """Retain latest plus two complete, exact-cycle forecasts within 48 hours.
+
+    Backfill from official GRIB products on the first publication after upgrade.
+    Archive writes never update latest.json or substitute another cycle. A failed
+    backfill leaves the verified live forecast usable and is retried next time.
+    """
+    config = MODELS[model]
+    domain_root = root / config['domain']
+    latest = json.loads((domain_root / 'latest.json').read_text())
+    reference = datetime.fromisoformat(latest['reference_time'])
+    retained = [latest]
+    pending = []
+    for offset in range(config['cycle'], 49, config['cycle']):
+        candidate = reference - timedelta(hours=offset)
+        try:
+            meta = build_model(model, root, candidate, workers,
+                               max_new_frames=max_new_frames, archive=True)
+            if meta and meta.get('completed') is True and meta['reference_time'] == iso(candidate):
+                retained.append(meta)
+            elif meta and meta['reference_time'] == iso(candidate):
+                pending.append(meta)
+        except (requests.RequestException, ValueError, RuntimeError) as error:
+            print(f'::warning::{model}: archive {iso(candidate)} unavailable: {error}', flush=True)
+        if len(retained) == 3:
+            break
+    index = dict(format_version=VERSION, generated_at=iso(now),
+                 runs=[meta['reference_time'] for meta in retained])
+    path = domain_root / 'history.json'
+    path.with_suffix('.tmp').write_text(json.dumps(index, indent=2) + '\n')
+    path.with_suffix('.tmp').replace(path)
+    # Clean only after all retained runs and their index have been verified.
+    keep = {frame_path(root, config['domain'], datetime.fromisoformat(meta['reference_time']), 0).parent
+            for meta in retained + pending[:1]}
+    for folder in domain_root.glob('*/*/*/*Z'):
+        if folder not in keep:
+            if not folder.resolve().is_relative_to(domain_root.resolve()):
+                raise ValueError('Refusing to clean a directory outside generated model data')
+            shutil.rmtree(folder)
+    if len(retained) < 3:
+        print(f'::warning::{model}: only {len(retained)} verified runs available for comparison', flush=True)
+    print(f'{model}: retained {len(retained)} exact-cycle forecasts for comparison', flush=True)
+    return index
 
 
 def main():
@@ -340,6 +378,8 @@ def main():
     for model in args.model or MODELS:
         try:
             build_model(model, args.output, now, args.workers, [int(h) for h in args.hours.split(',')] if args.hours else None, args.max_new_frames)
+            if args.hours is None:
+                prepare_history(model, args.output, now, args.workers, args.max_new_frames)
         except Exception as error:
             errors.append(f'{model}: {error}')
             print(f'::error::{model}: {error}', flush=True)
