@@ -36,6 +36,7 @@ MODELS = {
     'ecmwf': dict(domain='snowline_ecmwf_ensemble', step=.25, cycle=12,
                   hours=list(range(0, 145, 3)) + list(range(150, 361, 6))),
 }
+ECMWF_BASES = ('https://data.ecmwf.int/forecasts', 'https://storage.googleapis.com/ecmwf-open-data')
 _local = threading.local()
 _grib_lock = threading.Lock()
 
@@ -104,15 +105,24 @@ class Source:
         self.model, self.run = model, run
         self.config = MODELS[model]
         self.indexes = {}
+        self.ecmwf_bases = {}
         if model == 'ecmwf':
             for block in (240, 360):
-                url = self.url(block, 'mean')
-                try:
-                    self.indexes[block] = [json.loads(line) for line in fetch(url.replace('.grib2', '.index')).decode().splitlines()]
-                except requests.HTTPError as error:
-                    if error.response.status_code != 404:
-                        raise
-                    self.indexes[block] = []
+                for i, base in enumerate(ECMWF_BASES):
+                    # Keep each binary on the same mirror as its byte-offset index.
+                    self.ecmwf_bases[block] = base
+                    url = self.url(block, 'mean')
+                    try:
+                        self.indexes[block] = [json.loads(line) for line in fetch(url.replace('.grib2', '.index')).decode().splitlines()]
+                        break
+                    except requests.RequestException as error:
+                        status = getattr(error.response, 'status_code', None)
+                        if status == 404:
+                            self.indexes[block] = []
+                            break
+                        if i == len(ECMWF_BASES) - 1 or status is not None and status not in (429, 500, 502, 503, 504):
+                            raise
+                        print(f'ecmwf: source unavailable for {self.run.isoformat()} block {block}; trying official mirror')
 
     def url(self, hour, stat):
         date, cycle = self.run.strftime('%Y%m%d'), self.run.strftime('%H')
@@ -121,7 +131,8 @@ class Source:
             return f'https://noaa-gefs-pds.s3.amazonaws.com/gefs.{date}/{cycle}/atmos/pgrb2ap5/{product}.t{cycle}z.pgrb2a.0p50.f{hour:03d}'
         block = 240 if hour <= 240 else 360
         # ECMWF bundles em/es in the ep files, rather than separate em/es URLs.
-        return f'https://data.ecmwf.int/forecasts/{date}/{cycle}z/ifs/0p25/enfo/{date}{cycle}0000-{block}h-enfo-ep.grib2'
+        base = self.ecmwf_bases.get(block, ECMWF_BASES[0])
+        return f'{base}/{date}/{cycle}z/ifs/0p25/enfo/{date}{cycle}0000-{block}h-enfo-ep.grib2'
 
     def records(self, hour, stat):
         if self.model == 'gefs':

@@ -9,12 +9,13 @@ import json,os
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request,urlopen
 from urllib.parse import urlencode
 SITE='https://matthewhugo81-arch.github.io/snowline/'
 MODELS={'gefs':('snowline_gefs_ensemble',6),'ecmwf':('snowline_ecmwf_ensemble',12)}
 REQUIRED={('gh','pl','500'),('t','pl','850'),('msl','sfc',None)}
+ECMWF_BASES=('https://data.ecmwf.int/forecasts','https://storage.googleapis.com/ecmwf-open-data')
 def iso(t):return t.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 def get(url):
  with urlopen(Request(url,headers={'User-Agent':'Snowline-ensemble-health/1.0','Cache-Control':'no-cache'}),timeout=20) as r:return r.read()
@@ -32,10 +33,14 @@ def probe(model,run):
   return gefs_hours(date,cycle)
  hours=[]
  for block in (240,360):
-  url=f'https://data.ecmwf.int/forecasts/{date}/{cycle}z/ifs/0p25/enfo/{date}{cycle}0000-{block}h-enfo-ep.index'
-  try:hours.extend(ecmwf_hours(get(url).decode()))
-  except HTTPError as e:
-   if e.code!=404:raise
+  for i,base in enumerate(ECMWF_BASES):
+   url=f'{base}/{date}/{cycle}z/ifs/0p25/enfo/{date}{cycle}0000-{block}h-enfo-ep.index'
+   try:
+    hours.extend(ecmwf_hours(get(url).decode()));break
+   except (URLError,TimeoutError) as e:
+    code=getattr(e,'code',None)
+    if code==404:break
+    if i==len(ECMWF_BASES)-1 or code is not None and code not in (429,500,502,503,504):raise
  return sorted(set(hours))
 
 def gefs_hours(date,cycle):

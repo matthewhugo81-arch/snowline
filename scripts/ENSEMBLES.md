@@ -10,6 +10,10 @@ deviation. GEFS products currently contain 30 perturbed members; ECMWF contains
 GEFS: 0–240 h every 3 h, then every 6 h to 384 h, four cycles/day.
 ECMWF: 0–144 h every 3 h, then every 6 h to 360 h, 00/12 UTC cycles.
 The published run's actual metadata drives the browser timeline.
+If ECMWF's primary server is rate-limited or temporarily unavailable, both the
+publisher and source check use ECMWF's official Google Cloud replica. Each
+binary uses the same mirror as its index so byte offsets cannot cross sources.
+Missing products remain missing; failed mirrors remain visible as check errors.
 
 All GRIB identities, units, statistic codes, grid shape, scan directions, cycle
 and lead times are validated before publishing. Mean temperature is K−273.15;

@@ -106,6 +106,32 @@ class EnsembleDataTests(unittest.TestCase):
             source=b.Source('ecmwf',datetime(2026,10,11,12,tzinfo=timezone.utc))
             self.assertEqual(source.available_hours(),[0])
 
+    def test_ecmwf_rate_limit_uses_official_mirror_for_index_and_binary(self):
+        rows=[dict(type=stat,step='0',param=v[2],levtype=v[3],levelist=v[4],_offset=i*100,_length=100)
+              for stat in ('em','es') for i,v in enumerate(b.FIELDS.values())]
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            response=b.requests.Response()
+            response.status_code=429 if url.startswith(b.ECMWF_BASES[0]) else 404
+            if url.startswith(b.ECMWF_BASES[0]) or '360h' in url:
+                raise b.requests.HTTPError(response=response)
+            return '\n'.join(json.dumps(row) for row in rows).encode()
+        with patch.object(b,'fetch',side_effect=fetch):
+            source=b.Source('ecmwf',datetime(2026,10,11,12,tzinfo=timezone.utc))
+            self.assertEqual(source.available_hours(),[0])
+            self.assertTrue(source.url(0,'mean').startswith(b.ECMWF_BASES[1]))
+            self.assertEqual(source.url(0,'mean'),source.url(0,'spread'))
+            self.assertIn('20261011/12z/',source.url(0,'mean'))
+            self.assertEqual(len(calls),4)
+
+    def test_ecmwf_mirror_failure_is_not_missing_product(self):
+        response=b.requests.Response();response.status_code=503
+        with patch.object(b,'fetch',side_effect=b.requests.HTTPError(response=response)) as fetch:
+            with self.assertRaises(b.requests.HTTPError):
+                b.Source('ecmwf',datetime(2026,10,11,12,tzinfo=timezone.utc))
+            self.assertEqual(fetch.call_count,2)
+
     def test_gefs_availability_requires_mean_and_spread_but_not_full_run(self):
         source=b.Source('gefs',datetime(2026,10,11,12,tzinfo=timezone.utc))
         def fetch(url):

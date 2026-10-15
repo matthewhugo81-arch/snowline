@@ -3,9 +3,28 @@ from pathlib import Path
 from datetime import datetime,timezone,timedelta
 from unittest.mock import patch
 from urllib.parse import parse_qs,urlparse
+from urllib.error import HTTPError
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 import check_ensemble_freshness as f
 class FreshnessTests(unittest.TestCase):
+ def test_ecmwf_rate_limit_checks_same_cycle_on_official_mirror(self):
+  run=datetime(2026,10,15,tzinfo=timezone.utc)
+  rows=[dict(type=s,step='3',param=p,levtype=l,levelist=k) for s in ['em','es'] for p,l,k in f.REQUIRED]
+  calls=[]
+  def fake_get(url):
+   calls.append(url)
+   if url.startswith(f.ECMWF_BASES[0]):raise HTTPError(url,429,'rate limited',{},None)
+   if '20261015/00z/' in url or '360h' in url:raise HTTPError(url,404,'not published',{},None)
+   return '\n'.join(map(json.dumps,rows)).encode()
+  with patch.object(f,'get',side_effect=fake_get):
+   reference,hours=f.newest_source('ecmwf',run)
+   self.assertEqual(reference,run-timedelta(hours=12))
+   self.assertEqual(hours,[3])
+   self.assertEqual(len(calls),8)
+ def test_ecmwf_mirror_failure_remains_failed_check(self):
+  with patch.object(f,'get',side_effect=HTTPError('',503,'unavailable',{},None)) as get:
+   with self.assertRaises(HTTPError):f.probe('ecmwf',datetime(2026,10,15,tzinfo=timezone.utc))
+   self.assertEqual(get.call_count,2)
  def test_gefs_checks_later_hours_and_all_six_fields(self):
   def fake_get(url):
    if '?' in url:
