@@ -81,11 +81,11 @@ Altitude is reused from the forecast response or geocoding result. The separate 
 
 Validation: `node --test tests/*.test.mjs` includes transport, cooldown, cache expiry, partial failure, coordinate isolation and publisher tests. `python tests/chart-zoom-browser.py` checks all charts, exports, synchronized right-drag, panel state, mobile layouts, and an actual simulated HTTP 429 through the browser fetch/cache path. No chart geometry, zoom implementation, CSS, map rendering or map data sources were changed by this fix.
 
-## Shared cache for searched locations (prepared, not activated)
+## Shared cache for searched locations (activated 15 October 2026)
 
-An optional Cloudflare Worker extends forecast sharing to searched coordinates,
+The configured Cloudflare Worker extends forecast sharing to searched coordinates,
 with one-hour reuse, globally coordinated simultaneous requests, persistent
 provider cooldowns, a daily HTTP safety budget, dated stale fallback and protected
-usage counters. The existing six town snapshots remain first choice. The Worker
-must be deployed and verified before setting `FORECAST_SERVICE_URL`; the empty
-setting preserves current operation. See [setup, validation and rollback](docs/shared-forecast-cache.md).
+usage counters. The existing six town snapshots remain first choice. The live service is
+`https://snowline-forecast-cache.matthewhugo81.workers.dev`. Clearing
+`FORECAST_SERVICE_URL` restores the direct forecast path. See [setup, validation and rollback](docs/shared-forecast-cache.md).

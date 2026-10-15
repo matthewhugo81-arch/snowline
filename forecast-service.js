@@ -1,5 +1,5 @@
-// Set only after deploying and verifying worker/wrangler.toml; empty preserves the current site.
-export const FORECAST_SERVICE_URL='';
+// Verified shared service; clear the URL to restore the direct forecast path.
+export const FORECAST_SERVICE_URL='https://snowline-forecast-cache.matthewhugo81.workers.dev';
 export function pointForecastURL(location,model,service=FORECAST_SERVICE_URL){
  if(!service)return null;
  const url=new URL(service);

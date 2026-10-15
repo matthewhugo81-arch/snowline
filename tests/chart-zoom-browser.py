@@ -36,15 +36,15 @@ def run():
           window.__forecastRequests=[];
           window.fetch=async url=>{
             if(url.includes('/v1/elevation?')) return new Response(JSON.stringify({elevation:[200]}));
-            if(!url.includes('/v1/forecast?')) throw Error('Unexpected external request: '+url);
+            if(!url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?')) throw Error('Unexpected external request: '+url);
             window.__forecastRequests.push(url);
             const start=Math.floor(Date.now()/3600000)*3600000;
             const time=Array.from({length:192},(_,i)=>new Date(start+i*3600000).toISOString());
             const keys=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m'];
             const hourly={time},hourly_units={};
             for(const key of keys){hourly[key]=time.map((_,i)=>key==='snowfall'?i/100:key==='snow_depth'?0:key==='cloud_cover'||key==='relative_humidity_2m'?50:key==='precipitation'?i/10:i/10-4);hourly_units[key]=key.includes('wind_')?'mph':key==='snow_depth'?'cm':'°C';}
-            if(new URL(url).searchParams.get('models')==='gfs_global')hourly.temperature_2m[80]=null;
-            return new Response(JSON.stringify({hourly,hourly_units,latitude:54,longitude:-2,elevation:200}));
+            if(new URL(url).searchParams.get('model')==='gfs_global')hourly.temperature_2m[80]=null;
+            return new Response(JSON.stringify({hourly,hourly_units,latitude:54,longitude:-2,elevation:200,_retrievedAt:Date.now(),_source:'shared cache'}));
           };
           const urls=new Map();
           function moduleURL(spec){
@@ -60,6 +60,7 @@ def run():
         page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 12")
         check('All eleven variable charts and agreement chart load', page.locator('.plot svg').count()==12)
         initial_requests=page.evaluate('window.__forecastRequests.length')
+        check('All fifteen forecasts use the shared service',initial_requests==15 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
         expected_order=['snowfall','snow_depth','temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','relative_humidity_2m','soil_temperature_0cm','temperature_850hPa']
         check('Panels follow the requested reading order',page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         def paired_layout():
@@ -204,20 +205,20 @@ def run():
         page.locator('#charts').screenshot(path=str(ROOT.parent/'panels-desktop.png'))
         # The same UI must retain usable data when a forced refresh encounters a
         # real 429 response. Advance beyond the fresh-cache window, not its horizon.
-        page.evaluate('''()=>{Date.now=()=>Date.UTC(2026,9,12,21);window.__quotaCalls=0;window.fetch=async()=>{window.__quotaCalls++;return new Response(JSON.stringify({error:true,reason:'Daily API request limit exceeded. Please try again tomorrow.'}),{status:429});};}''')
+        page.evaluate('''()=>{Date.now=()=>Date.UTC(2026,9,12,21);window.__quotaCalls=0;window.__quotaForecastCalls=0;window.fetch=async url=>{window.__quotaCalls++;if(url.includes('/forecast?'))window.__quotaForecastCalls++;return new Response(JSON.stringify({error:true,reason:'Daily API request limit exceeded. Please try again tomorrow.'}),{status:429});};}''')
         page.locator('#refresh').click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
         check('Quota failure retains all twelve charts and altitude',page.locator('.plot svg').count()==12 and 'approximately 200' in page.locator('#altitude').inner_text())
         check('Fallback is explicitly dated and labelled as cached', 'Cached forecasts' in page.locator('#status').inner_text() and '19:00' in page.locator('#status').inner_text() and 'request limit' in page.locator('#status').inner_text())
-        quota_calls=page.evaluate('window.__quotaCalls')
+        quota_calls=page.evaluate('window.__quotaForecastCalls')
         check('Quota response stops the remaining model queue',0 < quota_calls <= 3)
         page.locator('#refresh').click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
-        check('Repeated Refresh honours quota cooldown without more requests',page.evaluate('window.__quotaCalls')==quota_calls)
+        check('Repeated Refresh honours quota cooldown without more requests',page.evaluate('window.__quotaForecastCalls')==quota_calls)
         drag(selector,10,30)
         check('Synchronized right-drag remains usable on fallback forecasts',bounds()[:2]==[10,30])
         page.locator('#location-search').fill('55, -4');page.locator('#search-form button[type="submit"]').click()
         page.locator('#search-results button').first.click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
         check('Uncached locations show the provider limit, never another location forecast','No usable cached forecast exists for this location' in page.locator('#status').inner_text() and page.locator('.plot svg').count()==0)
-        check('New-location and elevation requests also respect the cooldown',page.evaluate('window.__quotaCalls')==quota_calls)
+        check('New-location forecasts respect backend cooldown; separate elevation stays independent',page.evaluate('window.__quotaForecastCalls')==quota_calls and page.evaluate('window.__quotaCalls')<=quota_calls+1)
         check('No JavaScript errors during interaction tests',not errors)
         timings=page.evaluate('window.__inspectionMilliseconds.slice().sort((a,b)=>a-b)')
         print(json.dumps({'passed':len(RESULTS),'checks':RESULTS,'errors':errors,'inspection_ms':{'samples':len(timings),'median':round(timings[len(timings)//2],2),'p95':round(timings[int(len(timings)*.95)],2)}},indent=2))

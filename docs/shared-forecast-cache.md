@@ -1,9 +1,14 @@
 # Shared location forecast service
 
-Prepared for Snowline on 15 October 2026. This is a separate Cloudflare Worker;
-GitHub Pages continues to serve the existing website. **It is not active until the
-Worker is deployed and `FORECAST_SERVICE_URL` is configured.** No Cloudflare
-account, paid plan or subscription is created by this change.
+Activated for Snowline on 15 October 2026 after owner deployment and public
+forecast verification. The service is
+`https://snowline-forecast-cache.matthewhugo81.workers.dev`.
+GitHub Pages continues to serve the website. Two live same-point IFS requests
+returned 192 hours with identical `_retrievedAt` values and `shared cache` source;
+CORS allowed the GitHub Pages origin. No paid API subscription was configured.
+Private `/stats` access requires the owner to set `STATS_TOKEN`; it remains
+inaccessible without that secret. The deployment instructions below also cover
+recreating the service and rollback.
 
 ## Behaviour
 
