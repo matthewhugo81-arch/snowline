@@ -4,21 +4,21 @@ import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {ForecastFrames} from './map-frames.js?v=20261015-loading-performance';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performance';
-import {overlayGroups} from './map-overlay-specs.js?v=20261015-vertical-motion';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261015-vertical-motion';
+import {overlayGroups} from './map-overlay-specs.js?v=20261015-direct-vertical';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261015-direct-vertical';
 import {installDewPoint} from './map-dew-point.js';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261015-vertical-motion';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261015-direct-vertical';
 
 import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
-import {fieldSource} from './map-sources.js?v=20261015-vertical-motion';
-import {sourceVariable} from './map-catalogue.js?v=20261015-vertical-motion';
+import {fieldSource} from './map-sources.js?v=20261015-direct-vertical';
+import {sourceVariable} from './map-catalogue.js?v=20261015-direct-vertical';
 import {forecastInputWork} from './map-work-queue.js';
-import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-vertical-motion';
+import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-direct-vertical';
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
@@ -100,14 +100,14 @@ export class BriefingRenderer{
   if(nextFrame)void this.prepareInputs({meta,preset,clip,signal,...nextFrame}).catch(()=>{});
   // Worker requests are shared across both views. Distinguish the composite's
   // colours even if an interactive tile is still finishing cancellation.
-  const url=key=>this.createURL(model,meta,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=20261013-catalogue-'+(weather?'white90':'field');
+  const url=(key,source=meta)=>this.createURL(model,source,time,key).replace(/^om:\/\//,'briefing://')+'&briefing_style=20261013-catalogue-'+(weather?'white90':'field');
   const field=this.fields.find(field=>field.key===preset.field);
   if(!field||!preset.required.every(key=>hasFieldTime(meta,key,time)))throw Error('This chart is unavailable for the selected time.');
   const main=url(preset.field),pressureURL=hasFieldTime(meta,'pressure_msl',time)?url('pressure_msl'):null;
   const decorate=()=>[
    ...(preset.field===THETA_SYMBOLS?[symbolOverlay(symbolURL(url('precipitation'),fieldSource(meta,'precipitation',time)))]:[]),
    ...(weather?[compositeUnderlay(url('cloud_cover'))]:[]),
-   ...overlayGroups({field,url:main,pressureURL,...verticalMotionOverlayURLs(preset.field,url),contours:!!overlays.contours,isobars:true})
+   ...overlayGroups({field,url:main,pressureURL,...verticalMotionOverlayURLs(preset.field,key=>url(key,fieldSource(meta,preset.field,time))),contours:!!overlays.contours,isobars:true})
   ];
   const frames=this.frames=new ForecastFrames(this.map,'briefing-frame',{timeout:accumulationHours(preset.field)?120000:25000,decorate,rasterBefore:this.rasterBefore,overlayBefore:this.overlayBefore,isActive:()=>!signal.aborted});
   const cancel=()=>frames.clear();signal.addEventListener('abort',cancel,{once:true});

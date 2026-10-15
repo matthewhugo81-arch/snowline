@@ -2,13 +2,14 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261015-vertical-motion';
+import {sourceVariable} from './map-catalogue.js?v=20261015-direct-vertical';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261015-ensemble-history';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
 
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
 import {precipitationStepHours,precipitationExistsAt} from './map-accumulation.js?v=20261014-interaction-audit';
+import {DIRECT_VERTICAL_MODELS,verifiedDirectVertical} from './map-direct-vertical.js?v=20261015-direct-vertical';
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
 // Open-Meteo splits GFS surface and pressure/upper-air fields into two grids.
@@ -80,6 +81,12 @@ export function fieldDataURL(meta,key,time){
  if(!source)return null;
  return (source.baseURL??SPATIAL_BASE)+source.domain+'/'+runPath(source.reference_time)+time.slice(0,16).replace(':','')+'.om';
 }
+async function directVertical(model,reference,load){
+ const domain=DIRECT_VERTICAL_MODELS[model];
+ const meta=await load(ownBase+domain+'/'+runPath(reference)+'meta.json');
+ if(!verifiedDirectVertical(meta,domain)||Date.parse(meta.reference_time)!==Date.parse(reference))throw Error('Unverified direct 700 hPa run');
+ return {...meta,domain,baseURL:ownBase};
+}
 async function mogrepsSnow(model,load,reference){
  const base=ownBase+model.snowDomain+'/';
  const meta=await load(base+(reference?runPath(reference)+'meta.json':'latest.json'));
@@ -115,6 +122,10 @@ export async function loadSpatialModel(model,load){
    return null;
   }
  }));
+ if(DIRECT_VERTICAL_MODELS[model]){
+  try{other.push(await directVertical(model,primary.reference_time,load));}
+  catch{warnings.push('Direct 700 hPa charts are not yet available for this run; other fields remain available. Check latest runs to retry.');}
+ }
  const mogreps=MOGREPS_MODELS.find(item=>item.id===model);
  if(mogreps){
   try{
@@ -152,6 +163,10 @@ export async function loadSpatialRun(model,referenceTime,load){
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
   catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}
  }));
+ if(DIRECT_VERTICAL_MODELS[model]){
+  try{other.push(await directVertical(model,primary.reference_time,load));}
+  catch{warnings.push('Direct 700 hPa charts are not yet available for this run; other fields remain available. Check latest runs to retry.');}
+ }
  const mogreps=MOGREPS_MODELS.find(item=>item.id===model);
  if(mogreps){try{other.push(await mogrepsSnow(mogreps,load,referenceTime));}catch{warnings.push('Member snowfall probabilities are unavailable for this archived run.');}}
  return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings};
