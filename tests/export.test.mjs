@@ -154,7 +154,7 @@ test('forecasts request both wind variables in mph with a distinct cache URL',()
   const keys = url.searchParams.get('hourly').split(',');
   assert.ok(keys.includes('wind_speed_10m'));
   assert.ok(keys.includes('wind_gusts_10m'));
-  assert.ok(VARIABLES.filter(v => v.key.startsWith('wind_')).every(v => v.unit === 'mph'));
+  assert.ok(VARIABLES.filter(v => ['wind_speed_10m','wind_gusts_10m'].includes(v.key)).every(v => v.unit === 'mph'));
 });
 
 test('wind units are converted once, preserving calm and missing values',() => {
@@ -186,4 +186,21 @@ test('gust datasets, averages and downloads use mph and omit unavailable models'
   const converted = normalise({hourly:{time:[times[0]],wind_speed_10m:[16.09344],wind_gusts_10m:[32.18688]},hourly_units:{wind_speed_10m:'km/h',wind_gusts_10m:'km/h'}},defs[0]);
   assert.deepEqual(converted.values.wind_speed_10m,[10]);
   assert.deepEqual(converted.values.wind_gusts_10m,[20]);
+});
+
+
+test('wind direction uses circular averages and compass readouts, retaining missing data',async()=>{
+ const {directionMean}=await import('../average.js');
+ assert.ok(Math.min(directionMean([350,10]),360-directionMean([350,10]))<1e-8);
+ assert.equal(directionMean([90,270]),null);
+ const v=VARIABLES.find(v=>v.direction);
+ assert.equal(formatValue(225,v),'SW 225°');
+ const a=normalise({hourly:{time:times,wind_direction_10m:[350,360,null]}},defs[0]);
+ const b=normalise({hourly:{time:times,wind_direction_10m:[10,180,400]}},defs[1]);
+ const dataset=buildDataset({...options,variable:v,models:new Map([['one',a],['two',b]])});
+ assert.ok(Math.min(dataset.rows[0].average,360-dataset.rows[0].average)<1e-8);
+ assert.equal(dataset.rows[1].average,null);
+ assert.deepEqual(a.values.wind_direction_10m,[350,0,null]);
+ assert.deepEqual(b.values.wind_direction_10m,[10,180,null]);
+ assert.ok(new URL(forecastURL({latitude:54,longitude:-2},defs[0])).searchParams.get('hourly').includes(v.key));
 });
