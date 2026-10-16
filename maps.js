@@ -28,7 +28,7 @@ import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-unit
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261015-direct-vertical';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261015-direct-vertical';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261016-temperature500';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261014-interaction-audit';
 import {finite} from './data.js?v=20261010-ukv';
