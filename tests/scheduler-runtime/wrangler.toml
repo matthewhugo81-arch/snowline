@@ -1,0 +1,9 @@
+name = "snowline-scheduler-runtime-test"
+main = "index.mjs"
+compatibility_date = "2026-10-01"
+[[durable_objects.bindings]]
+name = "MODEL_SCHEDULER"
+class_name = "TestScheduler"
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TestScheduler"]

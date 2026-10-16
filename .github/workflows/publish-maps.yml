@@ -34,6 +34,7 @@ jobs:
         run: |
           node --test tests/*.test.mjs
           python -m unittest discover -s tests -p 'test_ensemble*.py'
+          python -m unittest discover -s tests -p 'test_generated*.py'
           python -m unittest discover -s tests -p 'test_mogreps*.py'
           python -m unittest discover -s tests -p 'test_vertical*.py'
       - uses: actions/cache@v4
@@ -70,7 +71,7 @@ jobs:
           exit "$failed"
       - name: Record source-to-publication health without changing model timestamps
         continue-on-error: true
-        run: python scripts/check_ensemble_freshness.py --local-root ensemble-data --output ensemble-data/health.json
+        run: python scripts/check_generated_freshness.py --local-root ensemble-data --output ensemble-data/health.json
       - name: Assemble site without source-control or test files
         run: |
           mkdir _site

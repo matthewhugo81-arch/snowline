@@ -18,3 +18,9 @@ jobs:
         run: node --test tests/*.test.mjs
       - name: Check native Cloudflare forecast transport and cache reuse
         run: python tests/worker-runtime/check.py
+      - name: Verify all generated model availability checks
+        run: python -m unittest discover -s tests -p 'test_generated*.py'
+      - name: Check scheduler Durable Object RPC and persistent dispatch lease
+        run: python tests/worker-runtime/check.py tests/scheduler-runtime/wrangler.toml
+      - name: Validate external scheduler packaging
+        run: npx --yes wrangler@4.151.0 deploy --dry-run --config scheduler/wrangler.toml
