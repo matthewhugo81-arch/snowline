@@ -40,9 +40,9 @@ def run():
             window.__forecastRequests.push(url);
             const start=Math.floor(Date.now()/3600000)*3600000;
             const time=Array.from({length:192},(_,i)=>new Date(start+i*3600000).toISOString());
-            const keys=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m'];
+            const keys=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m'];
             const hourly={time},hourly_units={};
-            for(const key of keys){hourly[key]=time.map((_,i)=>key==='snowfall'?i/100:key==='snow_depth'?0:key==='cloud_cover'||key==='relative_humidity_2m'?50:key==='precipitation'?i/10:i/10-4);hourly_units[key]=key.includes('wind_')?'mph':key==='snow_depth'?'cm':'°C';}
+            for(const key of keys){hourly[key]=time.map((_,i)=>key==='wind_direction_10m'?(350+i*5)%360:key==='snowfall'?i/100:key==='snow_depth'?0:key==='cloud_cover'||key==='relative_humidity_2m'?50:key==='precipitation'?i/10:i/10-4);hourly_units[key]=key.includes('wind_')?'mph':key==='snow_depth'?'cm':'°C';}
             if(new URL(url).searchParams.get('model')==='gfs_global')hourly.temperature_2m[80]=null;
             return new Response(JSON.stringify({hourly,hourly_units,latitude:54,longitude:-2,elevation:200,_retrievedAt:Date.now(),_source:'shared cache'}));
           };
@@ -57,17 +57,20 @@ def run():
           }
           await import(moduleURL('app.js'));
         }''',sources)
-        page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 12")
-        check('All eleven variable charts and agreement chart load', page.locator('.plot svg').count()==12)
+        page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 13")
+        check('All twelve variable charts and agreement chart load', page.locator('.plot svg').count()==13)
+        check('Direction plots hourly dots without connecting paths',page.locator('#plot-wind_direction_10m .direction-dot').count()>100 and page.locator('#plot-wind_direction_10m path').count()==0)
+        check('Direction compass runs north clockwise to north',page.locator('#plot-wind_direction_10m text').all_text_contents()[:9]==['N','NE','E','SE','S','SW','W','NW','N'])
         initial_requests=page.evaluate('window.__forecastRequests.length')
         check('All fifteen forecasts use the shared service',initial_requests==15 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
-        expected_order=['snowfall','snow_depth','temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','relative_humidity_2m','soil_temperature_0cm','temperature_850hPa']
+        expected_order=['snowfall','snow_depth','temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','relative_humidity_2m','soil_temperature_0cm','temperature_850hPa']
         check('Panels follow the requested reading order',page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         def paired_layout():
             boxes=page.locator('#charts .chart-card').evaluate_all('els=>els.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}})')
-            return all(boxes[i]['y']==boxes[i+1]['y'] and boxes[i]['x']<boxes[i+1]['x'] for i in range(0,10,2)) and boxes[10]['y']>boxes[9]['y']
+            pairs=[(0,1),(2,3),(4,5),(6,7),(9,10)]
+            return all(boxes[a]['y']==boxes[b]['y'] and boxes[a]['x']<boxes[b]['x'] for a,b in pairs) and boxes[8]['y']>boxes[7]['y'] and boxes[9]['y']>boxes[8]['y'] and boxes[11]['y']>boxes[10]['y']
         check('Desktop has five ordered pairs and a single final panel',paired_layout())
-        check('Every chart including agreement has an accessible collapse control',page.locator('.chart-toggle[aria-expanded="true"][aria-controls]').count()==12)
+        check('Every chart including agreement has an accessible collapse control',page.locator('.chart-toggle[aria-expanded="true"][aria-controls]').count()==13)
         for toggle in page.locator('.chart-toggle').all():
             content=page.locator('#'+toggle.get_attribute('aria-controls'))
             toggle.click();page.wait_for_timeout(30)
@@ -210,7 +213,7 @@ def run():
         check('Finger release preserves zoom without inspecting or resetting',bounds()==[42,126,42] and page.locator('.zoom-pinching').count()==0)
         check('Pinch updates overview statistics and all inspected times',page.locator('#snow-max').inner_text()=='1.26 cm' and page.locator('#temp-min').inner_text()=='0.2°C' and page.locator('.chart-time time').evaluate_all('(els)=>new Set(els.map(e=>e.dateTime)).size')==1)
         check('Time labels remain separated at intermediate pinch ranges',page.locator(selector+' .time-tick').evaluate_all('els=>els.every((el,i)=>!i||els[i-1].getBoundingClientRect().right+2<=el.getBoundingClientRect().left)'))
-        check('Reset returns to the original compact size in each chart heading',page.locator('.chart-heading [data-reset-zoom]').count()==12 and card.locator('[data-reset-zoom]').evaluate('el=>{const s=getComputedStyle(el);return s.fontSize==="11px"&&s.padding==="5px 8px"&&el.getBoundingClientRect().height===30}'))
+        check('Reset returns to the original compact size in each chart heading',page.locator('.chart-heading [data-reset-zoom]').count()==13 and card.locator('[data-reset-zoom]').evaluate('el=>{const s=getComputedStyle(el);return s.fontSize==="11px"&&s.padding==="5px 8px"&&el.getBoundingClientRect().height===30}'))
         card.screenshot(path=str(ROOT.parent/'zoom-mobile-pinch.png'))
         page.locator('[data-variable="temperature_2m"]').click()
         check('Pinch updates the exported chart window',page.locator('#dataset-table tbody tr').count()==85 and page.locator('#dataset-table tbody time').first.get_attribute('datetime')==times[42])
@@ -265,7 +268,7 @@ def run():
         check('Pinch never magnifies the page or fetches more forecasts',page.evaluate('visualViewport.scale')==1 and page.evaluate('window.__forecastRequests.length')==initial_requests)
         card.locator('.chart-toggle').click();page.wait_for_timeout(70)
         page.locator('#focus').select_option('wind');page.wait_for_timeout(70)
-        check('Focus filters retain the paired wind charts',page.locator('#charts .chart-card:visible h2').all_text_contents()==['10 m wind speed','10 m wind gusts'])
+        check('Focus filters retain the paired wind charts',page.locator('#charts .chart-card:visible h2').all_text_contents()==['10 m wind speed','10 m wind gusts','10 m wind direction'])
         page.locator('#focus').select_option('all');page.wait_for_timeout(70)
         check('Returning from a focus filter preserves collapse state and order',card.locator('.chart-content').is_hidden() and page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         page.locator('#refresh').click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
@@ -290,7 +293,7 @@ def run():
         # real 429 response. Advance beyond the fresh-cache window, not its horizon.
         page.evaluate('''()=>{Date.now=()=>Date.UTC(2026,9,12,21);window.__quotaCalls=0;window.__quotaForecastCalls=0;window.fetch=async url=>{window.__quotaCalls++;if(url.includes('/forecast?'))window.__quotaForecastCalls++;return new Response(JSON.stringify({error:true,reason:'Daily API request limit exceeded. Please try again tomorrow.'}),{status:429});};}''')
         page.locator('#refresh').click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
-        check('Quota failure retains all twelve charts and altitude',page.locator('.plot svg').count()==12 and 'approximately 200' in page.locator('#altitude').inner_text())
+        check('Quota failure retains all thirteen charts and altitude',page.locator('.plot svg').count()==13 and 'approximately 200' in page.locator('#altitude').inner_text())
         check('Fallback is explicitly dated and labelled as cached', 'Cached forecasts' in page.locator('#status').inner_text() and '19:00' in page.locator('#status').inner_text() and 'request limit' in page.locator('#status').inner_text())
         quota_calls=page.evaluate('window.__quotaForecastCalls')
         check('Quota response stops the remaining model queue',0 < quota_calls <= 3)
