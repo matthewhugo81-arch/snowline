@@ -11,6 +11,7 @@ export const VARIABLES = [
  {key:'cloud_cover',title:'Total cloud cover',unit:'%',note:'Watch for clearing after rain and overnight cooling',floor:0,ceiling:100,minRange:20},
  {key:'wind_speed_10m',title:'10 m wind speed',unit:'mph',note:'Wind speed at 10 m above ground',floor:0,minRange:5},
  {key:'wind_gusts_10m',title:'10 m wind gusts',unit:'mph',note:'Maximum gust in the preceding hour; availability varies by model',floor:0,minRange:5},
+ {key:'wind_direction_10m',title:'10 m wind direction',unit:'°',note:'Dots show each model; direction the wind comes from (N = 0° / 360°)',floor:0,ceiling:360,minRange:360,direction:true},
  {key:'relative_humidity_2m',title:'2 m relative humidity',unit:'%',note:'Moisture context alongside the minimum temperature',floor:0,ceiling:100,minRange:20},
  {key:'soil_temperature_0cm',title:'0 cm soil temperature',unit:'°C',note:'Modelled ground proxy; not a road or pavement forecast',minRange:4},
  {key:'temperature_850hPa',title:'850 hPa temperature',unit:'°C',note:'Upper-air context; this level may lie below high terrain',minRange:4}
@@ -36,6 +37,7 @@ export function normalise(json,model){
   const raw=json.hourly[v.key]??[],unit=json.hourly_units?.[v.key];
   data.values[v.key]=data.time.map((_,i)=>{
    if(!finite(raw[i]))return null;
+   if(v.direction)return raw[i]>=0&&raw[i]<=360?raw[i]%360:null;
    if(v.unit==='mph')return windMph(raw[i],unit);
    return v.key==='snow_depth'&&unit==='m'?raw[i]*100:raw[i];
   });
