@@ -2,7 +2,7 @@ import {MODELS,normalise,fetchJSON,forecastURL} from './data.js?v=20261016-direc
 import {FORECAST_SERVICE_URL,pointForecastURL} from './forecast-service.js?v=20261015-shared-cache-live';
 import {POINT_LOCATIONS,POINT_TTL,POINT_MAX_AGE,pointKey,usableForecast,snapshotFor} from './point-snapshots.js';
 
-export async function loadPointForecasts(location,{signal,force=false,onModel=()=>{},onError=()=>{},onProgress=()=>{},load=fetchJSON,service=FORECAST_SERVICE_URL}={}){
+export async function loadPointForecasts(location,{signal,force=false,withWindDirection=false,onModel=()=>{},onError=()=>{},onProgress=()=>{},load=fetchJSON,service=FORECAST_SERVICE_URL}={}){
  let shared=null;
  if(POINT_LOCATIONS.some(point=>pointKey(point)===pointKey(location))){
   try{shared=snapshotFor(await load('./point-data/'+pointKey(location)+'.json',signal,{force,ttl:300000,staleTtl:POINT_MAX_AGE}),location);}catch{/* Exact-location browser cache and direct API remain available. */}
@@ -23,7 +23,7 @@ export async function loadPointForecasts(location,{signal,force=false,onModel=()
    }
    signal?.throwIfAborted();
    if(!usableForecast(json))throw Error('No current forecast data for this location.');
-   if(!Object.hasOwn(json.hourly,'wind_direction_10m')){
+   if(withWindDirection&&!Object.hasOwn(json.hourly,'wind_direction_10m')){
     try{
      const url=new URL(forecastURL(location,model));url.searchParams.set('hourly','wind_direction_10m');
      const extra=await load(url.href,signal,{force,ttl:POINT_TTL,staleTtl:POINT_MAX_AGE});
