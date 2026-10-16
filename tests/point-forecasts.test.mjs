@@ -9,7 +9,7 @@ function snapshot(age=0){return {version:1,location:point,models:Object.fromEntr
 test('shared exact-location snapshot loads all 15 models and all variables with no API calls, including Refresh',async()=>{
  for(const force of [false,true]){const loaded=[],requests=[];
  await loadPointForecasts(point,{service:'',force,load:async url=>{requests.push(url);assert.ok(url.startsWith('./point-data/'));return snapshot();},onModel:m=>loaded.push(m)});
- assert.equal(requests.length,1);assert.equal(loaded.length,15);assert.ok(loaded.every(m=>m.source==='shared cache'&&Object.keys(m.values).length===11));assert.equal(loaded[0].values.snowfall[0],0);
+ assert.equal(requests.length,1);assert.equal(loaded.length,15);assert.ok(loaded.every(m=>m.source==='shared cache'&&Object.keys(m.values).length===VARIABLES.length));assert.equal(loaded[0].values.snowfall[0],0);
  }
 });
 test('partial shared data isolates a failed model without losing the other 14',async()=>{
