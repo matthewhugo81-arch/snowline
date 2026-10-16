@@ -158,6 +158,9 @@ function renderInspection(){
  for(const v of VARIABLES){
  const average=averages.get(v.key);
  const current=models.filter(m=>finite(valueAt(m,v.key,time)));
+ // Sort only these on-screen readouts; model, chart and export order stay intact.
+ const direction={precipitation:-1,wind_speed_10m:-1,wind_gusts_10m:-1,soil_temperature_0cm:1}[v.key];
+ if(direction)current.sort((a,b)=>direction*(valueAt(a,v.key,time)-valueAt(b,v.key,time)));
  const mean=average.values[index],count=average.counts[index];
  const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${valueAttributes(mean,v)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
  $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${modelColour(m)}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
