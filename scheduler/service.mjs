@@ -32,8 +32,9 @@ export class ModelSchedulerService {
   try{
    if(!this.token)throw Error('GITHUB_ACTIONS_TOKEN is not configured');
    // Persist before sending. An ambiguous POST outcome or isolate restart must
-   // not cause a second dispatch during this three-minute lease.
-   if(now-(Date.parse(previous.lastAttemptAt)||0)<3*MINUTE)return save({status:'cooldown'});
+   // not cause a second dispatch during this lease. Leave 30 seconds below
+   // the cron interval so ordinary trigger jitter does not skip every other tick.
+   if(now-(Date.parse(previous.lastAttemptAt)||0)<150000)return save({status:'cooldown'});
    const [health,publish]=await Promise.all([HEALTH_WORKFLOW,PUBLISH_WORKFLOW].map(async workflow=>{
     const data=await this.api(`actions/workflows/${workflow}/runs?branch=main&per_page=20`);
     if(!Array.isArray(data.workflow_runs))throw Error('Invalid GitHub workflow response');
