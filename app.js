@@ -1,11 +1,11 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261015-shared-cache';
-import {loadPointForecasts} from './point-forecasts.js?v=20261015-shared-cache-live';
-import {averageSeries} from './average.js';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261016-direction';
+import {loadPointForecasts} from './point-forecasts.js?v=20261016-direction';
+import {averageSeries,circularAverageSeries,directionLabel} from './average.js?v=20261016-direction';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261015-compact-reset';
 import {setupChartPanels} from './chart-panels.js?v=20261014-panels';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261013-compact-tables';
-import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261013-compact-tables';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261016-direction';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261016-direction';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -90,9 +90,10 @@ function plot(container,series,config,times){
  if(config.floor===undefined){min=Math.min(min,0);max=Math.max(max,0);}
  if(max-min<config.minRange){if(config.floor!==undefined)max=min+config.minRange;else{const mid=(min+max)/2;min=mid-config.minRange/2;max=mid+config.minRange/2;}}
  if(config.ceiling===undefined)max+=(max-min)*.08;
- const x=i=>left+inner*i/Math.max(1,n-1),y=v=>top+(height-bottom-top)*(1-(v-min)/(max-min));
+ const x=i=>left+inner*i/Math.max(1,n-1),y=v=>top+(height-bottom-top)*(config.direction?(v-min)/(max-min):1-(v-min)/(max-min));
  let html=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(config.title)}. Values for the inspected hour appear below and in the data table.">`;
- for(let j=0;j<=4;j++){const v=min+(max-min)*j/4,yy=y(v);html+=`<line class="gridline" x1="${left}" x2="${width-right}" y1="${yy}" y2="${yy}"/><text x="${left-8}" y="${yy+4}" text-anchor="end">${Math.abs(v)<.0001?'0':v.toFixed(max-min<=2?2:max-min<=8?1:0)}</text>`;}
+ const ticks=config.direction?8:4;
+ for(let j=0;j<=ticks;j++){const v=min+(max-min)*j/ticks,yy=y(v),label=config.direction?directionLabel(v):Math.abs(v)<.0001?'0':v.toFixed(max-min<=2?2:max-min<=8?1:0);html+=`<line class="gridline" x1="${left}" x2="${width-right}" y1="${yy}" y2="${yy}"/><text x="${left-8}" y="${yy+4}" text-anchor="end">${label}</text>`;}
  if(min<0&&max>0)html+=`<line class="zero-line" x1="${left}" x2="${width-right}" y1="${y(0)}" y2="${y(0)}"/>`;
  // The forecast begins at the current hour; day boundaries must follow UTC midnight.
  const dayStarts=times.flatMap((time,i)=>new Date(time).getUTCHours()===0?[i]:[]);
@@ -105,7 +106,7 @@ function plot(container,series,config,times){
  const dayTicks=!state.zoom&&dayStarts.length&&x(dayStarts[0])-left<74?dayStarts:[0,...dayStarts];
  let labelEnd=-Infinity;
  for(const i of new Set(dayTicks)){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text class="date-tick" x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))}</text>`;labelEnd=labelStart+labelWidth;}
- for(const s of series){if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="var(--chart-halo, white)" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${modelColour(s)}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
+ for(const s of series){if(config.direction){s.values.forEach((v,i)=>{if(finite(v))html+=`<circle class="direction-dot" cx="${x(i)}" cy="${y(v)}" r="2.7" fill="${modelColour(s)}" opacity=".8"/>`;});continue;}if(s.average)html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="var(--chart-halo, white)" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${pathFrom(s.values,x,y)}" fill="none" stroke="${modelColour(s)}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
  html+=`<line class="cursor-line" x1="${x(index)}" x2="${x(index)}" y1="${top}" y2="${height-bottom}"/>`;
  for(const s of series){const v=s.values[index];html+=`<circle class="cursor-point" cx="${x(index)}" cy="${finite(v)?y(v):top}" r="3" fill="${modelColour(s)}"${finite(v)?'':' display="none"'}/>`;}
  html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,height,left,inner,top,bottom,n,start,times,x,y,series,cursor:container.querySelector('.cursor-line'),points:[...container.querySelectorAll('.cursor-point')]});
@@ -132,9 +133,9 @@ function render(){
  const averages=new Map();
  for(const v of VARIABLES){
  const series=models.map(m=>({...m,values:times.map(t=>valueAt(m,v.key,t))}));
- const average=averageSeries(series,times.length);
+ const average=(v.direction?circularAverageSeries:averageSeries)(series,times.length);
  averages.set(v.key,average);
- plot($('plot-'+v.key),[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
+ plot($('plot-'+v.key),v.direction?series:[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
  const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);let validTimes=data?coverageCache.get(data):null;if(!validTimes){validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];if(data)coverageCache.set(data,validTimes);}let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
@@ -203,7 +204,7 @@ $('refresh').addEventListener('click',()=>loadLocation(state.location,true));
 $('horizon').addEventListener('change',e=>{chartZoom.cancel();state.zoom=null;state.hours=Number(e.target.value);scheduleRender();});
 $('time-slider').addEventListener('input',e=>{state.index=Number(e.target.value);scheduleRender(true);});
 for(const [id,filter] of [['select-all',()=>true],['select-global',m=>!m.regional],['select-none',()=>false]])$(id).addEventListener('click',()=>{state.selected=new Set(MODELS.filter(filter).map(m=>m.id));document.querySelectorAll('.model-chip input').forEach(input=>input.checked=state.selected.has(input.value));scheduleRender();});
-$('focus').addEventListener('change',e=>{const group=e.target.value;const snow=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation'];const ice=['temperature_2m','dew_point_2m','soil_temperature_0cm','relative_humidity_2m','precipitation','snow_depth','cloud_cover','wind_speed_10m','wind_gusts_10m'];const wind=['wind_speed_10m','wind_gusts_10m'];for(const v of VARIABLES){const card=$('plot-'+v.key).closest('article');const order=group==='snow'?snow:group==='wind'?wind:ice;card.hidden=group!=='all'&&!order.includes(v.key);card.style.order=group==='all'?0:order.indexOf(v.key);}scheduleRender();});
+$('focus').addEventListener('change',e=>{const group=e.target.value;const snow=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation'];const ice=['temperature_2m','dew_point_2m','soil_temperature_0cm','relative_humidity_2m','precipitation','snow_depth','cloud_cover','wind_speed_10m','wind_gusts_10m'];const wind=['wind_speed_10m','wind_gusts_10m','wind_direction_10m'];for(const v of VARIABLES){const card=$('plot-'+v.key).closest('article');const order=group==='snow'?snow:group==='wind'?wind:ice;card.hidden=group!=='all'&&!order.includes(v.key);card.style.order=group==='all'?0:order.indexOf(v.key);}scheduleRender();});
 let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(scheduleRender,120);});
 populate();await loadLocation(state.location);
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'set_forecast_location',title:'Compare forecasts at a location',description:'Load the model comparison for latitude and longitude and update the visible dashboard. Makes requests to Open-Meteo.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},async execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');await loadLocation({latitude:input.latitude,longitude:input.longitude,name:`${input.latitude.toFixed(4)}, ${input.longitude.toFixed(4)}`});return {location:state.location,modelsLoaded:state.models.size,unavailable:state.errors.size};}},{signal:lifecycle.signal});}catch(error){console.info('Optional browser tool unavailable:',error.message);}}
