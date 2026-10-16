@@ -1,5 +1,5 @@
-import {finite, valueAt} from './data.js?v=20261007-wind-mph';
-import {averageSeries} from './average.js';
+import {finite, valueAt} from './data.js?v=20261016-direction';
+import {averageSeries, circularAverageSeries, directionLabel} from './average.js?v=20261016-direction';
 
 export const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -56,6 +56,7 @@ export function variableLegend(variable){
 
 export function formatValue(value, variable){
   if(!finite(value)) return '—';
+  if(variable.direction)return `${directionLabel(value)} ${Math.round(value)%360}°`;
   // Do not round a very small negative temperature to zero.
   if(variable.unit === '°C' && value < 0 && value > -0.1) return String(value);
   if(variable.key === 'precipitation' && value > 0 && value < 0.1) return String(Number(value.toPrecision(2)));
@@ -68,7 +69,7 @@ export function buildDataset({variable, modelDefinitions, models, times, full, l
   // Keep columns and values together when omitting models empty in this variable/period.
   const series = requestedColumns.map(model => ({model, values:rowTimes.map(time => model.data ? valueAt(model.data, variable.key, time) : null)})).filter(model => model.values.some(finite));
   const columns = series.map(item => item.model);
-  const averages = averageSeries(series, rowTimes.length);
+  const averages = (variable.direction ? circularAverageSeries : averageSeries)(series, rowTimes.length);
   const rows = rowTimes.map((time, index) => ({time, values:series.map(model => model.values[index]), average:averages.values[index], averageCount:averages.counts[index]}));
   return {variable, requestedColumns, columns, rows, location:{...location}, loading, errors:new Map(errors), full, hasData:columns.length > 0};
 }
@@ -108,7 +109,7 @@ export function datasetCSV(dataset){
 export function datasetHTML(dataset){
   const {variable, location, rows, full} = dataset;
   const range = rows.length ? `${rows[0].time} to ${rows.at(-1).time}` : 'No forecast hours';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Snowline · ${escapeHTML(variable.title)}</title><style>body{font:14px system-ui,sans-serif;color:#162b40;margin:24px}h1{font-size:24px}p{line-height:1.6}.table-wrap{overflow:auto}table{border-collapse:collapse;font-variant-numeric:tabular-nums}caption{text-align:left;padding:12px 0;font-weight:bold}th,td{border:1px solid #dbe4ec;padding:9px 12px;white-space:nowrap;text-align:right}th{background:#f3f6fa}th:first-child{text-align:left}.average-column{font-weight:700;background:#edf3f8;border-left:2px solid #8fa4b7}.frost-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0}.frost-key{padding:5px 8px;border-radius:4px}li{margin:6px 0}@media print{.table-wrap{overflow:visible}body{margin:0}th,td,.frost-key{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><h1>${escapeHTML(variable.title)} (${escapeHTML(variable.unit)})</h1><p><strong>${escapeHTML(location.name)}</strong> · ${location.latitude}, ${location.longitude}<br>${escapeHTML(range)} · ${full ? 'Full model dataset' : 'Chart time window'}<br>${escapeHTML(variable.note)}</p><p>A dash means unavailable, never zero. Values are shown at display precision. CSV exports retain the supplied numeric precision. Average is the arithmetic mean of available model values in each row; zeroes are included and missing values are excluded.${dataset.loading ? ' Forecasts were still loading when this table was saved.' : ''}</p>${variableLegend(variable)}<div class="table-wrap">${datasetTable(dataset)}</div><h2>Data availability and retrieval times</h2><ul>${datasetCoverage(dataset)}</ul><p>Weather data: <a href="https://open-meteo.com/">Open-Meteo</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Exported from Snowline. All times UTC.</p></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Snowline · ${escapeHTML(variable.title)}</title><style>body{font:14px system-ui,sans-serif;color:#162b40;margin:24px}h1{font-size:24px}p{line-height:1.6}.table-wrap{overflow:auto}table{border-collapse:collapse;font-variant-numeric:tabular-nums}caption{text-align:left;padding:12px 0;font-weight:bold}th,td{border:1px solid #dbe4ec;padding:9px 12px;white-space:nowrap;text-align:right}th{background:#f3f6fa}th:first-child{text-align:left}.average-column{font-weight:700;background:#edf3f8;border-left:2px solid #8fa4b7}.frost-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0}.frost-key{padding:5px 8px;border-radius:4px}li{margin:6px 0}@media print{.table-wrap{overflow:visible}body{margin:0}th,td,.frost-key{print-color-adjust:exact;-webkit-print-color-adjust:exact}}</style></head><body><h1>${escapeHTML(variable.title)} (${escapeHTML(variable.unit)})</h1><p><strong>${escapeHTML(location.name)}</strong> · ${location.latitude}, ${location.longitude}<br>${escapeHTML(range)} · ${full ? 'Full model dataset' : 'Chart time window'}<br>${escapeHTML(variable.note)}</p><p>A dash means unavailable, never zero. Values are shown at display precision. CSV exports retain the supplied numeric precision. ${variable.direction ? 'Average is the circular mean of available wind directions (opposing directions have no mean);' : 'Average is the arithmetic mean of available model values in each row;'} zeroes are included and missing values are excluded.${dataset.loading ? ' Forecasts were still loading when this table was saved.' : ''}</p>${variableLegend(variable)}<div class="table-wrap">${datasetTable(dataset)}</div><h2>Data availability and retrieval times</h2><ul>${datasetCoverage(dataset)}</ul><p>Weather data: <a href="https://open-meteo.com/">Open-Meteo</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Exported from Snowline. All times UTC.</p></body></html>`;
 }
 
 export function datasetFilename(dataset, extension){
