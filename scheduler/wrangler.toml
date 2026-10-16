@@ -1,0 +1,18 @@
+name = "snowline-model-scheduler"
+main = "index.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/3 * * * *"]
+
+[[durable_objects.bindings]]
+name = "MODEL_SCHEDULER"
+class_name = "ModelScheduler"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ModelScheduler"]
+
+[observability]
+enabled = true
