@@ -55,7 +55,7 @@ async function loadLocation(location,force=false){
  state.times=Array.from({length:168},(_,i)=>new Date(start+i*3600000).toISOString().replace('.000Z','Z'));
  if(Number.isFinite(requestedTime)){const idx=state.times.findIndex(t=>Date.parse(t)===requestedTime);if(idx>=0)state.index=idx;else state.timeNote='The selected map time is outside this point-forecast window. ';requestedTime=NaN;}
  setStatus('Loading forecasts for this location…');render();
- try{await loadPointForecasts(location,{signal,force,
+ try{await loadPointForecasts(location,{signal,force,withWindDirection:true,
   onModel:model=>{if(generation!==state.generation)return;state.models.set(model.id,model);if(!finite(altitude)&&finite(model.elevation)){altitude=model.elevation;showAltitude();}if(model.retryAt)state.limit={retryAt:model.retryAt};},
   onError:(model,error)=>{if(generation!==state.generation)return;state.errors.set(model.id,error.name==='TimeoutError'?'Request timed out. Try Refresh.':error.message);if(error.status===429)state.limit=error;},
   onProgress:done=>{if(generation===state.generation){setStatus(`Loading forecasts · ${done} of ${MODELS.length} models checked`);scheduleRender();}}
