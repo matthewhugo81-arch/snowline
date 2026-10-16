@@ -1,5 +1,5 @@
 import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261016-direction';
-import {loadPointForecasts} from './point-forecasts.js?v=20261016-direction';
+import {loadPointForecasts} from './point-forecasts.js?v=20261016-direction2';
 import {averageSeries,circularAverageSeries,directionLabel} from './average.js?v=20261016-direction';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261015-compact-reset';
