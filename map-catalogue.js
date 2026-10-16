@@ -159,8 +159,13 @@ export function describeVariable(key,OM){
  if(!scaleKey)return null;
  if(!OM.defaultOmProtocolSettings.colorScales[scaleKey]&&!/^geopotential_height_\d+hPa$/.test(scaleKey))return null;
  const raw=OM.getColorScale(scaleKey,false);
+ // Spread the full temperature palette across the 500 hPa analysis range,
+ // shared by every supporting model, map panel and chart export.
+ const stops=key==='temperature_500hPa'
+  ?raw.breakpoints.map(value=>-50+(value-raw.breakpoints[0])*60/(raw.breakpoints.at(-1)-raw.breakpoints[0]))
+  :raw.breakpoints;
  if(key.startsWith('wind_speed_'))note+=' Shading, legend and readouts display mph; underlying spatial data remains in m/s. Arrows show flow direction.';
- return {key,name,group:variableGroup(key),unit:unit??raw.unit,note,stops:raw.breakpoints,colors:raw.colors.map(hex)};
+ return {key,name,group:variableGroup(key),unit:unit??raw.unit,note,stops,colors:raw.colors.map(hex)};
 }
 export function availableFields(fields,metas){
  return fields.filter(f=>!f.overlayOnly&&menuField(f.key)&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
