@@ -23,7 +23,7 @@ test('concurrent ticks and an isolate restart cannot duplicate a dispatch',async
  const f=fixture();await Promise.all([f.service.tick(),f.service.tick(),f.service.tick()]);
  const restarted=new ModelSchedulerService(f.storage,{token:'fixture-only',fetcher:f.fetcher,now:()=>instant+1000});await restarted.tick();
  assert.equal(f.calls.filter(x=>x.options.method==='POST').length,1);
- f.setNow(instant+180000);await f.service.tick();assert.equal(f.calls.filter(x=>x.options.method==='POST').length,2);
+ f.setNow(instant+170000);await f.service.tick();assert.equal(f.calls.filter(x=>x.options.method==='POST').length,2,'Minor cron jitter does not skip the next interval');
 });
 test('queued health and active publisher suppress duplicate work, stuck jobs are unhealthy',async()=>{
  for(const key of ['health','publish']){
@@ -38,7 +38,7 @@ test('a native cron or manual check less than 150 seconds old counts as a check'
 });
 test('dispatch failures stay visible and retry after the persistent lease expires',async()=>{
  const f=fixture({postStatus:503});await assert.rejects(f.service.tick(),/HTTP 503/);assert.equal((await f.service.status()).ok,false);
- await f.service.tick();assert.equal(f.calls.filter(x=>x.options.method==='POST').length,1);
+ await f.service.tick();assert.equal(f.calls.filter(x=>x.options.method==='POST').length,1);assert.equal((await f.service.status()).ok,false,'A cooldown cannot hide a failed dispatch');
  f.setNow(instant+180000);await assert.rejects(f.service.tick(),/HTTP 503/);assert.equal(f.calls.filter(x=>x.options.method==='POST').length,2);
 });
 test('missing credentials, stale ticks and HTTP read failures cannot report healthy',async()=>{
