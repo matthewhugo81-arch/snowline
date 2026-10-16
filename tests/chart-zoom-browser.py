@@ -63,12 +63,12 @@ def run():
         check('Direction compass runs north clockwise to north',page.locator('#plot-wind_direction_10m text').all_text_contents()[:9]==['N','NE','E','SE','S','SW','W','NW','N'])
         initial_requests=page.evaluate('window.__forecastRequests.length')
         check('All fifteen forecasts use the shared service',initial_requests==15 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
-        expected_order=['snowfall','snow_depth','temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','relative_humidity_2m','soil_temperature_0cm','temperature_850hPa']
+        expected_order=['temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','relative_humidity_2m','soil_temperature_0cm','temperature_850hPa','snowfall','snow_depth']
         check('Panels follow the requested reading order',page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         def paired_layout():
             boxes=page.locator('#charts .chart-card').evaluate_all('els=>els.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}})')
-            pairs=[(0,1),(2,3),(4,5),(6,7),(9,10)]
-            return all(boxes[a]['y']==boxes[b]['y'] and boxes[a]['x']<boxes[b]['x'] for a,b in pairs) and boxes[8]['y']>boxes[7]['y'] and boxes[9]['y']>boxes[8]['y'] and boxes[11]['y']>boxes[10]['y']
+            pairs=[(0,1),(2,3),(4,5),(7,8),(10,11)]
+            return all(boxes[a]['y']==boxes[b]['y'] and boxes[a]['x']<boxes[b]['x'] for a,b in pairs) and boxes[6]['y']>boxes[5]['y'] and boxes[7]['y']>boxes[6]['y'] and boxes[9]['y']>boxes[8]['y'] and boxes[10]['y']>boxes[9]['y']
         check('Desktop has five ordered pairs and a single final panel',paired_layout())
         check('Every chart including agreement has an accessible collapse control',page.locator('.chart-toggle[aria-expanded="true"][aria-controls]').count()==13)
         for toggle in page.locator('.chart-toggle').all():
