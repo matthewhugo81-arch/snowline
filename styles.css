@@ -99,3 +99,5 @@
 .recent-locations button:hover{background:#e3f2f1}
 @media(max-width:900px){.location-page .intro{grid-template-columns:1fr;gap:12px}.location-page .search{max-width:none}}
 @media(max-width:540px){.location-page header{padding:10px 18px}.location-page main{padding:16px 18px}.location-page .summary article{padding:9px 10px}.location-page .summary strong{font-size:22px}.location-page .time-control strong{display:block;margin-left:0}.location-page .agreement-card{padding:12px}.recent-locations button{max-width:145px}}
+
+@media(min-width:901px){.chart-card:has(#plot-wind_direction_10m){grid-column:1 / -1}}
