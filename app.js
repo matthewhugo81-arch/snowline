@@ -185,7 +185,16 @@ function renderRecents(){
 }
 renderRecents();
 $('search-form').addEventListener('submit',async e=>{e.preventDefault();searchController?.abort();searchController=new AbortController();const current=searchController;const box=$('search-results');box.className='search-results-open';box.textContent='Searching…';try{const locations=await searchLocations($('location-search').value);if(current!==searchController)return;if(!locations.length){box.textContent='No matches. Try another name or enter latitude, longitude.';return;}box.replaceChildren();for(const location of locations){const button=document.createElement('button');button.type='button';button.textContent=location.name;button.addEventListener('click',()=>chooseLocation(location));box.append(button);}}catch(error){if(current===searchController)box.textContent=error.message;}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSearch();});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape')closeSearch();
+ if(!['ArrowLeft','ArrowRight'].includes(e.key)||e.defaultPrevented||e.isComposing||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||chartZoom.active)return;
+ // Focused controls retain their own keys, including the slider's native step.
+ if(e.target.isContentEditable||e.target.closest('input,textarea,select,[role="slider"],[role="textbox"],[role="combobox"]')||document.querySelector('dialog[open]'))return;
+ const {start,end}=chartWindow(state);if(end<start)return;
+ e.preventDefault();
+ const next=Math.max(start,Math.min(end,state.index+(e.key==='ArrowRight'?1:-1)));
+ if(next!==state.index){state.index=next;scheduleRender(true);}
+});
 document.addEventListener('click',e=>{if(!e.target.closest('#search-form'))closeSearch();});
 $('refresh').addEventListener('click',()=>loadLocation(state.location,true));
 $('horizon').addEventListener('change',e=>{chartZoom.cancel();state.zoom=null;state.hours=Number(e.target.value);scheduleRender();});
