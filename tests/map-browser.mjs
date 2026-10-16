@@ -49,6 +49,12 @@ const style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'ba
 try{
  for(const viewport of [{width:1280,height:900},{width:390,height:844}]){
   const page=await browser.newPage({viewport,deviceScaleFactor:1});const errors=[];
+  let releaseBriefing;
+  const briefingGate=new Promise(resolve=>{releaseBriefing=resolve;});
+  await page.route('**/map-briefing.js*',async route=>{
+   await briefingGate;
+   await route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'map-briefing.js'),'utf8'))+'\nwindow.fixtureBriefingImported=true;'});
+  });
   page.on('pageerror',e=>errors.push(e.message));
   page.on('console',m=>{if(m.type()==='warning'||m.type()==='error')console.log('BROWSER',m.text());});
   await page.addInitScript(()=>localStorage.setItem('snowline-terrain','false'));
@@ -84,6 +90,62 @@ try{
   await page.goto(origin+'/maps.html');
   try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   assert.equal(await page.locator('header .strap').count(),0);
+   assert.equal(await page.locator('#open-briefing').textContent(),'Briefing View');
+   const selection=()=>page.evaluate(()=>['map-model','map-variable','map-start-time'].map(id=>document.getElementById(id).value));
+   let selected;
+   if(viewport.width>650){
+    await page.locator('#compare-maps').check();
+    await page.locator('#panel-b').waitFor({state:'visible'});
+    await page.waitForFunction(()=>['a','b'].every(key=>document.getElementById('panel-label-'+key).textContent.includes('Valid')));
+    selected=await selection();
+    const width=(await page.locator('.map-stage').boundingBox()).width;
+    await page.locator('#toggle-map-sidebar').click();
+    assert.equal(await page.locator('#map-settings-content').isVisible(),false);
+    assert.equal(await page.locator('#toggle-map-sidebar').getAttribute('aria-expanded'),'false');
+    assert.ok((await page.locator('.map-stage').boundingBox()).width>width+150,'Collapsed sidebar gives its width to the maps');
+    await page.waitForFunction(()=>['a','b'].every(key=>{
+     const map=document.getElementById('map-'+key),canvas=map.querySelector('canvas');
+     return canvas&&Math.abs(canvas.getBoundingClientRect().width-map.clientWidth)<2;
+    }));
+    assert.deepEqual(await selection(),selected,'Collapsing retains the chosen model, layer and time');
+    assert.equal(await page.locator('#compare-maps').isChecked(),true);
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('#mobile-map-settings').click();
+    assert.equal(await page.locator('#map-area').isVisible(),true,'Desktop collapse does not hide phone settings');
+    assert.equal(await page.locator('#toggle-map-sidebar').isVisible(),false);
+    await page.setViewportSize(viewport);
+    assert.equal(await page.locator('#map-settings-content').isVisible(),false,'Desktop collapse preference survives resizing');
+    await page.locator('#toggle-map-sidebar').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#map-settings-content').isVisible(),true);
+    assert.equal(await page.locator('#toggle-map-sidebar').getAttribute('aria-expanded'),'true');
+    await page.locator('#compare-maps').uncheck();
+    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'));
+   }else{
+    assert.equal(await page.locator('#toggle-map-sidebar').isVisible(),false);
+   }
+   await page.locator('#map-start-time').selectOption({index:0});
+   selected=await selection();
+   const briefingButton=page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing');
+   await briefingButton.click();
+   assert.equal(await page.locator('#briefing-loading').isVisible(),true,'Briefing switches views even while its module download is held');
+   assert.equal(await page.locator('.map-workspace').isVisible(),false);
+   await page.locator('#briefing-loading-close').click();
+   assert.equal(await page.locator('.map-workspace').isVisible(),true);
+   releaseBriefing();
+   await page.waitForFunction(()=>window.fixtureBriefingImported);
+   assert.equal(await page.locator('#briefing-view').isVisible(),false,'Late download completion cannot reopen a cancelled view');
+   await briefingButton.click();
+   await page.locator('#briefing-close').waitFor({state:'visible'});
+   await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6,{},{timeout:60000});
+   await page.locator('#briefing-close').click();
+   assert.deepEqual(await selection(),selected,'Briefing round trip retains the map selection');
+   if(process.env.MAP_NAVIGATION_ONLY){
+    assert.deepEqual(errors,[]);
+    console.log(JSON.stringify({viewport,navigationPassed:true}));
+    continue;
+   }
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
    assert.equal(await page.locator('#map-forecast-interval').isDisabled(),true,'UKV always retains every supplied hour');
    await page.locator('#map-variable').selectOption('dew_point_2m');

@@ -15,6 +15,7 @@ import {installDewPoint} from './map-dew-point.js';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
+import {setupMapSidebar} from './map-sidebar.js?v=20261016-navigation';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261015-comparison-loading';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performance';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
@@ -44,6 +45,7 @@ import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from '.
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
+setupMapSidebar();
 const UK=[-11,49,2.7,61.6];
 for(const area of MAP_AREAS){const option=document.createElement('option');option.value=area.id;option.textContent=area.name;$('map-area').append(option);}
 const currentArea=document.createElement('option');currentArea.value='current';currentArea.textContent='Current map area';$('map-area').append(currentArea);
@@ -107,7 +109,7 @@ $('map-background').value=background;
 let terrain=true;try{terrain=localStorage.getItem('snowline-terrain')!=='false';}catch{}
 $('map-terrain').checked=terrain;
 const panels={};
-let briefingActive=false,briefingView,briefingScroll=0;
+let briefingActive=false,briefingView,briefingScroll=0,briefingOpening=0,briefingModule;
 let locationPopup=null,locationMarker=null;
 function dismissLocation(){
  const popup=locationPopup;locationPopup=null;
@@ -651,28 +653,50 @@ window.addEventListener('pagehide',pauseAnimation);document.addEventListener('vi
   refreshLiveRuns();
  }
 });
+function loadBriefing(){
+ return briefingModule??=import('./map-briefing.js?v=20261015-direct-vertical').catch(error=>{briefingModule=null;throw error;});
+}
+function closeBriefing(){
+ ++briefingOpening;briefingActive=false;
+ $('briefing-view').hidden=true;$('briefing-loading').hidden=true;
+ document.body.classList.remove('briefing-open');
+ for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}
+ viewportBounds();if(!restyleMaps())void restoreMapFrame();
+ window.scrollTo(0,briefingScroll);
+ (matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});
+}
 async function openBriefing(){
  if(briefingActive)return;
  // Carry explicit area presets; retain the UK briefing default after free panning.
  const bounds=a.map.getBounds(),selection={model:state.model,field:state.field,time:state.times[state.index],interval:state.interval,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
  briefingScroll=window.scrollY;briefingActive=true;pauseAnimation();++timeGeneration;viewportRefresh.cancel();
+ const opening=++briefingOpening;
  if($('expanded-map').open)$('expanded-map').close();
  for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
+ // Switch views before any network wait, with a working way back while loading.
+ document.body.classList.add('briefing-open');$('briefing-view').hidden=false;
+ window.scrollTo(0,0);
  try{
   if(!briefingView){
-   const {createBriefing}=await import('./map-briefing.js?v=20261015-direct-vertical');
-   briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-view'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
+   $('briefing-loading').hidden=false;$('briefing-loading-close').focus({preventScroll:true});
+   const {createBriefing}=await loadBriefing();
+   if(opening!==briefingOpening||!briefingActive)return;
+   briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-content'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
     loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
-    onClose:()=>{briefingActive=false;document.body.classList.remove('briefing-open');for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}viewportBounds();if(!restyleMaps())void restoreMapFrame();window.scrollTo(0,briefingScroll);(matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});}
+    onClose:closeBriefing
    });
   }
-  document.body.classList.add('briefing-open');briefingView.open(selection);window.scrollTo(0,0);
- }catch(error){briefingActive=false;document.body.classList.remove('briefing-open');status('Briefing could not open. '+error.message);setTime();}
+  $('briefing-loading').hidden=true;briefingView.open(selection);
+ }catch(error){if(opening!==briefingOpening||!briefingActive)return;closeBriefing();status('Briefing could not open. '+error.message);setTime();}
 }
 $('open-briefing').addEventListener('click',openBriefing);$('mobile-briefing').addEventListener('click',openBriefing);
+$('briefing-loading-close').addEventListener('click',closeBriefing);
+// Prepare the optional view when the user approaches either button.
+for(const id of ['open-briefing','mobile-briefing'])for(const event of ['pointerenter','focus'])$(id).addEventListener(event,()=>{void loadBriefing().catch(()=>{});});
 await configure();
+void loadBriefing().catch(()=>{});
 let liveRunTimer=setInterval(refreshLiveRuns,60000);
 window.addEventListener('pagehide',()=>clearInterval(liveRunTimer));
 window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(liveRunTimer);liveRunTimer=setInterval(refreshLiveRuns,60000);refreshLiveRuns();}});
