@@ -3,7 +3,7 @@ import {loadPointForecasts} from './point-forecasts.js?v=20261018-pressure-total
 import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total2';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261015-compact-reset';
-import {setupChartPanels} from './chart-panels.js?v=20261014-panels';
+import {setupChartPanels} from './chart-panels.js?v=20261018-panel-width';
 import {createDatasetDialog} from './dataset-dialog.js?v=20261018-pressure-total2';
 import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261018-pressure-total2';
 

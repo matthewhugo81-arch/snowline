@@ -100,8 +100,7 @@
 @media(max-width:900px){.location-page .intro{grid-template-columns:1fr;gap:12px}.location-page .search{max-width:none}}
 @media(max-width:540px){.location-page header{padding:10px 18px}.location-page main{padding:16px 18px}.location-page .summary article{padding:9px 10px}.location-page .summary strong{font-size:22px}.location-page .time-control strong{display:block;margin-left:0}.location-page .agreement-card{padding:12px}.recent-locations button{max-width:145px}}
 
-@media(min-width:901px){.chart-card:has(#plot-wind_direction_10m),.chart-card:has(#plot-temperature_850hPa){grid-column:1 / -1}}
-
-/* Keep existing chart pairs and full-width upper-air/direction rows intact. */
-@media(min-width:901px){.chart-card:has(#plot-pressure_msl){grid-column:1 / -1}}
+/* Every chart starts at the standard width; a wider view is optional. */
+.location-page .chart-size{display:none;align-items:center;justify-content:center;flex:none;width:30px;height:30px;padding:5px;border-radius:6px}
+@media(min-width:901px){.location-page .chart-size{display:inline-flex}.location-page .chart-card.chart-wide{grid-column:1 / -1}}
 .precipitation-total{border-top:1px solid var(--line);padding-top:8px;margin-top:10px;color:var(--ink);font-weight:600}

@@ -67,9 +67,9 @@ def run():
         check('Panels follow the requested reading order',page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         def paired_layout():
             boxes=page.locator('#charts .chart-card').evaluate_all('els=>els.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}})')
-            pairs=[(0,1),(2,3),(4,5),(7,8),(11,12)]
-            return all(boxes[a]['y']==boxes[b]['y'] and boxes[a]['x']<boxes[b]['x'] for a,b in pairs) and boxes[6]['y']>boxes[5]['y'] and boxes[7]['y']>boxes[6]['y'] and boxes[9]['y']>boxes[8]['y'] and boxes[10]['y']>boxes[9]['y'] and boxes[11]['y']>boxes[10]['y']
-        check('Desktop preserves five pairs and full-width direction, pressure and upper-air rows',paired_layout())
+            pairs=[(i,i+1) for i in range(0,len(boxes)-1,2)]
+            return all(boxes[a]['y']==boxes[b]['y'] and boxes[a]['x']<boxes[b]['x'] for a,b in pairs) and all(abs(box['width']-boxes[0]['width'])<1 for box in boxes)
+        check('All desktop charts use the same standard width in two columns',paired_layout())
         check('Every chart including agreement has an accessible collapse control',page.locator('.chart-toggle[aria-expanded="true"][aria-controls]').count()==14)
         for toggle in page.locator('.chart-toggle').all():
             content=page.locator('#'+toggle.get_attribute('aria-controls'))
@@ -123,6 +123,22 @@ def run():
         card.screenshot(path=str(ROOT.parent/'zoom-after.png'))
         xy=coords(selector,42);page.mouse.click(**xy);page.wait_for_timeout(70)
         check('Click inspection and legend values follow the zoomed position',bounds()==[24,60,42] and page.locator('#time-temperature_2m').get_attribute('datetime')==times[42] and page.locator('#values-temperature_2m .average-value b').inner_text()=='0.2')
+        before_size=bounds();before_total=page.locator('#precipitation-total').inner_text()
+        for key in ['wind_direction_10m','pressure_msl','temperature_850hPa']:
+            sized=page.locator('#plot-'+key).locator('xpath=ancestor::article')
+            normal_width=sized.bounding_box()['width']
+            size_button=sized.locator('.chart-size')
+            size_button.click();page.wait_for_timeout(100)
+            assert size_button.get_attribute('aria-pressed')=='true' and sized.bounding_box()['width']>normal_width*1.8
+            assert bounds()==before_size and page.locator('#precipitation-total').inner_text()==before_total
+            assert page.locator('#plot-'+key).evaluate('el=>Math.abs(el.clientWidth-el.querySelector("svg").viewBox.baseVal.width)<1')
+            sized.locator('.chart-toggle').click();page.wait_for_timeout(70)
+            assert sized.locator('.chart-content').is_hidden() and size_button.get_attribute('aria-pressed')=='true'
+            sized.locator('.chart-toggle').click();page.wait_for_timeout(70)
+            size_button.focus();page.keyboard.press('Enter');page.wait_for_timeout(100)
+            assert size_button.get_attribute('aria-pressed')=='false' and abs(sized.bounding_box()['width']-normal_width)<1
+        check('Optional full-width charts preserve zoom, totals, collapse and keyboard restore',paired_layout() and bounds()==before_size)
+        check('Resizing panels does not request forecast data',page.evaluate('window.__forecastRequests.length')==initial_requests)
         check('All chart inspected times stay synchronized',page.locator('.chart-time time').evaluate_all('(els)=>new Set(els.map(e=>e.dateTime)).size')==1)
         card.locator('.chart-toggle').click();page.wait_for_timeout(70)
         check('Collapse preserves the selected hour and synchronized time window',bounds()==[24,60,42] and card.locator('.chart-content').is_hidden())
@@ -186,6 +202,7 @@ def run():
         drag(selector,30,60)
         # Check the existing mouse controls at mobile dimensions before native touch input.
         page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(250)
+        check('Phone layouts hide the unnecessary width controls',page.locator('.chart-size:visible').count()==0)
         check('Mobile layout has no horizontal page overflow',page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
         card.screenshot(path=str(ROOT.parent/'zoom-mobile.png'))
         check('Native vertical touch scrolling is retained',page.locator(selector+' svg').evaluate("el=>getComputedStyle(el).touchAction")=='pan-y')
