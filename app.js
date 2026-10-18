@@ -1,11 +1,11 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261018-pressure-total';
-import {loadPointForecasts} from './point-forecasts.js?v=20261018-pressure-total';
-import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261018-pressure-total2';
+import {loadPointForecasts} from './point-forecasts.js?v=20261018-pressure-total2';
+import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total2';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261015-compact-reset';
 import {setupChartPanels} from './chart-panels.js?v=20261014-panels';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261016-direction';
-import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261016-direction';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261018-pressure-total2';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261018-pressure-total2';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -35,7 +35,7 @@ function populate(){
  $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${modelColour(m)}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
  const chartVariables=[...VARIABLES.filter(v=>!['snowfall','snow_depth'].includes(v.key)),...VARIABLES.filter(v=>['snowfall','snow_depth'].includes(v.key))];
- $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div>${v.key==='precipitation'?'<p id="precipitation-total" class="chart-note" aria-live="polite"></p>':''}</article>`).join('');
+ $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div>${v.key==='precipitation'?'<p id="precipitation-total" class="chart-note precipitation-total" aria-live="polite"></p>':''}</article>`).join('');
  $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
  setupChartPanels(document.querySelector('main'),()=>{chartZoom.cancel();scheduleRender();});
  document.querySelectorAll('.plot').forEach(el=>{el.tabIndex=0;el.title='Pinch with two fingers to zoom; move two fingers sideways to pan. Right-drag (or Shift + left-drag) to zoom all charts. Double-click or press Escape here to reset.';});
@@ -138,7 +138,8 @@ function render(){
  averages.set(v.key,average);
  if(v.key==='precipitation'){
   const total=precipitationTotal(average.values);
-  $('precipitation-total').textContent=`Average precipitation total: ${total===null?'—':fmt(total)+' mm'} · displayed period${total===null?' (incomplete data)':''}`;
+  const detail=!state.selected.size?'Select a model':total===null?'Incomplete hourly data':`${times.length} hourly model averages${state.loading?' · models still loading':''}`;
+  $('precipitation-total').textContent=`Accumulated precipitation: ${total===null?'—':fmt(total)+' mm'} · ${detail} · ${date.format(new Date(times[0]))} – ${date.format(new Date(times.at(-1)))} UTC`;
  }
  plot($('plot-'+v.key),v.direction?series:[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';

@@ -4,6 +4,7 @@ import {averageSeries,precipitationTotal} from '../average.js';
 import {chartWindow} from '../chart-window.js';
 import {VARIABLES,MODELS,normalise,forecastURL} from '../data.js';
 import {loadPointForecasts} from '../point-forecasts.js';
+import {POINT_LOCATIONS} from '../point-snapshots.js';
 test('total follows hourly average, selected models and displayed window',()=>{
  const times=['a','b','c','d'];
  const series=[{values:[0,2,4,6]},{values:[2,4,6,8]}];
@@ -32,4 +33,54 @@ test('older cached payloads supplement pressure and direction together, aligned 
  },onModel:m=>loaded.push(m)});
  assert.equal(supplements,MODELS.length);assert.equal(loaded.length,MODELS.length);
  assert.ok(loaded.every(m=>m.values.pressure_msl[0]===1020&&m.values.wind_direction_10m[0]===270));
+});
+
+test('a fresh town snapshot checks Cloudflare for new fields before any direct request',async()=>{
+ const point=POINT_LOCATIONS[0],time=new Date(Math.floor(Date.now()/3600000)*3600000).toISOString();
+ const base={_retrievedAt:Date.now(),hourly:{time:[time],precipitation:[1]}};
+ const requests=[],models=[];
+ await loadPointForecasts(point,{withPressure:true,withWindDirection:true,force:true,load:async(url,signal,options)=>{
+  requests.push(url);
+  if(url.startsWith('./point-data/'))return {version:1,location:point,models:Object.fromEntries(MODELS.map(m=>[m.id,base]))};
+  assert.match(url,/workers.dev\/forecast/);assert.equal(options.forceMinAge,3600000);
+  return {...base,hourly:{...base.hourly,pressure_msl:[1012],wind_direction_10m:[90]}};
+ },onModel:m=>models.push(m)});
+ assert.equal(requests.length,16);assert.equal(models.length,15);
+ assert.ok(models.every(m=>m.values.pressure_msl[0]===1012));
+});
+
+test('cache fields, including all-null pressure, never trigger provider supplements',async()=>{
+ const time=new Date().toISOString(),requests=[],models=[];
+ await loadPointForecasts({latitude:52,longitude:1},{withPressure:true,withWindDirection:true,load:async url=>{
+  requests.push(url);assert.match(url,/workers.dev/);
+  return {_retrievedAt:Date.now(),hourly:{time:[time],precipitation:[1],pressure_msl:[null],wind_direction_10m:[90]}};
+ },onModel:m=>models.push(m)});
+ assert.equal(requests.length,15);assert.equal(models.length,15);
+ assert.ok(models.every(m=>m.values.pressure_msl[0]===null));
+});
+
+test('missing-field supplements align reordered UTC hours and Refresh respects hourly reuse',async()=>{
+ const hour=Math.floor(Date.now()/3600000)*3600000,time=[hour,hour+3600000].map(t=>new Date(t).toISOString()),models=[];
+ await loadPointForecasts({latitude:52,longitude:1},{withPressure:true,force:true,load:async(url,signal,options)=>{
+  if(url.includes('api.open-meteo.com')){
+   assert.equal(new URL(url).searchParams.get('hourly'),'pressure_msl');assert.equal(options.forceMinAge,3600000);
+   return {hourly:{time:[time[1],time[0]],pressure_msl:[1020,1010]},hourly_units:{pressure_msl:'hPa'}};
+  }
+  return {_retrievedAt:Date.now(),hourly:{time,precipitation:[1,2]}};
+ },onModel:m=>models.push(m)});
+ assert.equal(models.length,15);assert.deepEqual(models[0].values.pressure_msl,[1010,1020]);
+});
+
+test('shared-cache failure retains town data without bypassing its limit for pressure',async()=>{
+ const point=POINT_LOCATIONS[0],base={_retrievedAt:Date.now(),hourly:{time:[new Date().toISOString()],precipitation:[1]}},models=[];
+ await loadPointForecasts(point,{withPressure:true,load:async url=>{
+  if(url.startsWith('./point-data/'))return {version:1,location:point,models:Object.fromEntries(MODELS.map(m=>[m.id,base]))};
+  assert.match(url,/workers.dev/);throw Object.assign(Error('Daily limit'),{status:429});
+ },onModel:m=>models.push(m)});
+ assert.equal(models.length,15);assert.ok(models.every(m=>m.values.precipitation[0]===1&&m.values.pressure_msl[0]===null));
+});
+
+test('total averages each available hour before summing when model horizons differ',()=>{
+ const mean=averageSeries([{values:[2,4,null]},{values:[4,null,6]}],3);
+ assert.deepEqual(mean.values,[3,4,6]);assert.equal(precipitationTotal(mean.values),13);
 });

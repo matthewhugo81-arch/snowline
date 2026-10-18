@@ -40,9 +40,9 @@ def run():
             window.__forecastRequests.push(url);
             const start=Math.floor(Date.now()/3600000)*3600000;
             const time=Array.from({length:192},(_,i)=>new Date(start+i*3600000).toISOString());
-            const keys=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m'];
+            const keys=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','pressure_msl'];
             const hourly={time},hourly_units={};
-            for(const key of keys){hourly[key]=time.map((_,i)=>key==='wind_direction_10m'?(350+i*5)%360:key==='snowfall'?i/100:key==='snow_depth'?0:key==='cloud_cover'||key==='relative_humidity_2m'?50:key==='precipitation'?i/10:i/10-4);hourly_units[key]=key.includes('wind_')?'mph':key==='snow_depth'?'cm':'°C';}
+            for(const key of keys){hourly[key]=time.map((_,i)=>key==='pressure_msl'?1000+i/10:key==='wind_direction_10m'?(350+i*5)%360:key==='snowfall'?i/100:key==='snow_depth'?0:key==='cloud_cover'||key==='relative_humidity_2m'?50:key==='precipitation'?i/10:i/10-4);hourly_units[key]=key==='pressure_msl'?'hPa':key.includes('wind_')?'mph':key==='snow_depth'?'cm':'°C';}
             if(new URL(url).searchParams.get('model')==='gfs_global')hourly.temperature_2m[80]=null;
             return new Response(JSON.stringify({hourly,hourly_units,latitude:54,longitude:-2,elevation:200,_retrievedAt:Date.now(),_source:'shared cache'}));
           };
@@ -57,20 +57,20 @@ def run():
           }
           await import(moduleURL('app.js'));
         }''',sources)
-        page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 13")
-        check('All twelve variable charts and agreement chart load', page.locator('.plot svg').count()==13)
+        page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 14")
+        check('All thirteen variable charts and agreement chart load', page.locator('.plot svg').count()==14)
         check('Direction plots hourly dots without connecting paths',page.locator('#plot-wind_direction_10m .direction-dot').count()>100 and page.locator('#plot-wind_direction_10m path').count()==0)
         check('Direction compass runs north clockwise to north',page.locator('#plot-wind_direction_10m text').all_text_contents()[:9]==['N','NE','E','SE','S','SW','W','NW','N'])
         initial_requests=page.evaluate('window.__forecastRequests.length')
         check('All fifteen forecasts use the shared service',initial_requests==15 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
-        expected_order=['temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','relative_humidity_2m','soil_temperature_0cm','temperature_850hPa','snowfall','snow_depth']
+        expected_order=['temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','relative_humidity_2m','soil_temperature_0cm','pressure_msl','temperature_850hPa','snowfall','snow_depth']
         check('Panels follow the requested reading order',page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         def paired_layout():
             boxes=page.locator('#charts .chart-card').evaluate_all('els=>els.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width}})')
-            pairs=[(0,1),(2,3),(4,5),(7,8),(10,11)]
-            return all(boxes[a]['y']==boxes[b]['y'] and boxes[a]['x']<boxes[b]['x'] for a,b in pairs) and boxes[6]['y']>boxes[5]['y'] and boxes[7]['y']>boxes[6]['y'] and boxes[9]['y']>boxes[8]['y'] and boxes[10]['y']>boxes[9]['y']
-        check('Desktop has five ordered pairs and a single final panel',paired_layout())
-        check('Every chart including agreement has an accessible collapse control',page.locator('.chart-toggle[aria-expanded="true"][aria-controls]').count()==13)
+            pairs=[(0,1),(2,3),(4,5),(7,8),(11,12)]
+            return all(boxes[a]['y']==boxes[b]['y'] and boxes[a]['x']<boxes[b]['x'] for a,b in pairs) and boxes[6]['y']>boxes[5]['y'] and boxes[7]['y']>boxes[6]['y'] and boxes[9]['y']>boxes[8]['y'] and boxes[10]['y']>boxes[9]['y'] and boxes[11]['y']>boxes[10]['y']
+        check('Desktop preserves five pairs and full-width direction, pressure and upper-air rows',paired_layout())
+        check('Every chart including agreement has an accessible collapse control',page.locator('.chart-toggle[aria-expanded="true"][aria-controls]').count()==14)
         for toggle in page.locator('.chart-toggle').all():
             content=page.locator('#'+toggle.get_attribute('aria-controls'))
             toggle.click();page.wait_for_timeout(30)
@@ -81,6 +81,12 @@ def run():
         times=page.evaluate("()=>{const t=Math.floor(Date.now()/3600000)*3600000;return Array.from({length:168},(_,i)=>new Date(t+i*3600000).toISOString().replace('.000Z','Z'))}")
         def bounds():
             return page.locator('#time-slider').evaluate('(el)=>[+el.min,+el.max,+el.value]')
+        def check_total():
+            first,last,_=bounds()
+            expected=sum(i/10 for i in range(first,last+1))
+            assert f'{expected:.1f} mm' in page.locator('#precipitation-total').inner_text()
+        check_total()
+        check('Pressure shows each model and its average on an absolute hPa axis',page.locator('#plot-pressure_msl path').count()==17 and float(page.locator('#plot-pressure_msl text').first.text_content())>900)
         def coords(selector, index):
             page.locator(selector).scroll_into_view_if_needed()
             return page.locator(selector).evaluate('''(el,i)=>{const s=el.querySelector('svg'),w=s.viewBox.baseVal.width,n=+document.querySelector('#time-slider').max-(+document.querySelector('#time-slider').min);const p=new DOMPoint(43+(w-55)*(i-(+document.querySelector('#time-slider').min))/n,55).matrixTransform(s.getScreenCTM());return {x:p.x,y:p.y}}''',index)
@@ -109,6 +115,7 @@ def run():
         check('A visible date-labelled selection appears during drag',page.locator('.zoom-selection').count()==1 and 'UTC' in page.locator('.zoom-selection text').text_content())
         card.screenshot(path=str(ROOT.parent/'zoom-selecting.png'))
         page.mouse.up(button='right');page.wait_for_timeout(100)
+        check_total()
         check('Right-drag zooms to the selected inclusive time interval',bounds()==[24,60,24])
         check('The inspected timestamp is absolute, not reset to hour zero',page.locator('#time-temperature_2m').get_attribute('datetime')==times[24])
         check('Summary minimum and snowfall maximum use only the zoomed hours',page.locator('#temp-min').inner_text()=='-1.6°C' and page.locator('#snow-max').inner_text()=='0.60 cm')
@@ -164,6 +171,7 @@ def run():
         page.locator('#horizon').select_option('72');page.wait_for_timeout(70)
         drag(selector,20,40)
         page.locator('#horizon').select_option('24');page.wait_for_timeout(70)
+        check_total()
         check('Changing horizon clears zoom and clamps inspection',bounds()[:2]==[0,23] and bounds()[2]<=23)
         xy=coords(selector,10);page.mouse.click(**xy,button='right');page.wait_for_timeout(70)
         check('Right-click without dragging does not zoom',bounds()[:2]==[0,23])
@@ -207,13 +215,14 @@ def run():
         check('The plus/minus buttons and separate toolbar are removed',page.locator('[data-zoom-in], [data-zoom-out], .chart-zoom-controls').count()==0)
         check('Reset is hidden at the full horizon as before',card.locator('[data-reset-zoom]').is_hidden())
         pinch_gesture(64,128,finish=False)
+        check_total()
         check('Spreading two fingers zooms live before release',bounds()[:2]==[42,126])
         check('Every graph redraws to the same pinch time range',page.locator('.plot svg').evaluate_all('els=>new Set(els.map(el=>[el.querySelector(".time-tick")?.textContent,[...el.querySelectorAll(".time-tick")].at(-1)?.textContent,[...el.querySelectorAll(".date-tick")].map(t=>t.textContent).join() ].join("|"))).size===1'))
         touch('touchEnd',[])
         check('Finger release preserves zoom without inspecting or resetting',bounds()==[42,126,42] and page.locator('.zoom-pinching').count()==0)
         check('Pinch updates overview statistics and all inspected times',page.locator('#snow-max').inner_text()=='1.26 cm' and page.locator('#temp-min').inner_text()=='0.2°C' and page.locator('.chart-time time').evaluate_all('(els)=>new Set(els.map(e=>e.dateTime)).size')==1)
         check('Time labels remain separated at intermediate pinch ranges',page.locator(selector+' .time-tick').evaluate_all('els=>els.every((el,i)=>!i||els[i-1].getBoundingClientRect().right+2<=el.getBoundingClientRect().left)'))
-        check('Reset returns to the original compact size in each chart heading',page.locator('.chart-heading [data-reset-zoom]').count()==13 and card.locator('[data-reset-zoom]').evaluate('el=>{const s=getComputedStyle(el);return s.fontSize==="11px"&&s.padding==="5px 8px"&&el.getBoundingClientRect().height===30}'))
+        check('Reset returns to the original compact size in each chart heading',page.locator('.chart-heading [data-reset-zoom]').count()==14 and card.locator('[data-reset-zoom]').evaluate('el=>{const s=getComputedStyle(el);return s.fontSize==="11px"&&s.padding==="5px 8px"&&el.getBoundingClientRect().height===30}'))
         card.screenshot(path=str(ROOT.parent/'zoom-mobile-pinch.png'))
         page.locator('[data-variable="temperature_2m"]').click()
         check('Pinch updates the exported chart window',page.locator('#dataset-table tbody tr').count()==85 and page.locator('#dataset-table tbody time').first.get_attribute('datetime')==times[42])
@@ -223,8 +232,10 @@ def run():
         pinch_gesture(64,128)
         check('A fresh pinch zooms all graphs again',bounds()[:2]==[42,126])
         before=bounds();pinch_gesture(80,80,shift=24)
+        check_total()
         check('Two fingers pan through time without changing zoom span',bounds()[0]<before[0] and bounds()[1]-bounds()[0]==84)
         pinch_gesture(80,80,shift=-48)
+        check_total()
         check('Two-finger panning works in the opposite direction',bounds()[0]>before[0] and bounds()[1]-bounds()[0]==84)
         pinch_gesture(128,64)
         check('Pinching out after panning restores the full horizon',bounds()[:2]==[0,167])
@@ -293,7 +304,7 @@ def run():
         # real 429 response. Advance beyond the fresh-cache window, not its horizon.
         page.evaluate('''()=>{Date.now=()=>Date.UTC(2026,9,12,21);window.__quotaCalls=0;window.__quotaForecastCalls=0;window.fetch=async url=>{window.__quotaCalls++;if(url.includes('/forecast?'))window.__quotaForecastCalls++;return new Response(JSON.stringify({error:true,reason:'Daily API request limit exceeded. Please try again tomorrow.'}),{status:429});};}''')
         page.locator('#refresh').click();page.wait_for_function("document.querySelector('#refresh').disabled === false")
-        check('Quota failure retains all thirteen charts and altitude',page.locator('.plot svg').count()==13 and 'approximately 200' in page.locator('#altitude').inner_text())
+        check('Quota failure retains all fourteen charts and altitude',page.locator('.plot svg').count()==14 and 'approximately 200' in page.locator('#altitude').inner_text())
         check('Fallback is explicitly dated and labelled as cached', 'Cached forecasts' in page.locator('#status').inner_text() and '19:00' in page.locator('#status').inner_text() and 'request limit' in page.locator('#status').inner_text())
         quota_calls=page.evaluate('window.__quotaForecastCalls')
         check('Quota response stops the remaining model queue',0 < quota_calls <= 3)
