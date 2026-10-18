@@ -2,15 +2,15 @@ import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261015-direct-vertical';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261018-rates';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261015-direct-vertical';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261015-direct-vertical';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261018-rates';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261018-rates';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261015-direct-vertical';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261018-rates';
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {chartScales} from './map-image-export.js?v=20261015-direct-vertical';
+import {chartScales} from './map-image-export.js?v=20261018-rates';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
@@ -83,7 +83,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(title.textContent)item.append(title);item.append(gradient,labels);$('legend').append(item);
   if(preset.id==='weather'){
    const rain=document.createElement('div');rain.className='briefing-rain-scale';
-   const heading=document.createElement('strong');heading.textContent='Precipitation · mm water';rain.append(heading);
+   const heading=document.createElement('strong');heading.textContent='Precipitation · mm/h';rain.append(heading);
    const bands=document.createElement('div');bands.className='briefing-rain-bands';
    PRECIPITATION_SCALE.stops.slice(1).forEach((value,index)=>{const band=document.createElement('span');band.style.borderTopColor=PRECIPITATION_SCALE.colors[index+1];band.textContent=value+(index===PRECIPITATION_SCALE.stops.length-2?'+':'');bands.append(band);});
    rain.append(bands);$('legend').append(rain);

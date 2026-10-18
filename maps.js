@@ -1,3 +1,4 @@
+import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261015-direct-vertical';
 import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-direct-vertical';
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
@@ -6,7 +7,7 @@ import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-m
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
-import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
+import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
 import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261015-ensemble-history';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
@@ -17,28 +18,28 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purp
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261016-navigation';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261015-comparison-loading';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performance';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261018-rates';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261015-direct-vertical';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261015-direct-vertical';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261018-rates';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-clean-symbols';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261018-rates';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261015-direct-vertical';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261018-rates';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261016-temperature500';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261018-rates';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
-import * as OM from './vendor/index.mjs?v=20261014-interaction-audit';
+import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261015-direct-vertical';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261015-direct-vertical';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261018-rates';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261018-rates';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261015-loading-performance';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261015-direct-vertical';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261018-rates';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
@@ -61,8 +62,8 @@ const fields=[
  {key:'dew_point_2m',name:'2 m dew point',unit:'°C',note:'Near-surface dew point. UKMO maps calculate it from 2 m temperature and relative humidity on the same model grid and forecast time.',stops:[-15,-10,-5,0,3,7,12,18],colors:tempColors},
  {key:'soil_temperature_0cm',name:'0 cm soil temperature',unit:'°C',note:'Modelled ground temperature, not a road-surface forecast.',stops:[-15,-10,-5,0,3,7,12,18],colors:tempColors},
  {key:'soil_temperature_0_to_7cm',name:'0–7 cm soil temperature',unit:'°C',note:'Average temperature in a soil layer; not road or grass-minimum temperature.',stops:[-15,-10,-5,0,3,7,12,18],colors:tempColors},
- {key:'precipitation',name:'Precipitation',unit:'mm water',note:'Total precipitation (liquid plus frozen water equivalent) over the native model interval. White means 0 to below 0.5 mm. Check the interval shown with the valid time.',...PRECIPITATION_SCALE},
- {key:'snowfall_water_equivalent',name:'Snowfall · water equivalent',unit:'mm water',note:'Water contained in falling snow over the model interval. This is not snow depth or a D-category amount.',stops:[0,.1,.25,.5,1,2,5,10],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
+ {key:'precipitation',name:'Precipitation',unit:'mm/h',note:'Mean total precipitation rate (liquid plus frozen water equivalent) over the stated native model interval. White means below 0.5 mm/h, not necessarily dry. Longer intervals show an average, not hourly detail. Use accumulation layers for period totals.',...PRECIPITATION_SCALE},
+ {key:'snowfall_water_equivalent',name:'Snowfall · water equivalent',unit:'mm/h',note:'Mean snowfall water-equivalent rate over the stated native model interval. Longer intervals show an average, not hourly detail. This is not snow depth or a D-category amount.',stops:[0,.1,.25,.5,1,2,5,10],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
  {key:'snow_depth',name:'Snow depth',unit:'m snow',note:'Existing snow on the ground. Kept in the spatial feed’s native metres.',stops:[0,.01,.02,.05,.1,.2,.5,1],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
  {key:'snow_depth_water_equivalent',name:'Snow cover · water equivalent',unit:'mm water',note:'Water equivalent of existing snow cover, not its physical depth.',stops:[0,1,5,10,25,50,100,200],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
  {key:'relative_humidity_2m',name:'2 m relative humidity',unit:'%',note:'Near-surface moisture context. Humidity alone does not determine surface wetness.',stops:[0,20,40,60,75,85,95,100],colors:['#f7ecce','#edce9c','#c6d4b1','#98cdbf','#60b7ba','#359ab0','#257ca2','#225987']},
@@ -78,6 +79,7 @@ installDewPoint(OM,settings);
 installDiagnostics(OM,settings);
 installVerticalMotion(OM,settings);
 installPrecipitationType(OM,settings);
+installPrecipitationRates(OM,settings);
 const accumulationReader=installAccumulations(OM,settings);
 const renderMapTile=(params,controller)=>isSymbolURL(params.url)?precipitationSymbolProtocol(params,controller,OM,settings):OM.omProtocol(params,controller,isCompositeURL(params.url)?compositeSettings(settings):settings);
 const readMapValue=createValueReader({...OM,omProtocol:renderMapTile},settings);
@@ -92,7 +94,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
-},{onLimit:()=>updatePreloadStatus()});
+},{persistent:true,onLimit:()=>updatePreloadStatus()});
 imageryCache.setContext(JSON.stringify(UK));
 maplibregl.addProtocol('om',(params,controller)=>imageryCache.protocol(params,controller));
 window.addEventListener('pagehide',()=>imageryCache.release());
@@ -240,7 +242,7 @@ async function drawGridValues(panel){
   note.textContent=features.length?'Grid values · '+(field===WEATHER_COMPOSITE?'precipitation · ':'')+displayUnit(f):'No grid values in this area.';
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
-function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:sourceVariable(source,field)??field,interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
+function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:precipitationRateVariable(sourceVariable(source,field)??field),interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null;
 function refreshStartingTime(message='No forecast times available'){
  const select=$('map-start-time');if(!select)return;
@@ -450,7 +452,7 @@ function setLegend(){
   const legendOffset=f.legendStart??0,legendColors=f.colors.slice(legendOffset),displayBreaks=displayStops(f).slice(legendOffset),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
   if(panels[key].legendField!==field){
   panels[key].legendField=field;
-  el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm)':['precipitation_probability','snowfall_probability'].includes(field)?'Chance (%)':f.categoryLabels?'Precipitation type & intensity':displayUnit(f);
+  el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm/h)':['precipitation_probability','snowfall_probability'].includes(field)?'Chance (%)':f.categoryLabels?'Precipitation type & intensity':displayUnit(f);
   gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
   gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
   [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
@@ -460,7 +462,7 @@ function setLegend(){
   if(field===WEATHER_COMPOSITE){
    gradient.hidden=false;ticks.hidden=false;gradient.style.background='linear-gradient(to right,#414141,#e6e6e6)';ticks.replaceChildren();
    for(const text of ['Clear · 0%','Overcast · 100%']){const label=document.createElement('span');label.textContent=text;ticks.append(label);}
-   const dry=bands.firstElementChild;if(dry){dry.querySelector('i').style.background='linear-gradient(to right,#414141,#e6e6e6)';dry.title='Below 0.5 mm: modelled cloud remains visible, not necessarily dry';}
+   const dry=bands.firstElementChild;if(dry){dry.querySelector('i').style.background='linear-gradient(to right,#414141,#e6e6e6)';dry.title='Below 0.5 mm/h: modelled cloud remains visible, not necessarily dry';}
   }
   if(isTypeField(field)){bands.replaceChildren();bands.style.gridTemplateColumns='repeat('+ (field===NATIVE_PRECIPITATION_TYPE?6:4)+',minmax(0,1fr))';for(const scale of precipitationTypeScales(field===NATIVE_PRECIPITATION_TYPE)){const cell=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');swatch.style.background='linear-gradient(to right,'+scale.colors.flatMap((c,i)=>[c+' '+i*25+'%',c+' '+(i+1)*25+'%']).join(',')+')';label.textContent=scale.name.split(' · ')[0];cell.title=scale.labels.join(' / ')+' mm/h water equivalent';cell.append(swatch,label);bands.append(cell);}}
   el('legend-winter').hidden=!isTypeField(field)&&field!==THETA_SYMBOLS;el('legend-winter').textContent=isTypeField(field)?'Light → dark: 0.1–<0.5 / 0.5–<2 / 2–<5 / 5+ mm/h water equivalent · below 0.1 unshaded':field===THETA_SYMBOLS?f.legendNote:'';
@@ -470,9 +472,10 @@ function setLegend(){
   if(field===VERTICAL_MOTION){const sourceNote=directVerticalNote(fieldSource(state.metas[model],field,state.times[state.index]));if(sourceNote){note+=' '+sourceNote;interval+=' '+sourceNote;}}
   if([WEATHER_COMPOSITE,...TYPE_KEYS,THETA_SYMBOLS,'precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
    const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
-   interval=hours?hours+' h ending at valid time':'Period unavailable';
+   const rate=field===WEATHER_COMPOSITE||isPrecipitationRate(field);
+   interval=hours?(rate?'Mean rate over preceding '+hours+' h':hours+' h ending at valid time'):'Period unavailable';
    if(['precipitation_probability','snowfall_probability'].includes(field)&&hours)interval='≥'+Number((hours*.1).toFixed(2))+(field==='snowfall_probability'?' mm water / ':' mm / ')+interval;
-   note+=' '+(hours?(['precipitation_probability','snowfall_probability'].includes(field)?'Probability threshold: ':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
+   note+=' '+(hours?(['precipitation_probability','snowfall_probability'].includes(field)?'Probability threshold: ':rate?'':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
   }
   if(/^temperature_2m_(max|min)$/.test(field))interval='Native period ending at valid time · duration unspecified';
   el('legend-interval').textContent=f.ensembleStatistic==='spread'?'Standard deviation · higher = more disagreement':f.ensembleStatistic==='mean'?'Ensemble mean':interval;
@@ -654,7 +657,7 @@ window.addEventListener('pagehide',pauseAnimation);document.addEventListener('vi
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261015-direct-vertical').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261018-rates').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

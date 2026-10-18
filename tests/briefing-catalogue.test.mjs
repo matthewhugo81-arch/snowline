@@ -44,11 +44,11 @@ test('IFS feeds retain their own supported fields; theta-w needs same-grid T850 
  const runs=[quarter,{...quarter,reference_time:time(-6)},{...quarter,reference_time:time(-12),variables:weather}];
  assert.ok(!previousRunPresets(runs,3,fields).some(p=>p.id==='theta-w'));
 });
-test('standalone precipitation comparisons require equal native periods and label those periods',()=>{
+test('standalone precipitation comparisons label mean rates and retain verified periods despite gaps',()=>{
  const one=meta('dwd_icon_eu',weather),three={...one,reference_time:time(-3),valid_times:[time(0),time(3),time(6)]},older={...one,reference_time:time(-6)};
  const p=briefingPresets(one,catalogue([one])).find(p=>p.key==='precipitation');
- assert.match(briefingCaption(one,p,time(3)),/1 h precipitation/);
- assert.deepEqual(previousRunTimes([one,three,older],p,{},'native'),[]);
+ assert.match(briefingCaption(one,p,time(3)),/Mean rate \(mm\/h\) over preceding 1 h/);
+ assert.deepEqual(previousRunTimes([one,three,older],p,{},'native'),[time(3),time(6)]);
 });
 test('ensemble catalogue is exposed in sequence; absent archives are explained without substituting models',async()=>{
  const m=meta('snowline_ecmwf_ensemble',['temperature_850hPa_mean','temperature_850hPa_spread','pressure_msl_mean']),fields=catalogue([m]);

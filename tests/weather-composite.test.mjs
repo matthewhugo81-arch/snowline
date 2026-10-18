@@ -45,7 +45,7 @@ test('composite and comparison timelines intersect every field, excluding analys
  assert.match(fieldDataURL(complete,KEY,time(2)),/ncep_gfs013\/2026\/10\/12\/0000Z\/2026-10-12T0200\.om$/);
  assert.equal(fieldDataURL(complete,KEY,time(1)),null);
  assert.equal(fieldIntervalHours(complete,KEY,time(2)),1,'Pressure gaps do not lengthen precipitation accumulation');
- assert.equal(fieldIntervalHours(meta('ecmwf_ifs',COMPOSITE_FIELDS,[0,3,6]),KEY,time(6)),3);
+ assert.equal(fieldIntervalHours(meta('ecmwf_ifs',COMPOSITE_FIELDS,[0,3,6]),KEY,time(6)),1,'Sparse publication does not change the verified native interval');
 });
 
 test('combined palette matches the briefing while preserving ordinary cloud and precipitation colours',()=>{

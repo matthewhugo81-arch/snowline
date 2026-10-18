@@ -1,6 +1,6 @@
-import {hasFieldTime} from './map-sources.js?v=20261015-direct-vertical';
+import {hasFieldTime} from './map-sources.js?v=20261018-rates';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261015-direct-vertical';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261018-rates';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

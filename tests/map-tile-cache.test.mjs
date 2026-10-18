@@ -7,10 +7,40 @@ const storage=()=>{
  const caches=new Map();
  return {keys:async()=>[...caches.keys()],delete:async name=>caches.delete(name),open:async name=>{
   if(!caches.has(name))caches.set(name,new Map());const entries=caches.get(name);
-  return {match:async key=>entries.get(key)?.clone(),put:async(key,value)=>entries.set(key,value.clone())};
+  return {keys:async()=>[...entries.keys()],delete:async key=>entries.delete(key),match:async key=>entries.get(key)?.clone(),put:async(key,value)=>entries.set(key,value.clone())};
  }};
 };
 const read=(cache,url,type)=>cache.protocol(params(url,type),new AbortController());
+const saved=cache=>Promise.all([...cache.writes.values()].map(job=>job.promise));
+
+test('persistent tiles survive reload with independent bytes, bounded storage and expiry',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.UTC(2026,9,18,12,10)});
+ const disk=storage();let calls=0;
+ const create=()=>new ForecastTileCache(async()=>{calls++;return bytes();},{storage:disk,persistent:true,diskBytes:8,memoryBytes:4});
+ const first=create();first.setContext('wide');await read(first,'rate-1');await saved(first);await read(first,'rate-2');await saved(first);first.release();
+ const reload=create();reload.setContext('wide');const restored=await read(reload,'rate-1');assert.equal(calls,2);new Uint8Array(restored.data)[0]=0;
+ await read(reload,'rate-3');await saved(reload);assert.equal(calls,3);reload.release();
+ const again=create();again.setContext('wide');await read(again,'rate-2');assert.equal(calls,3,'retained tile reused');await read(again,'rate-1');assert.equal(calls,4,'oldest disk entry evicted at byte cap');await saved(again);again.release();
+ const moved=create();moved.setContext('different viewport');await read(moved,'rate-2');assert.equal(calls,5,'different native read coverage cannot reuse pixels');await saved(moved);moved.release();
+ t.mock.timers.tick(3600000);
+ const expired=create();expired.setContext('wide');await read(expired,'rate-2');assert.equal(calls,6,'expiry refreshes native data');await saved(expired);expired.release();
+});
+
+test('repeated visits retain at most three persistent viewport caches',async()=>{
+ const disk=storage();
+ for(let i=0;i<8;i++){
+  const cache=new ForecastTileCache(async()=>bytes(),{storage:disk,persistent:true});cache.setContext('view-'+i);await read(cache,'rate');await saved(cache);await new Promise(resolve=>setImmediate(resolve));cache.release();
+ }
+ assert.ok((await disk.keys()).length<=3);
+});
+
+test('empty overlay tiles are retained but cannot create an unbounded disk cache',async()=>{
+ const disk=storage();let calls=0;
+ const create=()=>new ForecastTileCache(async()=>{calls++;return {data:new ArrayBuffer(0)};},{storage:disk,persistent:true,diskEntries:2});
+ const first=create();first.setContext('view');for(const key of ['one','two','three']){await read(first,key,'arrayBuffer');await saved(first);}first.release();
+ const second=create();second.setContext('view');await read(second,'two','arrayBuffer');assert.equal(calls,3);await read(second,'one','arrayBuffer');assert.equal(calls,4);await saved(second);second.release();
+ const store=await disk.open((await disk.keys())[0]);assert.equal((await store.keys()).length,2);
+});
 
 test('prepared raster, vector and metadata survive worker transfer and memory eviction',async()=>{
  let calls=0;const cache=new ForecastTileCache(async p=>{calls++;return p.type==='json'?{data:{tiles:['om://run/tile']}}:bytes();},{storage:storage(),memoryBytes:4});

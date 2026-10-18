@@ -1,8 +1,9 @@
+import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {accumulationHours,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
-import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
+import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261015-direct-vertical';
+import {sourceVariable} from './map-catalogue.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261015-ensemble-history';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
@@ -50,6 +51,7 @@ export function fieldIntervalHours(meta,key,time){
  if(key===THETA_SYMBOLS){const s=fieldSource(compositeMeta(meta),'precipitation',time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
  if(isTypeField(key)){const s=fieldSource(meta,key,time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
  if(key===WEATHER_COMPOSITE)return fieldIntervalHours(compositeMeta(meta),'precipitation',time);
+ if(isPrecipitationRate(key)){const s=fieldSource(meta,key,time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
  // Extrema may use 3/6-hour or other reporting periods independent of file cadence.
  // Their OM metadata exposes no time bounds: never invent a duration.
  if(/^temperature_2m_(max|min)$/.test(key))return null;

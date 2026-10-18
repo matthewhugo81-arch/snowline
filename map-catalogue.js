@@ -1,5 +1,6 @@
+import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
-import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261013-map-appearance';
+import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {ensembleField} from './map-ensemble.js?v=20261015-ensemble-history';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
@@ -101,8 +102,8 @@ const extras={
  cloud_cover_2m:['Near-surface cloud (2 m)','cloud_cover','Model cloud fraction near the surface, useful alongside visibility when assessing fog.'],
  cloud_base:['Cloud base','cloud_base','Model cloud-base height in metres.'],
  surface_temperature:['Surface (skin) temperature','temperature','Model surface (skin) temperature; not a road-surface forecast.'],
- rain:['Rain','precipitation','Rain water amount over the native model interval, excluding frozen precipitation. Some model feeds supply convective showers separately. Use Precipitation for the total water amount.'],
- showers:['Showers','precipitation','Convective precipitation water amount over the native model interval.'],
+ rain:['Rain','precipitation','Mean rain rate in mm/h over the stated native model interval, excluding frozen precipitation. Some model feeds supply convective showers separately. Use Precipitation for the total water-equivalent rate.'],
+ showers:['Showers','precipitation','Mean convective precipitation rate in mm/h over the stated native model interval. Longer intervals show an average, not hourly detail.'],
  snowfall_height:['Snowfall height','snowfall_height','Model snowfall-height estimate in metres; distinct from the freezing level and not a guarantee of settling snow.'],
  cape:['CAPE','cape','Convective available potential energy: instability guidance, not a thunderstorm probability.'],
  convective_inhibition:['Convective inhibition (CIN)','convective_inhibition','Energy barrier to convection in J/kg; interpret alongside CAPE and a lifting mechanism.'],
@@ -137,7 +138,7 @@ export function describeVariable(key,OM){
   key,name:'Precipitation probability',group:variableGroup(key),unit:'%',...PRECIPITATION_PROBABILITY_SCALE,
   note:'Share of ensemble members predicting at least 0.1 mm/h averaged over the model interval, including rain and snow water equivalent. The threshold and period are shown beside the scale.'
  };
- if(key==='rain'||key==='showers')return {key,name,note,group:variableGroup(key),unit:'mm water',...PRECIPITATION_SCALE};
+ if(key==='rain'||key==='showers')return {key,name,note,group:variableGroup(key),unit:'mm/h',...PRECIPITATION_SCALE};
  if(scaleKey==='cloud_cover')return {key,name,note,group:variableGroup(key),unit:'%',...CLOUD_COVER_SCALE};
  let unit;
  const pressure=key.match(/^(temperature|relative_humidity|wind_speed|geopotential_height)_(\d+)hPa$/);
@@ -199,7 +200,7 @@ export function extendCatalogue(fields,metas,OM,settings){
   }
   if(key==='wind_speed_10m'){field.name='10 m wind speed & direction';field.note='Shading, legend and readouts display mph; underlying spatial data remains in m/s. Arrows show flow direction.';}
   for(const meta of metas){const source=sourceVariable(meta,key);if(!source)continue;
-   settings.colorScales[source]={type:'breakpoint',unit:field.unit,breakpoints:field.stops,colors:field.colors.map(c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16),c.length===9?parseInt(c.slice(7,9),16)/255:1])};
+   settings.colorScales[precipitationRateVariable(source)]=settings.colorScales[source]={type:'breakpoint',unit:field.unit,breakpoints:field.stops,colors:field.colors.map(c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16),c.length===9?parseInt(c.slice(7,9),16)/255:1])};
   }
  }
  return omitted;

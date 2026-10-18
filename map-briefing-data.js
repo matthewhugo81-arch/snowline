@@ -1,10 +1,11 @@
+import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261014-interaction-audit';
 import {directVerticalNote} from './map-direct-vertical.js?v=20261015-direct-vertical';
-import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261015-direct-vertical';
+import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261018-rates';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261015-direct-vertical';
-import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261018-rates';
+import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
@@ -56,7 +57,7 @@ export function briefingCaption(meta,preset,time){
  const amount=preset.id==='weather'?'precipitation':preset.field;
  const period=[PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
  const sourceNote=preset.field===VERTICAL_MOTION?directVerticalNote(fieldSource(meta,preset.field,time)):'';
- return (sourceNote?sourceNote+' · ':'')+'T+'+String(lead).padStart(3,'0')+(period?' · '+period+' h '+(isTypeField(amount)?'precipitation-type / intensity':amount===THETA_SYMBOLS?'precipitation symbols (mean mm/h)':amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount==='snowfall_probability'?'snow probability (≥'+Number((period*.1).toFixed(2))+' mm water)':amount)+' ending at this time':'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
+ return (sourceNote?sourceNote+' · ':'')+'T+'+String(lead).padStart(3,'0')+(period?(isPrecipitationRate(amount)?' · Mean rate (mm/h) over preceding '+period+' h':' · '+period+' h '+(isTypeField(amount)?'precipitation-type / intensity':amount===THETA_SYMBOLS?'precipitation symbols (mean mm/h)':amount==='snowfall_water_equivalent'?'snowfall water equivalent':amount==='precipitation_probability'?'precipitation probability':amount==='snowfall_probability'?'snow probability (≥'+Number((period*.1).toFixed(2))+' mm water)':amount)+' ending at this time'):'')+(/^temperature_2m_(max|min)$/.test(preset.field)?' · Native period ending at this time · duration unspecified':'');
 }
 export function briefingKey(model,meta,preset,area,time,size=[960,660],overlays={},background='light',appearance={}){return JSON.stringify([model,meta.reference_time,preset.id,area,time,size,!!overlays.contours,!!overlays.grid,background,appearanceKey(appearance)]);}
 

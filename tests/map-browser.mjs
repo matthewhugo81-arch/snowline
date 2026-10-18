@@ -163,9 +163,9 @@ try{
    assert.equal(await page.locator('#map-mslp-a').isChecked(),true);
    assert.equal(await page.locator('#map-mslp-a').isDisabled(),true);
    assert.match(await page.locator('#legend-title-a').textContent(),/cloud.*precipitation/i);
-   assert.match(await page.locator('#legend-interval-a').textContent(),/1 h ending/);
+   assert.match(await page.locator('#legend-interval-a').textContent(),/Mean rate over preceding 1 h/);
    await page.locator('#map-grid-a').check();
-   await page.waitForFunction(()=>document.getElementById('grid-note-a').textContent.includes('precipitation · mm water'));
+   await page.waitForFunction(()=>document.getElementById('grid-note-a').textContent.includes('precipitation · mm/h'));
    await page.locator('#map-grid-a').uncheck();
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Precipitation')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
@@ -320,7 +320,7 @@ try{
    firstHour=6;await selectTime(0);
    await bothAt('Sat 10 Oct, 06:00 UTC');
    assert.ok(await initialTemperatureRequests()>=1,'The initialization image is available; cached data is shared across panels');
-   const invalidIntervals=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('variable=precipitation&')&&/\/(\d{4})Z\/2026-10-10T\1\.om/.test(r.url)));
+   const invalidIntervals=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('variable=precipitation_hourly_rate&')&&/\/(\d{4})Z\/2026-10-10T\1\.om/.test(r.url)));
    assert.deepEqual(invalidIntervals,[],'Do not request precipitation at initialization');
    // Removed menu products must also stop their metadata polling. Existing
    // mean/spread layer, buffering and comparison tests continue below.
@@ -368,7 +368,7 @@ try{
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'3');
    assert.equal(await page.locator('#map-forecast-interval').isDisabled(),false);
    assert.equal(await page.locator('#map-time').getAttribute('max'),'15','Default loads 16 three-hour steps instead of 48 hourly steps');
-   assert.equal(await page.locator('#legend-interval-a').textContent(),'1 h ending at valid time','Viewing interval must not alter snow accumulation');
+   assert.equal(await page.locator('#legend-interval-a').textContent(),'Mean rate over preceding 1 h','Viewing interval must not alter the snow averaging period');
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
    assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'32');
    const defaultGFSHours=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&/\/ncep_gfs0(13|25)\//.test(r.url)).map(r=>Number(r.url.match(/T(\d{2})00\.om/)?.[1])));
@@ -393,7 +393,7 @@ try{
    assert.equal(await page.locator('#map-time').getAttribute('max'),'7');
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
    assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'16');
-   assert.equal(await page.locator('#legend-interval-a').textContent(),'1 h ending at valid time');
+   assert.equal(await page.locator('#legend-interval-a').textContent(),'Mean rate over preceding 1 h');
    // Adding a regional panel restores all common native hours; returning to
    // globals remembers the chosen six-hour setting.
    await page.locator('#map-model-b').selectOption(main);
@@ -456,7 +456,7 @@ try{
     const context=canvas.getContext('2d');context.drawImage(image,0,0,1,1);return {hour:new Date(card.dataset.time).getUTCHours(),red:context.getImageData(0,0,1,1).data[0]};
    })));
    for(const {hour,red}of chartPixels)assert.ok(Math.abs(red-(hour*7*.96+255*.04))<3,'Each snapshot contains the pixels for its labelled valid time');
-   assert.match(await page.locator('.briefing-card>p').first().textContent(),/1 h precipitation/);
+   assert.match(await page.locator('.briefing-card>p').first().textContent(),/Mean rate \(mm\/h\) over preceding 1 h/);
    await page.locator('.briefing-chart').first().click();
    assert.equal(await page.locator('#briefing-enlarged').evaluate(dialog=>dialog.open),true);
    const enlargedBox=await page.locator('#briefing-enlarged-image').boundingBox();
@@ -472,7 +472,7 @@ try{
    await page.locator('#briefing-grid-values').check();
    await page.waitForFunction(()=>document.getElementById('briefing-status').textContent==='6/6 charts ready · 6/6 next charts prepared',{},{timeout:60000});
    assert.notEqual(await page.locator('#briefing-grid img').first().getAttribute('src'),plainImage,'Enabling overlays renders a distinct image');
-   assert.match(await page.locator('#briefing-legend').textContent(),/precipitation.*mm water/i);
+   assert.match(await page.locator('#briefing-legend').textContent(),/precipitation.*mm\/h/i);
    const preparedImages=await page.locator('#briefing-grid img').evaluateAll(images=>images.map(image=>image.src));
    const preparedRequests=await page.evaluate(()=>window.fixtureRequests.length);
    const expandedGridTop=await page.locator('#briefing-grid').evaluate(grid=>grid.getBoundingClientRect().top);
@@ -488,7 +488,7 @@ try{
    assert.deepEqual(await page.locator('#briefing-grid img').evaluateAll(images=>images.map(image=>image.src)),preparedImages,'Collapsing controls retains prepared imagery');
    assert.equal(await page.evaluate(()=>window.fixtureRequests.length),preparedRequests,'Toggling controls does not fetch or redraw the charts');
    const gridReads=await page.evaluate(()=>window.fixtureGridReads.filter(read=>read.purpose==='label'));
-   assert.ok(gridReads.length>=12);assert.ok(gridReads.every(r=>r.variable==='precipitation'));
+   assert.ok(gridReads.length>=12);assert.ok(gridReads.every(r=>r.variable==='precipitation_hourly_rate'));
    assert.ok(await page.evaluate(()=>window.fixtureGridReads.some(read=>read.purpose==='native'&&read.variable==='cloud_cover')),'Composite prefetch prepares its cloud input separately from precipitation labels');
    assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=precipitation'))),'Composite contours use precipitation in every view');
    await page.locator('.briefing-chart').first().click();
@@ -549,7 +549,7 @@ try{
     assert.ok(palettes.length>0);
     assert.deepEqual(palettes.at(-1).cloud,[38,60,85,1],'Standalone cloud keeps the main map palette');
     assert.deepEqual(palettes.at(-1).rain,[255,255,255,1],'Standalone precipitation keeps its opaque dry band');
-    if(field==='precipitation')assert.match(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),/1 h precipitation/);
+    if(field==='precipitation')assert.match(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),/Mean rate \(mm\/h\) over preceding 1 h/);
    }
    for(const selectedModel of [main]){
     await page.evaluate(()=>{window.fixtureRequests=[];window.fixtureGridReads=[];});

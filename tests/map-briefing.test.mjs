@@ -41,9 +41,9 @@ test('jet briefing requires paired winds and MSLP from the selected run',()=>{
   assert.equal(briefingTimes(complete,jet,{regional:true}).length,49);
  }
 });
-test('rain captions retain the source accumulation period rather than the display interval',()=>{
- assert.equal(briefingCaption(meta,BRIEFING_PRESETS[0],time(6)),'T+006 · 1 h precipitation ending at this time');
- assert.equal(briefingCaption({...meta,valid_times:[time(0),time(3),time(6)]},BRIEFING_PRESETS[0],time(6)),'T+006 · 3 h precipitation ending at this time');
+test('rain captions state mean rate and the verified native averaging period despite publication gaps',()=>{
+ assert.equal(briefingCaption(meta,BRIEFING_PRESETS[0],time(6)),'T+006 · Mean rate (mm/h) over preceding 1 h');
+ assert.equal(briefingCaption({...meta,valid_times:[time(0),time(3),time(6)]},BRIEFING_PRESETS[0],time(6)),'T+006 · Mean rate (mm/h) over preceding 1 h');
  assert.equal(briefingCaption(meta,BRIEFING_PRESETS.find(p=>p.id==='airmass'),time(12)),'T+012');
 });
 test('chart cache separates model, run, area, preset and time and releases old images',()=>{
@@ -91,5 +91,5 @@ test('composite grid values read precipitation when pressure uses a companion mo
  const calls=[],backend={...OM,getProtocolInstance:()=>({omFileReader:{readVariable:async(url,variable)=>{calls.push({url,variable});return {values:new Proxy({},{get:()=>1.5})};}}})};
  const primary={...meta,variables:['cloud_cover','precipitation']},pressure={...meta,domain:'ncep_gfs025',variables:['pressure_msl']};
  const labels=await briefingValueLabels({OM:backend,settings:{domainOptions:OM.domainOptions},meta:{...primary,sources:[primary,pressure]},field:{key:'cloud_precipitation_mslp',unit:'mm water'},time:time(3),bounds:[-10,49,2,61],width:960,height:960,unproject:([x,y])=>({lng:-10+x/80,lat:61-y/80}),project:([lng,lat])=>({x:(lng+10)*80,y:(61-lat)*80})});
- assert.equal(calls.length,1);assert.equal(calls[0].variable,'precipitation');assert.match(calls[0].url,/ncep_gfs013/);assert.ok(labels.length>0&&labels.every(label=>label.label==='1.5'));
+ assert.equal(calls.length,1);assert.equal(calls[0].variable,'precipitation_hourly_rate');assert.match(calls[0].url,/ncep_gfs013/);assert.ok(labels.length>0&&labels.every(label=>label.label==='1.5'));
 });

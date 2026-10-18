@@ -58,9 +58,9 @@ test('UTC steps are independent of run cycle, while short and off-cycle feeds re
  assert.deepEqual(intervalForecastTimes(halfHours,3),[halfHours[0],halfHours[3]]);
 });
 
-test('three-hour viewing reduces hourly downloads without relabelling rain or snow accumulations',()=>{
+test('three-hour viewing reduces downloads without changing the rain or snow averaging period',()=>{
  for(const field of ['precipitation','snowfall_water_equivalent']){
-  const meta={reference_time:time(0),valid_times:hourly,variables:[field]};
+  const meta={domain:'ncep_gfs013',reference_time:time(0),valid_times:hourly,variables:[field]};
   const state={model:'gfs_global',field,metas:{gfs_global:meta}};
   const native=panelForecastTimes(state),selected=intervalForecastTimes(native,3);
   assert.equal(native.length,48);

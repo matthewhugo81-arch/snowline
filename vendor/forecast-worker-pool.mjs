@@ -1,9 +1,11 @@
 // Open-Meteo worker protocol adapter. A logical tile can be requested again
 // before its cancelled worker replies. Every dispatch needs its own wire key.
+import {ForecastWorkerData} from './forecast-worker-data.mjs?v=20261018-rates';
 export class ForecastWorkerPool {
  constructor(workers=[]){
   this.workers=workers;this.nextWorker=0;this.sequence=0;
   this.pendingRequests=new Map();this.dispatches=new Map();
+  this.gridData=new ForecastWorkerData();
   for(const worker of workers){
    worker.onmessage=event=>this.handleMessage(event,worker);
    worker.onerror=event=>this.handleError(event,worker);
@@ -27,6 +29,7 @@ export class ForecastWorkerPool {
   }
  }
  handleError(event,worker){
+  this.gridData.reset(worker);
   for(const job of [...this.dispatches.values()])if(job.worker===worker){
    this.remove(job);
    for(const subscriber of job.subscribers)subscriber.reject(Error('Worker error while rendering tile '+job.key+': '+event.message));
@@ -61,8 +64,8 @@ export class ForecastWorkerPool {
   });
   if(dispatch){
    const {signal,...message}=request;
-   try{job.worker.postMessage({...message,key:job.wireKey});}
-   catch(error){this.remove(job);for(const subscriber of job.subscribers)subscriber.reject(error);}
+   try{job.worker.postMessage(this.gridData.encode(job.worker,{...message,key:job.wireKey}));}
+   catch(error){this.gridData.reset(job.worker);this.remove(job);for(const subscriber of job.subscribers)subscriber.reject(error);}
   }
   return promise;
  }

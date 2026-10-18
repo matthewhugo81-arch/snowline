@@ -1,3 +1,4 @@
+import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 // Forecast cloud, total precipitation and pressure: never observed satellite data.
 // Keep colour changes request-local so comparison panels cannot recolour each other.
 export const WEATHER_COMPOSITE='cloud_precipitation_mslp';
@@ -8,13 +9,14 @@ export function compositeMeta(meta){
  return {...meta,sources:meta.sources.filter(source=>Number.isFinite(reference)&&Date.parse(source.reference_time)===reference)};
 }
 export function compositeField(precipitationScale){
- return {key:WEATHER_COMPOSITE,name:'Cloud, precipitation & MSLP',unit:'mm water',...precipitationScale,
-  note:'Satellite-style modelled total cloud cover, not satellite observations: dark = clear, white = overcast. Coloured shading is TOTAL precipitation, including the water equivalent of snow, over the stated native interval. Below 0.5 mm the cloud remains visible; this does not imply zero precipitation. MSLP isobars every 4 hPa. All components use the same model run and valid time. Optional contours, grid values and clicked values refer to precipitation in mm water.'};
+ return {key:WEATHER_COMPOSITE,name:'Cloud, precipitation & MSLP',unit:'mm/h',...precipitationScale,
+  note:'Satellite-style modelled total cloud cover, not satellite observations: dark = clear, white = overcast. Coloured shading is the mean TOTAL precipitation rate in mm/h, including the water equivalent of snow, over the stated native interval. Longer intervals show an average, not hourly detail. Below 0.5 mm/h the cloud remains visible; this does not imply zero precipitation. MSLP isobars every 4 hPa. All components use the same model run and valid time. Optional contours, grid values and clicked values refer to precipitation in mm/h. Use accumulation layers for period totals.'};
 }
 export function compositeSettings(settings){
  const cloud=settings.colorScales.cloud_cover,rain=settings.colorScales.precipitation;
  return {...settings,colorScales:{...settings.colorScales,
   cloud_cover:{...cloud,colors:cloud.colors.map((_,index)=>{const shade=Math.round(65+165*cloud.breakpoints[index]/100);return [shade,shade,shade,1];})},
+  [precipitationRateVariable('precipitation')]:{...rain,unit:'mm/h',colors:rain.colors.map((color,index)=>index===0?[...color.slice(0,3),0]:[...color])},
   precipitation:{...rain,colors:rain.colors.map((color,index)=>index===0?[...color.slice(0,3),0]:[...color])}
  }};
 }

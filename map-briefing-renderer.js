@@ -1,22 +1,23 @@
+import {installPrecipitationRates,precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rasterResampling,gridLabelLayer} from './map-appearance.js?v=20261013-shared-appearance';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {ForecastFrames} from './map-frames.js?v=20261015-loading-performance';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261015-loading-performance';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261018-rates';
 import {overlayGroups} from './map-overlay-specs.js?v=20261015-direct-vertical';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261015-direct-vertical';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261018-rates';
 import {installDewPoint} from './map-dew-point.js';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261015-direct-vertical';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261018-rates';
 
-import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261013-map-appearance';
+import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
-import {fieldSource} from './map-sources.js?v=20261015-direct-vertical';
-import {sourceVariable} from './map-catalogue.js?v=20261015-direct-vertical';
+import {fieldSource} from './map-sources.js?v=20261018-rates';
+import {sourceVariable} from './map-catalogue.js?v=20261018-rates';
 import {forecastInputWork} from './map-work-queue.js';
 import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-direct-vertical';
 export {briefingSettings};
@@ -42,6 +43,7 @@ export class BriefingRenderer{
   installVerticalMotion(OM,this.settings);
   installDewPoint(OM,this.settings);
   installPrecipitationType(OM,this.settings);
+  installPrecipitationRates(OM,this.settings);
   installEnsembleTransport(OM,this.settings);
   this.accumulations=installAccumulations(OM,this.settings);
   this.cache=new ForecastTileCache(async(params,controller)=>{
@@ -51,7 +53,7 @@ export class BriefingRenderer{
    // and caching isolated from the interactive map's opaque precipitation scale.
    if(params.type==='json')return {...result,data:{...result.data,tiles:result.data.tiles.map(url=>url.replace(/^om:\/\//,'briefing://'))}};
    return result;
-  });
+  },{persistent:true});
   maplibre.addProtocol('briefing',(params,controller)=>this.cache.protocol(params,controller));
   this.container=document.createElement('div');this.container.className='briefing-renderer';this.container.setAttribute('aria-hidden','true');document.body.append(this.container);
   this.map=new maplibre.Map({container:this.container,style:backgroundStyle(background),center:[-3,55],zoom:4,interactive:false,attributionControl:false,preserveDrawingBuffer:true,fadeDuration:0,renderWorldCopies:false});
@@ -75,7 +77,7 @@ export class BriefingRenderer{
    signal.throwIfAborted();
    const source=fieldSource(meta,key,time),domain=this.settings.domainOptions.find(domain=>domain.value===source?.domain);
    if(!domain)continue;
-   const url=fieldDataURL(meta,key,time),variable=sourceVariable(source,key)??key,ranges=this.OM.getRanges(domain.grid,clip);
+   const url=fieldDataURL(meta,key,time),variable=precipitationRateVariable(sourceVariable(source,key)??key),ranges=this.OM.getRanges(domain.grid,clip);
    await forecastInputWork.run(()=>reader.readVariable(url,variable,ranges,signal),signal);
   }
  }

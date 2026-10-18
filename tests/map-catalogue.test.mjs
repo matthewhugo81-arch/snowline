@@ -80,6 +80,6 @@ test('rain and showers share the precipitation map bands and remain discrete',()
   assert.equal(field.bands,true);
   assert.deepEqual(field.stops,PRECIPITATION_SCALE.stops);
   assert.deepEqual(field.colors,PRECIPITATION_SCALE.colors);
-  assert.equal(field.unit,'mm water');
+  assert.equal(field.unit,'mm/h');
  }
 });

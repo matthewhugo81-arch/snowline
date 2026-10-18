@@ -1,7 +1,8 @@
-import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261015-direct-vertical';
-import {sourceVariable} from './map-catalogue.js?v=20261015-direct-vertical';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261014-clean-symbols';
+import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
+import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261018-rates';
+import {sourceVariable} from './map-catalogue.js?v=20261018-rates';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261018-rates';
 
 // One clipped native grid supplies every label, including derived diagnostics.
 // There are no point-forecast API calls and no requests per labelled cell.
@@ -15,7 +16,7 @@ export async function briefingValueLabels({OM,settings,meta,field,time,bounds,wi
  if(!points.length)return [];
  const ranges=OM.getRanges(domain.grid,bounds),sampleGrid=OM.GridFactory.create(domain.grid,ranges);
  const reader=OM.getProtocolInstance(settings).omFileReader;
- const data=await reader.readVariable(fieldDataURL(meta,key,time),sourceVariable(source,key),ranges,signal);
+ const data=await reader.readVariable(fieldDataURL(meta,key,time),precipitationRateVariable(sourceVariable(source,key)),ranges,signal);
  signal?.throwIfAborted();
  return points.flatMap(point=>{
   const value=sampleGrid.getInterpolatedValue(data.values,point.lat,point.lon,'nearest'),label=gridValueLabel(value,field);

@@ -28,22 +28,30 @@ const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  signal.addEventListener('abort',cancelled,{once:true});
 });
 export class ForecastTileCache{
- constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3}={}){
-  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts});
+ constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=64*1024*1024,diskEntries=2048}={}){
+  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries});
+  this.diskStates=new WeakMap();
   this.contexts=new Map();this.contextSequence=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
-  this.session=Date.now()+'-'+Math.random().toString(36).slice(2);
+  // Version + one-hour bucket prevents stale rendering after a release or
+  // source correction, while allowing a reload to reuse completed tiles.
+  this.session=persistent?Math.floor(Date.now()/3600000)*3600000+'-rates-v2':Date.now()+'-'+Math.random().toString(36).slice(2);
   // Only remove this feature's abandoned caches, never other site data.
-  storage?.keys().then(names=>Promise.all(names.filter(name=>name.startsWith(PREFIX)&&Number(name.slice(PREFIX.length).split('-')[0])<Date.now()-172800000).map(name=>storage.delete(name)))).catch(()=>{});
+  storage?.keys().then(names=>Promise.all(names.filter(name=>name.startsWith(PREFIX)&&Number(name.slice(PREFIX.length).split('-')[0])<Date.now()-(persistent?3600000:172800000)).map(name=>storage.delete(name)))).catch(()=>{});
  }
  setContext(context){
   if(context===this.context)return false;
   this.resetPending();this.context=context;this.limited=false;
   let entry=this.contexts.get(context);
-  if(!entry){const name=PREFIX+this.session+'-'+(++this.contextSequence);entry={name,disk:this.storage?.open(name).catch(()=>null)??Promise.resolve(null)};}
+  if(!entry){const name=PREFIX+this.session+'-'+(this.persistent?encodeURIComponent(context):++this.contextSequence);entry={name,disk:this.storage?.open(name).catch(()=>null)??Promise.resolve(null)};}
   this.contexts.delete(context);this.contexts.set(context,entry);
   this.name=entry.name;this.disk=entry.disk;
   while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
+  if(this.persistent)entry.disk.then(async()=>{
+   const active=new Set([...this.contexts.values()].map(item=>item.name));
+   const others=(await this.storage?.keys()??[]).filter(name=>name.startsWith(PREFIX+this.session+'-')&&!active.has(name));
+   await Promise.all(others.slice(0,Math.max(0,others.length+active.size-this.maxContexts)).map(name=>this.storage.delete(name)));
+  }).catch(()=>{});
   return true;
  }
  resetPending(){
@@ -53,11 +61,37 @@ export class ForecastTileCache{
  }
  release(){
   this.resetPending();
-  for(const entry of this.contexts.values())entry.disk.then(()=>this.storage?.delete(entry.name)).catch(()=>{});
+  if(!this.persistent)for(const entry of this.contexts.values())entry.disk.then(()=>this.storage?.delete(entry.name)).catch(()=>{});
   this.contexts.clear();this.context=null;
   this.disk=null;this.name=null;
  }
  limit(){if(!this.limited){this.limited=true;this.onLimit();}}
+ async put(store,request,response,bytes){
+  if(!this.persistent)return store.put(request,response);
+  let state=this.diskStates.get(store);
+  if(!state){
+   state={entries:new Map(),bytes:0,queue:Promise.resolve()};this.diskStates.set(store,state);
+   state.queue=(async()=>{
+    for(const key of await store.keys()){
+     const saved=await store.match(key),size=Number(saved?.headers.get('x-snowline-bytes'));
+     if(saved?.headers.get('x-snowline-bytes')===null||!Number.isFinite(size)||size<0){await store.delete(key);continue;}
+     state.entries.set(typeof key==='string'?key:key.url,size);state.bytes+=size;
+    }
+   })();
+  }
+  // Serialize only background disk writes, never foreground image delivery.
+  const write=state.queue.then(async()=>{
+   if(bytes>this.diskBytes)throw Error('Forecast tile exceeds storage budget');
+   const old=state.entries.get(request)??0;
+   state.entries.delete(request);state.bytes-=old;
+   while((state.bytes+bytes>this.diskBytes||state.entries.size>=this.diskEntries)&&state.entries.size){
+    const [key,size]=state.entries.entries().next().value;
+    await store.delete(key);state.entries.delete(key);state.bytes-=size;
+   }
+   await store.put(request,response);state.entries.set(request,bytes);state.bytes+=bytes;
+  });
+  state.queue=write.catch(()=>{});return write;
+ }
  remember(key,result,durable,persisting=false){
   const bytes=result.data instanceof ArrayBuffer?result.data.byteLength:new TextEncoder().encode(JSON.stringify(result.data)).length;
   const old=this.memory.get(key);if(old)this.bytes-=old.bytes;
@@ -72,7 +106,7 @@ export class ForecastTileCache{
  persist(key,request,entry,store,generation,type){
   // Display now; save separately. Keep pending writes bounded if storage stalls.
   const job={};this.writes.set(key,job);
-  job.promise=Promise.resolve().then(()=>store.put(request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes'}})))
+  job.promise=Promise.resolve().then(()=>this.put(store,request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes','x-snowline-bytes':String(entry.bytes)}}),entry.bytes))
    .then(()=>{entry.durable=true;},()=>{/* Storage denial must not stop a map. */})
    .finally(()=>{
     entry.persisting=false;

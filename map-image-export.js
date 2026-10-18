@@ -1,6 +1,6 @@
 import {displayStops,displayUnit} from './map-wind-units.js';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261015-direct-vertical';
-import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261013-map-appearance';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261018-rates';
+import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {isTypeField,NATIVE_PRECIPITATION_TYPE,precipitationTypeScales} from './map-precipitation-type.js?v=20261014-interaction-audit';
 const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';
 const FONT='Arial, sans-serif';
@@ -10,7 +10,7 @@ export function chartScales(field,interval='',weather=false){
  if(isTypeField(field.key))return precipitationTypeScales(field.key===NATIVE_PRECIPITATION_TYPE);
  if(weather||field.key===WEATHER_COMPOSITE)return [
   {name:'Modelled total cloud cover (not satellite observations)',colors:['#414141','#e6e6e6'],labels:['Clear · 0%','Overcast · 100%'],bands:false},
-  {name:'Total precipitation · mm water'+(interval?' · '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm: cloud remains visible; not necessarily dry.'}
+  {name:'Mean precipitation · mm/h'+(interval?' · '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm/h: cloud remains visible; not necessarily dry.'}
  ];
  const offset=field.legendStart??0,stops=displayStops(field).slice(offset),colors=field.colors.slice(offset);
  const labels=field.categoryLabels?field.categoryLabels.slice(offset):field.bands?stops.map((v,i)=>v+(i===stops.length-1&&!field.categorical?'+':'')):[String(field.temperatureBands?stops[1]:stops[0]),String(stops.at(-1))];
