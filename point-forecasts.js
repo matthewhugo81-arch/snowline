@@ -1,8 +1,8 @@
-import {MODELS,normalise,fetchJSON,forecastURL} from './data.js?v=20261016-direction';
+import {MODELS,normalise,fetchJSON,forecastURL} from './data.js?v=20261018-pressure-total';
 import {FORECAST_SERVICE_URL,pointForecastURL} from './forecast-service.js?v=20261015-shared-cache-live';
 import {POINT_LOCATIONS,POINT_TTL,POINT_MAX_AGE,pointKey,usableForecast,snapshotFor} from './point-snapshots.js';
 
-export async function loadPointForecasts(location,{signal,force=false,withWindDirection=false,onModel=()=>{},onError=()=>{},onProgress=()=>{},load=fetchJSON,service=FORECAST_SERVICE_URL}={}){
+export async function loadPointForecasts(location,{signal,force=false,withWindDirection=false,withPressure=false,onModel=()=>{},onError=()=>{},onProgress=()=>{},load=fetchJSON,service=FORECAST_SERVICE_URL}={}){
  let shared=null;
  if(POINT_LOCATIONS.some(point=>pointKey(point)===pointKey(location))){
   try{shared=snapshotFor(await load('./point-data/'+pointKey(location)+'.json',signal,{force,ttl:300000,staleTtl:POINT_MAX_AGE}),location);}catch{/* Exact-location browser cache and direct API remain available. */}
@@ -23,13 +23,16 @@ export async function loadPointForecasts(location,{signal,force=false,withWindDi
    }
    signal?.throwIfAborted();
    if(!usableForecast(json))throw Error('No current forecast data for this location.');
-   if(withWindDirection&&!Object.hasOwn(json.hourly,'wind_direction_10m')){
+   const missing=[...(withWindDirection?['wind_direction_10m']:[]),...(withPressure?['pressure_msl']:[])].filter(key=>!Object.hasOwn(json.hourly,key));
+   if(missing.length){
     try{
-     const url=new URL(forecastURL(location,model));url.searchParams.set('hourly','wind_direction_10m');
+     const url=new URL(forecastURL(location,model));url.searchParams.set('hourly',missing.join(','));
      const extra=await load(url.href,signal,{force,ttl:POINT_TTL,staleTtl:POINT_MAX_AGE});
-     const directions=new Map((extra.hourly?.time??[]).map((t,i)=>[Date.parse(/Z$/.test(t)?t:t+'Z'),extra.hourly.wind_direction_10m?.[i]??null]));
-     json={...json,hourly:{...json.hourly,wind_direction_10m:json.hourly.time.map(t=>directions.get(Date.parse(/Z$/.test(t)?t:t+'Z'))??null)}};
-    }catch{signal?.throwIfAborted();} // Other variables remain usable if direction is unavailable.
+     const indices=new Map((extra.hourly?.time??[]).map((t,i)=>[Date.parse(/Z$/.test(t)?t:t+'Z'),i]));
+     const hourly={...json.hourly};
+     for(const key of missing)hourly[key]=json.hourly.time.map(t=>extra.hourly?.[key]?.[indices.get(Date.parse(/Z$/.test(t)?t:t+'Z'))]??null);
+     json={...json,hourly,hourly_units:{...json.hourly_units,...extra.hourly_units}};
+    }catch{signal?.throwIfAborted();} // Existing forecasts remain usable if supplemental data is unavailable.
    }
    const parsed=normalise(json,model);
    onModel(parsed);

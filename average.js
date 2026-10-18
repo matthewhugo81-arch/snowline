@@ -17,3 +17,9 @@ export function circularAverageSeries(series,length){
  for(let i=0;i<length;i++){const valid=series.map(s=>s.values[i]).filter(v=>typeof v==='number'&&Number.isFinite(v));counts.push(valid.length);values.push(directionMean(valid));}
  return {values,counts};
 }
+
+// Hourly accumulations: sum the displayed hourly means, never average the total.
+// Missing hours must not silently reduce the reported accumulation.
+export function precipitationTotal(values){
+ return values.length&&values.every(v=>typeof v==='number'&&Number.isFinite(v))?values.reduce((sum,v)=>sum+v,0):null;
+}

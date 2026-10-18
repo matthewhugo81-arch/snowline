@@ -1,6 +1,6 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261016-direction';
-import {loadPointForecasts} from './point-forecasts.js?v=20261016-direction2';
-import {averageSeries,circularAverageSeries,directionLabel} from './average.js?v=20261016-direction';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261018-pressure-total';
+import {loadPointForecasts} from './point-forecasts.js?v=20261018-pressure-total';
+import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261015-compact-reset';
 import {setupChartPanels} from './chart-panels.js?v=20261014-panels';
@@ -35,7 +35,7 @@ function populate(){
  $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${modelColour(m)}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
  const chartVariables=[...VARIABLES.filter(v=>!['snowfall','snow_depth'].includes(v.key)),...VARIABLES.filter(v=>['snowfall','snow_depth'].includes(v.key))];
- $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div></article>`).join('');
+ $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div>${v.key==='precipitation'?'<p id="precipitation-total" class="chart-note" aria-live="polite"></p>':''}</article>`).join('');
  $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
  setupChartPanels(document.querySelector('main'),()=>{chartZoom.cancel();scheduleRender();});
  document.querySelectorAll('.plot').forEach(el=>{el.tabIndex=0;el.title='Pinch with two fingers to zoom; move two fingers sideways to pan. Right-drag (or Shift + left-drag) to zoom all charts. Double-click or press Escape here to reset.';});
@@ -56,7 +56,7 @@ async function loadLocation(location,force=false){
  state.times=Array.from({length:168},(_,i)=>new Date(start+i*3600000).toISOString().replace('.000Z','Z'));
  if(Number.isFinite(requestedTime)){const idx=state.times.findIndex(t=>Date.parse(t)===requestedTime);if(idx>=0)state.index=idx;else state.timeNote='The selected map time is outside this point-forecast window. ';requestedTime=NaN;}
  setStatus('Loading forecasts for this location…');render();
- try{await loadPointForecasts(location,{signal,force,withWindDirection:true,
+ try{await loadPointForecasts(location,{signal,force,withWindDirection:true,withPressure:true,
   onModel:model=>{if(generation!==state.generation)return;state.models.set(model.id,model);if(!finite(altitude)&&finite(model.elevation)){altitude=model.elevation;showAltitude();}if(model.retryAt)state.limit={retryAt:model.retryAt};},
   onError:(model,error)=>{if(generation!==state.generation)return;state.errors.set(model.id,error.name==='TimeoutError'?'Request timed out. Try Refresh.':error.message);if(error.status===429)state.limit=error;},
   onProgress:done=>{if(generation===state.generation){setStatus(`Loading forecasts · ${done} of ${MODELS.length} models checked`);scheduleRender();}}
@@ -88,7 +88,7 @@ function plot(container,series,config,times){
  const valid=series.flatMap(s=>s.values).filter(finite);
  if(!valid.length){container.innerHTML=`<div class="plot-empty">${state.loading?'Loading available forecasts…':state.selected.size?'No data available for the selected models.':'Select a model to see its forecast.'}</div>`;chartLayouts.delete(container.id);return;}
  let min=config.floor??Math.min(...valid),max=config.ceiling??Math.max(...valid);
- if(config.floor===undefined){min=Math.min(min,0);max=Math.max(max,0);}
+ if(config.floor===undefined&&!config.absolute){min=Math.min(min,0);max=Math.max(max,0);}
  if(max-min<config.minRange){if(config.floor!==undefined)max=min+config.minRange;else{const mid=(min+max)/2;min=mid-config.minRange/2;max=mid+config.minRange/2;}}
  if(config.ceiling===undefined)max+=(max-min)*.08;
  const x=i=>left+inner*i/Math.max(1,n-1),y=v=>top+(height-bottom-top)*(config.direction?(v-min)/(max-min):1-(v-min)/(max-min));
@@ -136,6 +136,10 @@ function render(){
  const series=models.map(m=>({...m,values:times.map(t=>valueAt(m,v.key,t))}));
  const average=(v.direction?circularAverageSeries:averageSeries)(series,times.length);
  averages.set(v.key,average);
+ if(v.key==='precipitation'){
+  const total=precipitationTotal(average.values);
+  $('precipitation-total').textContent=`Average precipitation total: ${total===null?'—':fmt(total)+' mm'} · displayed period${total===null?' (incomplete data)':''}`;
+ }
  plot($('plot-'+v.key),v.direction?series:[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }

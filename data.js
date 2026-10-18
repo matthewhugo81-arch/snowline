@@ -14,6 +14,7 @@ export const VARIABLES = [
  {key:'wind_direction_10m',title:'10 m wind direction',unit:'°',note:'Dots show each model; direction the wind comes from (N = 0° / 360°)',floor:0,ceiling:360,minRange:360,direction:true},
  {key:'relative_humidity_2m',title:'2 m relative humidity',unit:'%',note:'Moisture context alongside the minimum temperature',floor:0,ceiling:100,minRange:20},
  {key:'soil_temperature_0cm',title:'0 cm soil temperature',unit:'°C',note:'Modelled ground proxy; not a road or pavement forecast',minRange:4},
+ {key:'pressure_msl',title:'Mean sea-level pressure',unit:'hPa',note:'Mean sea-level pressure from each available model, with the selected-model average',absolute:true,minRange:8},
  {key:'temperature_850hPa',title:'850 hPa temperature',unit:'°C',note:'Upper-air context; this level may lie below high terrain',minRange:4}
 ];
 export const finite = value => typeof value === 'number' && Number.isFinite(value);

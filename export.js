@@ -1,5 +1,5 @@
-import {finite, valueAt} from './data.js?v=20261016-direction';
-import {averageSeries, circularAverageSeries, directionLabel} from './average.js?v=20261016-direction';
+import {finite, valueAt} from './data.js?v=20261018-pressure-total';
+import {averageSeries, circularAverageSeries, directionLabel} from './average.js?v=20261018-pressure-total';
 
 export const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
