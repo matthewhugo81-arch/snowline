@@ -103,6 +103,15 @@ try {
         await page.keyboard.press('Escape'); assert.deepEqual(await bounds(), zoom);
       }
       await page.locator('#horizon').selectOption('24');
+      await page.waitForFunction(() => document.querySelector('#time-slider').max === '23');
+      // Fourteen models share 13.2 mm; GFS has 85.2 mm. The average
+      // line totals 18.0 mm, never the 270.0 mm sum of all model totals.
+      assert.match(await page.locator('#precipitation-total').textContent(),/Accumulated precipitation: 18\.0 mm/);
+      const averageSnapshot = await plot.evaluate(async el => {
+        const {captureChartImage} = await import('/chart-image-export.js');
+        return captureChartImage(el, {location:'Test location',coordinates:'54N 2W',period:'fixture',firstTime:'2026-10-18',legend:[]});
+      });
+      assert.match(averageSnapshot.total,/Accumulated precipitation: 18\.0 mm/,'Export preserves the displayed average-line total');
       await page.locator('#select-none').click(); await page.locator('input[value="gfs_global"]').check();
       await page.waitForTimeout(100);
       const snapshot = await plot.evaluate(async el => {

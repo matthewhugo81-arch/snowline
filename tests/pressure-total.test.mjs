@@ -17,6 +17,15 @@ test('total follows hourly average, selected models and displayed window',()=>{
  assert.equal(precipitationTotal([0,null]),null);
  assert.equal(precipitationTotal([]),null);
 });
+
+test('an outlier contributes only through the hourly average line',()=>{
+ const series=Array.from({length:10},(_,i)=>({values:[0,i===0?50:0,2]}));
+ const mean=averageSeries(series,3).values;
+ assert.deepEqual(mean,[0,5,2]);
+ assert.equal(precipitationTotal(mean),7);
+ assert.equal(precipitationTotal(mean.slice(1,2)),5);
+ assert.equal(precipitationTotal(averageSeries(series.slice(1),3).values),2);
+});
 test('pressure is requested and normalised in hPa with realistic absolute axis',()=>{
  const pressure=VARIABLES.find(v=>v.key==='pressure_msl');
  assert.equal(pressure.unit,'hPa');assert.equal(pressure.absolute,true);
