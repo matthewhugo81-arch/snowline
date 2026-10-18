@@ -1,0 +1,7 @@
+# Meteogram image export
+
+Right-click a location graph without dragging to choose **Copy image** or **Save PNG**. The image button beside Data opens the same menu on desktop and mobile. Right-drag and Shift-left-drag still zoom all graphs; two-finger zoom/pan is unchanged. A focused chart also supports Shift+F10, with Escape closing the menu without resetting its zoom.
+
+Images capture the visible chart at twice its rendered resolution, including its theme colours, model legend, location, UTC period and data status. Precipitation images include the displayed total of hourly selected-model averages. Opening the menu freezes that snapshot; it does not fetch weather. Clipboard writes start during the user gesture for Safari compatibility. If the browser blocks copying, a PNG preview provides native copy/hold and download options.
+
+Check with `node tests/meteogram-image-browser.mjs` (Playwright Chromium and WebKit), alongside `python tests/chart-zoom-browser.py`. The image suite uses deterministic weather and a stubbed clipboard boundary, validates PNG downloads/pixels and the denial fallback, and checks desktop and iPhone layouts without changing the system clipboard. Maps keep their existing image-export implementation.

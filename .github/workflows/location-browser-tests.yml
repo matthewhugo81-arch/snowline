@@ -2,10 +2,10 @@ name: Snowline location browser tests
 on:
   push:
     branches: [main]
-    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
+    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/meteogram-image-browser.mjs', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
   pull_request:
     branches: [main]
-    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
+    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/meteogram-image-browser.mjs', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
 permissions:
   contents: read
 jobs:
@@ -25,3 +25,14 @@ jobs:
         run: python tests/chart-zoom-browser.py
       - name: Check event analysis shared cache and location cancellation
         run: python tests/event-analysis-browser.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install image export browsers
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium webkit
+      - name: Check desktop and iPhone meteogram images
+        run: node tests/meteogram-image-browser.mjs
+        env:
+          SNOWLINE_TEST_OUTPUT: review-output/meteogram-images

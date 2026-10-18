@@ -2,7 +2,8 @@ import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} fr
 import {loadPointForecasts} from './point-forecasts.js?v=20261018-pressure-total2';
 import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total2';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
-import {createChartZoom} from './chart-zoom.js?v=20261015-compact-reset';
+import {createChartZoom} from './chart-zoom.js?v=20261018-image-export';
+import {createChartImageMenu} from './chart-image-export.js?v=20261018-image-export';
 import {setupChartPanels} from './chart-panels.js?v=20261018-panel-width';
 import {createDatasetDialog} from './dataset-dialog.js?v=20261018-pressure-total2';
 import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261018-pressure-total2';
@@ -20,11 +21,19 @@ try{if(linkParams.has('lat')&&linkParams.has('lon')){const point=parseCoordinate
 
 let chartLayouts=new Map(),plotWidths=new Map(),renderPending=false,fullRenderPending=false,inspection=null;
 const coverageCache=new WeakMap();
+const chartImages=createChartImageMenu({root:document.querySelector('main'),getInfo:id=>{
+ const layout=chartLayouts.get(id);if(!layout)return null;
+ return {location:$('place').textContent,coordinates:$('coordinates').textContent,
+  firstTime:layout.times[0],period:`${date.format(new Date(layout.times[0]))} – ${date.format(new Date(layout.times.at(-1)))} UTC`,
+  status:$('status').textContent,
+  legend:layout.series.filter(s=>s.values.some(finite)).map(s=>({name:s.name||'Snowfall model agreement',color:modelColour(s),average:!!s.average,ensemble:!!s.ensemble,dots:id==='plot-wind_direction_10m'}))};
+}});
 const chartZoom=createChartZoom({root:document.querySelector('main'),getLayout:id=>chartLayouts.get(id),
  getWindow:()=>{const {start,end}=chartWindow(state);return {start,end,length:Math.min(state.times.length,state.hours)};},
  onZoom:range=>{state.zoom=range.start===0&&range.end===Math.min(state.times.length,state.hours)-1?null:range;state.index=Math.max(range.start,Math.min(range.end,state.index));scheduleRender();},
  onInspect:index=>{if(index!==null){state.index=index;scheduleRender(true);}},
- onReset:()=>{chartZoom.cancel();state.zoom=null;scheduleRender();},onFinish:scheduleRender});
+ onReset:()=>{chartZoom.cancel();state.zoom=null;scheduleRender();},onFinish:scheduleRender,
+ onContextMenu:(chart,position)=>chartImages.open(chart,position)});
 function selectedModels(){return MODELS.filter(m=>state.selected.has(m.id)&&state.models.has(m.id)).map(m=>state.models.get(m.id));}
 function setStatus(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
 // Data, range and size changes take precedence over cursor-only updates in the same frame.
@@ -38,7 +47,8 @@ function populate(){
  $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div>${v.key==='precipitation'?'<p id="precipitation-total" class="chart-note precipitation-total" aria-live="polite"></p>':''}</article>`).join('');
  $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
  setupChartPanels(document.querySelector('main'),()=>{chartZoom.cancel();scheduleRender();});
- document.querySelectorAll('.plot').forEach(el=>{el.tabIndex=0;el.title='Pinch with two fingers to zoom; move two fingers sideways to pan. Right-drag (or Shift + left-drag) to zoom all charts. Double-click or press Escape here to reset.';});
+ chartImages.setup();
+ document.querySelectorAll('.plot').forEach(el=>{el.tabIndex=0;el.title='Right-click to copy or save this chart. Pinch with two fingers to zoom; move two fingers sideways to pan. Right-drag (or Shift + left-drag) to zoom all charts. Double-click or press Escape here to reset.';});
  $('data-table').previousElementSibling.innerHTML='<tr><th>Model</th>'+VARIABLES.map(v=>`<th>${v.title}<br>${v.unit}</th>`).join('')+'<th>Coverage / status</th></tr>';
 }
 async function loadLocation(location,force=false){

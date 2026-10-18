@@ -2,11 +2,11 @@ import {indexAtX, selectionRange, transformRange} from './chart-window.js?v=2026
 
 // Single-finger scrolling stays native. Only a two-finger gesture that starts
 // inside one graph is consumed; wheel events and page zoom outside stay native.
-export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, onReset, onFinish}) {
+export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, onReset, onFinish, onContextMenu}) {
   const svgNS = 'http://www.w3.org/2000/svg';
   const format = new Intl.DateTimeFormat('en-GB', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', timeZone:'UTC'});
   const listeners = new AbortController();
-  let drag = null, pinch = null, suppressClickUntil = 0, lastClick = null;
+  let drag = null, pinch = null, suppressClickUntil = 0, suppressContextUntil = 0, lastClick = null;
   const listen = (target, event, handler, options = {}) => target.addEventListener(event, handler, {...options, signal:listeners.signal});
   function chartFor(event) {
     const chart = event.target.closest?.('.plot');
@@ -74,6 +74,7 @@ export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, 
     if (!drag) return;
     const previous = drag;
     drag = null;
+    if (previous.button === 2) suppressContextUntil = performance.now() + 500;
     previous.band.remove();
     previous.chart.classList.remove('zoom-selecting');
     try { if (previous.chart.hasPointerCapture(previous.pointerId)) previous.chart.releasePointerCapture(previous.pointerId); } catch {}
@@ -112,7 +113,7 @@ export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, 
     label.setAttribute('text-anchor', 'middle');
     band.append(rect, label);
     chart.querySelector('svg').append(band);
-    drag = {chart, layout, band, anchor:p.x, clientX:event.clientX, pointerId:event.pointerId, button:right ? 2 : 0};
+    drag = {chart, layout, band, anchor:p.x, clientX:event.clientX, clientY:event.clientY, moved:false, pointerId:event.pointerId, button:right ? 2 : 0};
     chart.classList.add('zoom-selecting');
     chart.focus({preventScroll:true});
     try { chart.setPointerCapture(event.pointerId); } catch { /* Window listeners also handle release outside the chart. */ }
@@ -122,6 +123,7 @@ export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, 
     if (!drag || event.pointerId !== drag.pointerId) return;
     const pressed = drag.button === 2 ? 2 : 1;
     if (!(event.buttons & pressed)) { clearDrag(); return; }
+    drag.moved ||= Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) >= 6;
     const p = point(drag.chart, event);
     if (p) paint(p.x);
   });
@@ -130,9 +132,12 @@ export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, 
     event.preventDefault();
     const p = point(drag.chart, event);
     const range = p && Math.abs(event.clientX - drag.clientX) >= 6 ? selectionRange(drag.anchor, p.x, drag.layout) : null;
+    const menuChart = drag.button === 2 && !drag.moved && Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) < 6 ? drag.chart : null;
+    if (drag.button === 2) suppressContextUntil = performance.now() + 500;
     if (drag.button === 0) suppressClickUntil = performance.now() + 400;
     clearDrag();
     if (range) onZoom(range);
+    else if (menuChart) onContextMenu?.(menuChart, {x:event.clientX, y:event.clientY});
   });
   listen(window, 'pointercancel', event => { if (drag?.pointerId === event.pointerId) clearDrag(); });
   listen(root, 'lostpointercapture', event => { if (drag?.pointerId === event.pointerId) clearDrag(); });
@@ -140,7 +145,12 @@ export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, 
   listen(window, 'resize', cancel);
   listen(document, 'visibilitychange', () => { if (document.hidden) cancel(); });
   listen(root, 'contextmenu', event => {
-    if (chartFor(event) && event.pointerType !== 'touch' && !event.shiftKey && (event.button === 2 || drag)) event.preventDefault();
+    const chart = chartFor(event);
+    if (!chart || event.pointerType === 'touch' || event.shiftKey) return;
+    event.preventDefault();
+    // Windows may dispatch contextmenu before pointerup, other platforms after.
+    // A right-drag must never open the export menu on either event order.
+    if (!drag && performance.now() >= suppressContextUntil) onContextMenu?.(chart, event.clientX || event.clientY ? {x:event.clientX, y:event.clientY} : null);
   });
   listen(root, 'click', event => {
     if (event.target.closest?.('[data-reset-zoom]')) { cancel(); lastClick = null; onReset(); return; }
@@ -157,6 +167,10 @@ export function createChartZoom({root, getLayout, getWindow, onZoom, onInspect, 
   });
   listen(root, 'dblclick', event => { if (chartFor(event) && !event.shiftKey) { event.preventDefault(); onReset(); } });
   listen(document, 'keydown', event => {
+    const chart = document.activeElement;
+    if ((event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) && chart?.matches('.plot') && root.contains(chart)) {
+      event.preventDefault(); suppressContextUntil = performance.now() + 500; onContextMenu?.(chart, null); return;
+    }
     if (event.key !== 'Escape') return;
     if (drag || pinch) { event.preventDefault(); cancel(); return; }
     if (document.activeElement?.matches('.plot') && root.contains(document.activeElement)) onReset();
