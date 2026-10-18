@@ -72,6 +72,24 @@ try {
       };
       if (kind !== 'iphone') {
         await plot.scrollIntoViewIfNeeded(); await page.waitForTimeout(150);
+        // Some browsers terminate pointer tracking when requesting a context
+        // menu. There may be no pointerup after the contextmenu event.
+        for (const ending of ['pointercancel','lostpointercapture']) for (const contextFirst of [true,false]) {
+          await plot.evaluate((el,{ending,contextFirst}) => {
+            const r=el.getBoundingClientRect(), init={bubbles:true,cancelable:true,pointerType:'mouse',pointerId:77,button:2,buttons:2,clientX:r.x+150,clientY:r.y+80};
+            el.dispatchEvent(new PointerEvent('pointerdown',init));
+            if (contextFirst) el.dispatchEvent(new MouseEvent('contextmenu',init));
+            el.dispatchEvent(new PointerEvent(ending,{...init,buttons:0}));
+            if (!contextFirst) el.dispatchEvent(new MouseEvent('contextmenu',init));
+          },{ending,contextFirst});
+          assert.equal(await menu.isVisible(),true,`Contextmenu with ${ending} (contextFirst=${contextFirst}) must still open the image menu`);
+          await page.keyboard.press('Escape');
+        }
+        // Whole-panel right-clicks should offer the same image actions.
+        for (const target of [card.locator('h2'),card.locator('.chart-values'),card.locator('.precipitation-total')]) {
+          await target.click({button:'right'}); assert.equal(await menu.isVisible(),true,'Panel title, legend and total open the menu');
+          await page.keyboard.press('Escape');
+        }
         await plot.click({button:'right',position:{x:150,y:80}});
         await menu.waitFor({state:'visible'}); assert.deepEqual(await bounds(),[0,167]);
         await save('rainfall');
@@ -128,6 +146,12 @@ try {
         await save(title.replaceAll(' ','-'));
       }
       await open(); await page.screenshot({path:resolve(out,kind+'-menu.png')}); await page.keyboard.press('Escape');
+      if (kind !== 'iphone') {
+        await page.locator('#select-none').click(); await page.waitForTimeout(80);
+        await card.locator('h2').click({button:'right'}); assert.equal(await menu.isVisible(),true);
+        assert.match(await menu.getByRole('status').textContent(),/forecast data first/);
+        assert.equal(await menu.getByRole('menuitem',{name:'Save PNG',exact:true}).isDisabled(),true);
+      }
       assert.equal(requests,count,'Exports must not fetch weather'); assert.deepEqual(errors,[]);
       report.push({browser:kind,copy:'PNG generated during user activation',save:'PNG downloaded',fallback:'image preview',pixels,forecastRequests:count,errors});
     } finally { await browser.close(); }

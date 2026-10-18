@@ -2,7 +2,7 @@ import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} fr
 import {loadPointForecasts} from './point-forecasts.js?v=20261018-pressure-total2';
 import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total2';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
-import {createChartZoom} from './chart-zoom.js?v=20261018-image-export';
+import {createChartZoom} from './chart-zoom.js?v=20261018-context-menu-fix';
 import {createChartImageMenu} from './chart-image-export.js?v=20261018-image-export';
 import {setupChartPanels} from './chart-panels.js?v=20261018-panel-width';
 import {createDatasetDialog} from './dataset-dialog.js?v=20261018-pressure-total2';
@@ -33,7 +33,7 @@ const chartZoom=createChartZoom({root:document.querySelector('main'),getLayout:i
  onZoom:range=>{state.zoom=range.start===0&&range.end===Math.min(state.times.length,state.hours)-1?null:range;state.index=Math.max(range.start,Math.min(range.end,state.index));scheduleRender();},
  onInspect:index=>{if(index!==null){state.index=index;scheduleRender(true);}},
  onReset:()=>{chartZoom.cancel();state.zoom=null;scheduleRender();},onFinish:scheduleRender,
- onContextMenu:(chart,position)=>chartImages.open(chart,position)});
+ onContextMenu:(chart,position)=>chartImages.open(chart,position),onDragStart:()=>chartImages.close()});
 function selectedModels(){return MODELS.filter(m=>state.selected.has(m.id)&&state.models.has(m.id)).map(m=>state.models.get(m.id));}
 function setStatus(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
 // Data, range and size changes take precedence over cursor-only updates in the same frame.

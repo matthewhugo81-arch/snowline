@@ -1,6 +1,6 @@
 # Meteogram image export
 
-Right-click a location graph without dragging to choose **Copy image** or **Save PNG**. The image button beside Data opens the same menu on desktop and mobile. Right-drag and Shift-left-drag still zoom all graphs; two-finger zoom/pan is unchanged. A focused chart also supports Shift+F10, with Escape closing the menu without resetting its zoom.
+Right-click a location graph, its title, legend or total to choose **Copy image** or **Save PNG**. The image button beside Data opens the same menu on desktop and mobile. Context-menu requests work whether the browser delivers mouse release, cancels the pointer or loses capture; continuing into a right-drag dismisses the menu and zooms. Right-drag and Shift-left-drag still zoom all graphs; two-finger zoom/pan is unchanged. A focused chart also supports Shift+F10, with Escape closing the menu without resetting its zoom. A chart without loaded data explains why image actions are unavailable.
 
 Images capture the visible chart at twice its rendered resolution, including its theme colours, model legend, location, UTC period and data status. Precipitation images include the displayed total of hourly selected-model averages. Opening the menu freezes that snapshot; it does not fetch weather. Clipboard writes start during the user gesture for Safari compatibility. If the browser blocks copying, a PNG preview provides native copy/hold and download options.
 
