@@ -160,3 +160,13 @@ endpoint. The shared Worker and town publisher use the same model registry and
 URL builder as the charts. Deploy the updated Worker before the website so it
 accepts the new model. Cache keys, expiry, cooldown and budget rules stay shared.
 The existing selected-model average counts each selected ensemble mean once.
+
+## MOGREPS-UK location charts (19 October 2026)
+
+The separate regional mean uses `ukmo_uk_ensemble_mean_2km` through the ensemble
+endpoint and the same shared-cache budgets and cooldowns. Deploy the Worker first.
+It represents the three members supplied per cycle at 2 km, hourly for around five
+days. Live checks at Barnoldswick returned 11 chart fields; snow depth and the
+850/500 hPa temperatures were explicitly null. New York returned HTTP 400 with
+no data for the location. Never substitute MOGREPS-G or UKV for missing UK data.
+Both map models retain their existing identities.

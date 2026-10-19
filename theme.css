@@ -40,6 +40,7 @@
   --model-ncep_hgefs025_ensemble_mean:#b2bfce;
   --model-ecmwf_ifs025_ensemble_mean:#c4a0ff;
   --model-mogreps_global_ensemble_mean:#f58dbd;
+  --model-ukmo_uk_ensemble_mean_2km:#f2c27c;
   --model-ecmwf_ifs025:#8f9bea;
   --model-meteofrance_arome_france:#e9b553;
 }

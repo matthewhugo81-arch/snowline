@@ -45,6 +45,7 @@ def run():
             const keys=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','temperature_500hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','pressure_msl'];
             const hourly={time},hourly_units={};
             for(const key of keys){hourly[key]=time.map((_,i)=>key==='pressure_msl'?1000+i/10:key==='wind_direction_10m'?(350+i*5)%360:key==='snowfall'?i/100:key==='snow_depth'?0:key==='cloud_cover'||key==='relative_humidity_2m'?50:key==='precipitation'?i/10:i/10-4);hourly_units[key]=key==='pressure_msl'?'hPa':key.includes('wind_')?'mph':key==='snow_depth'?'cm':'°C';}
+            if(new URL(url).searchParams.get('model')==='ukmo_uk_ensemble_mean_2km')for(const key of ['snow_depth','temperature_850hPa','temperature_500hPa'])hourly[key]=time.map(()=>null);
             if(new URL(url).searchParams.get('model')==='gfs_global')hourly.temperature_2m[80]=null;
             return new Response(JSON.stringify({hourly,hourly_units,latitude:54,longitude:-2,elevation:200,_retrievedAt:Date.now(),_source:'shared cache'}));
           };
@@ -64,14 +65,22 @@ def run():
         check('Direction plots hourly dots without connecting paths',page.locator('#plot-wind_direction_10m .direction-dot').count()>100 and page.locator('#plot-wind_direction_10m path').count()==0)
         check('Direction compass runs north clockwise to north',page.locator('#plot-wind_direction_10m text').all_text_contents()[:9]==['N','NE','E','SE','S','SW','W','NW','N'])
         initial_requests=page.evaluate('window.__forecastRequests.length')
-        check('All sixteen forecasts use the shared service',initial_requests==16 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
+        check('All seventeen Open-Meteo forecasts use the shared service',initial_requests==17 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
         ec_toggle=page.locator('input[value="ecmwf_ifs025_ensemble_mean"]')
-        check('EC ENS is selected and both ensemble means have dashed lines and legend samples',ec_toggle.is_checked() and page.locator('#plot-temperature_2m path[stroke-dasharray]').count()==2 and page.locator('#values-temperature_2m .ensemble-swatch').count()==2)
+        check('EC ENS and MOGREPS-UK are selected with separate dashed ensemble lines and legend samples',ec_toggle.is_checked() and page.locator('input[value="ukmo_uk_ensemble_mean_2km"]').is_checked() and page.locator('#plot-temperature_2m path[stroke-dasharray]').count()==3 and page.locator('#values-temperature_2m .ensemble-swatch').count()==3)
         ec_toggle.uncheck()
-        page.wait_for_function("document.querySelectorAll('#plot-temperature_2m path[stroke-dasharray]').length === 1")
+        page.wait_for_function("document.querySelectorAll('#plot-temperature_2m path[stroke-dasharray]').length === 2")
         check('EC ENS can be hidden independently of HGEFS','EC ENS mean' not in page.locator('#values-temperature_2m').inner_text() and 'HGEFS mean' in page.locator('#values-temperature_2m').inner_text())
         ec_toggle.check()
+        page.wait_for_function("document.querySelectorAll('#plot-temperature_2m path[stroke-dasharray]').length === 3")
+        uk_toggle=page.locator('input[value="ukmo_uk_ensemble_mean_2km"]')
+        uk_toggle.uncheck()
         page.wait_for_function("document.querySelectorAll('#plot-temperature_2m path[stroke-dasharray]').length === 2")
+        check('UK can be hidden without switching off G',page.locator('input[value="mogreps_global_ensemble_mean"]').is_checked() and 'MOGREPS-UK' not in page.locator('#values-temperature_2m').inner_text())
+        page.locator('#select-global').click()
+        check('Global only excludes regional UK and keeps G',not uk_toggle.is_checked() and page.locator('input[value="mogreps_global_ensemble_mean"]').is_checked())
+        page.locator('#select-all').click()
+        page.wait_for_function("document.querySelectorAll('#plot-temperature_2m path[stroke-dasharray]').length === 3")
         expected_order=['temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','relative_humidity_2m','soil_temperature_0cm','pressure_msl','temperature_850hPa','temperature_500hPa','snowfall','snow_depth']
         check('Panels follow the requested reading order',page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         def paired_layout():
@@ -95,7 +104,7 @@ def run():
             expected=sum(i/10 for i in range(first,last+1))
             assert f'{expected:.1f} mm' in page.locator('#precipitation-total').inner_text()
         check_total()
-        check('Pressure shows each model and its average on an absolute hPa axis',page.locator('#plot-pressure_msl path').count()==18 and float(page.locator('#plot-pressure_msl text').first.text_content())>900)
+        check('Pressure shows each model and its average on an absolute hPa axis',page.locator('#plot-pressure_msl path').count()==19 and float(page.locator('#plot-pressure_msl text').first.text_content())>900)
         def coords(selector, index):
             page.locator(selector).scroll_into_view_if_needed()
             return page.locator(selector).evaluate('''(el,i)=>{const s=el.querySelector('svg'),w=s.viewBox.baseVal.width,n=+document.querySelector('#time-slider').max-(+document.querySelector('#time-slider').min);const p=new DOMPoint(43+(w-55)*(i-(+document.querySelector('#time-slider').min))/n,55).matrixTransform(s.getScreenCTM());return {x:p.x,y:p.y}}''',index)

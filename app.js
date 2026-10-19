@@ -1,14 +1,14 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261019-mogreps-g';
-import {loadPointForecasts} from './point-forecasts.js?v=20261019-mogreps-g';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261019-mogreps-uk';
+import {loadPointForecasts} from './point-forecasts.js?v=20261019-mogreps-uk';
 import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total2';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261018-context-menu-fix';
-import {createChartImageMenu} from './chart-image-export.js?v=20261019-mogreps-g';
+import {createChartImageMenu} from './chart-image-export.js?v=20261019-mogreps-uk';
 import {setupChartPanels} from './chart-panels.js?v=20261018-panel-width';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261019-mogreps-g';
-import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261019-mogreps-g';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261019-mogreps-uk';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261019-mogreps-uk';
 
-import {nativeSeriesPath,mogrepsLabel} from './mogreps-point.js?v=20261019-mogreps-g';
+import {nativeSeriesPath,mogrepsLabel} from './mogreps-point.js?v=20261019-mogreps-uk';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
@@ -27,7 +27,7 @@ const chartImages=createChartImageMenu({root:document.querySelector('main'),getI
  return {location:$('place').textContent,coordinates:$('coordinates').textContent,
   firstTime:layout.times[0],period:`${date.format(new Date(layout.times[0]))} – ${date.format(new Date(layout.times.at(-1)))} UTC`,
   status:$('status').textContent,
-  sourceNote:layout.series.some(s=>s.api==='mogreps')?'MOGREPS-G: © Crown copyright 2026, Met Office · CC BY-SA 4.0. '+layout.series.filter(s=>s.api==='mogreps').map(s=>'Run '+s.run).join(''):'',
+  sourceNote:layout.series.filter(s=>s.api==='mogreps'||s.id==='ukmo_uk_ensemble_mean_2km').map(s=>`${s.name}: © Crown copyright 2026, Met Office · CC BY-SA 4.0. ${s.run?'Run '+s.run:'3 members via Open-Meteo; hourly'}`).join(' · '),
   legend:layout.series.filter(s=>s.values.some(finite)).map(s=>({name:mogrepsLabel(s,id.replace('plot-',''))||'Snowfall model agreement',color:modelColour(s),average:!!s.average,ensemble:!!s.ensemble,dots:id==='plot-wind_direction_10m'}))};
 }});
 const chartZoom=createChartZoom({root:document.querySelector('main'),getLayout:id=>chartLayouts.get(id),
@@ -156,7 +156,7 @@ function render(){
  plot($('plot-'+v.key),v.direction?series:[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
- const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);let validTimes=data?coverageCache.get(data):null;if(!validTimes){validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];if(data)coverageCache.set(data,validTimes);}let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data?.run)text+=`; run ${date.format(new Date(data.run))} UTC · 18 members · ${data.complete?'complete':'partial; '+data.missingSteps.length+' missing steps'} · ${data.periodNote}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
+ const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);let validTimes=data?coverageCache.get(data):null;if(!validTimes){validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];if(data)coverageCache.set(data,validTimes);}let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data?.detail)text+='; '+data.detail;if(data?.run)text+=`; run ${date.format(new Date(data.run))} UTC · 18 members · ${data.complete?'complete':'partial; '+data.missingSteps.length+' missing steps'} · ${data.periodNote}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
  inspection={models,times,start,end,votes,averages,coverage};
  renderInspection();
  datasetDialog.render();

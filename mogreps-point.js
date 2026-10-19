@@ -1,5 +1,5 @@
-import {VARIABLES} from './data.js?v=20261019-mogreps-g';
-import {fetchMogreps, MOGREPS_VARIABLES} from './mogreps-client.js?v=20261019-mogreps-g';
+import {VARIABLES} from './data.js?v=20261019-mogreps-uk';
+import {fetchMogreps, MOGREPS_VARIABLES} from './mogreps-client.js?v=20261019-mogreps-uk';
 
 export const MOGREPS_POINT='mogreps_global_ensemble_mean';
 const hour=3600000;

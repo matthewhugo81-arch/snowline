@@ -3,21 +3,21 @@ import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rast
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
-import {ForecastFrames} from './map-frames.js?v=20261019-mogreps-g';
+import {ForecastFrames} from './map-frames.js?v=20261019-mogreps-uk';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261018-rates';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261019-mogreps-g';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261019-mogreps-uk';
 import {installDewPoint} from './map-dew-point.js';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261019-ensemble-extra4';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261019-mogreps-g';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261019-mogreps-uk';
 
 import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
-import {fieldSource} from './map-sources.js?v=20261019-mogreps-g';
-import {sourceVariable} from './map-catalogue.js?v=20261019-mogreps-g';
+import {fieldSource} from './map-sources.js?v=20261019-mogreps-uk';
+import {sourceVariable} from './map-catalogue.js?v=20261019-mogreps-uk';
 import {forecastInputWork} from './map-work-queue.js';
 import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-direct-vertical';
 export {briefingSettings};

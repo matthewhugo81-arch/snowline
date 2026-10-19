@@ -2,8 +2,9 @@ import {cachedJSON} from './cache.js?v=20261015-shared-cache';
 export const MODELS = [
  ['ecmwf_ifs','IFS 9 km','#007a80'],['ecmwf_aifs025_single','ECMWF AIFS','#9450c6'],['icon_global','ICON global','#cc7116'],['gem_global','GEM global','#3778c2'],['gfs_global','GFS global','#d84758'],['ukmo_global_deterministic_10km','UKMO global','#25844c'],['ncep_aigfs025','NOAA AIGFS','#aa427d'],['jma_gsm','JMA GSM','#6a6b30'],['knmi_harmonie_arome_europe','KNMI HARMONIE','#008db6',true],['meteofrance_arpege_europe','ARPEGE Europe','#9e613e',true],['icon_eu','ICON Europe','#5855c5',true],['ukmo_uk_deterministic_2km','UKMO UKV 2 km','#078a7b',true],['ncep_hgefs025_ensemble_mean','HGEFS mean','#7b8491',false,true],['ecmwf_ifs025','IFS 0.25°','#363a8a'],['meteofrance_arome_france','AROME France','#bb7510',true],
  ['ecmwf_ifs025_ensemble_mean','EC ENS mean','#7c3aed',false,true,'ensemble'],
- ['mogreps_global_ensemble_mean','MOGREPS-G mean','#b52970',false,true,'mogreps']
-].map(([id,name,color,regional=false,ensemble=false,api='forecast'])=>({id,name,color,regional,ensemble,api}));
+ ['mogreps_global_ensemble_mean','MOGREPS-G mean','#b52970',false,true,'mogreps'],
+ ['ukmo_uk_ensemble_mean_2km','MOGREPS-UK 2 km mean','#98631d',true,true,'ensemble','2 km regional grid; hourly mean of the 3 members supplied per cycle by Open-Meteo. Around 5 days of forecasts; snow depth and 850/500 hPa temperatures unavailable.']
+].map(([id,name,color,regional=false,ensemble=false,api='forecast',detail=''])=>({id,name,color,regional,ensemble,api,detail}));
 export const VARIABLES = [
  {key:'snowfall',title:'Snowfall rate',unit:'cm / hour',note:'New snow; MOGREPS-G shows the preceding 3 h average rate (7:1 snow-to-water equivalent)',floor:0,minRange:0.2},
  {key:'snow_depth',title:'Snow depth',unit:'cm',note:'Snow on the ground, including existing cover',floor:0,minRange:1},

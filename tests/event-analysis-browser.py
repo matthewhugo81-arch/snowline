@@ -41,7 +41,7 @@ with sync_playwright() as p:
         page.locator('#calculate-event').click()
         page.wait_for_function("!document.querySelector('#calculate-event').disabled")
     calculate()
-    assert page.locator('#event-results tr').count()==17
+    assert page.locator('#event-results tr').count()==18
     assert 'temporarily unavailable' in page.locator('#event-results tr').filter(has_text='MOGREPS-G').inner_text()
     assert page.evaluate('fixtureRequests.length')==1, 'Known location uses the shared snapshot'
     gfs=page.locator('#event-results tr').filter(has_text='GFS global')
