@@ -236,6 +236,12 @@ try{
    const composite='cloud_precipitation_mslp';
    assert.equal(await page.locator('#map-variable option[value="'+composite+'"]').count(),1);
    await page.locator('#map-mslp-a').uncheck();
+   // Complete the preceding overlay change before observing only the
+   // commits caused by the composite selection below.
+   await page.waitForFunction(()=>{
+    const panel=window.fixturePanel;
+    return document.getElementById('animation-status').textContent.startsWith('Ready')&&panel.frameCache?.current?.id===panel.sourceId&&panel.frameCache.isReady(panel.url)&&panel.frameDescriptors.get(panel.url)?.isobars===false;
+   });
    await page.evaluate(()=>{
     window.fixtureFrameCommits=[];
     const proto=Object.getPrototypeOf(window.fixturePanel.frameCache),show=proto.show;
@@ -247,7 +253,7 @@ try{
    // composite must remain prepared, rather than being invalidated by its legend.
    await page.waitForTimeout(300);
    const committed=await page.evaluate(()=>({commits:window.fixtureFrameCommits,current:window.fixturePanel.frameCache.current?.id,ready:window.fixturePanel.frameCache.isReady(window.fixturePanel.url)}));
-   assert.equal(committed.commits.length,1,'Legend layout must not load the same selected frame twice');
+   assert.equal(committed.commits.length,1,'Legend layout must not load the same selected frame twice: '+JSON.stringify(committed));
    assert.equal(committed.current,committed.commits[0].id);assert.equal(committed.ready,true);
    assert.equal(await page.locator('#map-mslp-a').isChecked(),true);
    assert.equal(await page.locator('#map-mslp-a').isDisabled(),true);
