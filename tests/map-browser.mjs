@@ -117,6 +117,8 @@ try{
     assert.equal(await page.locator('#map-area').isVisible(),true,'Desktop collapse does not hide phone settings');
     assert.equal(await page.locator('#toggle-map-sidebar').isVisible(),false);
     await page.setViewportSize(viewport);
+    // The media-query change event is asynchronous after viewport emulation.
+    await page.waitForFunction(()=>document.getElementById('map-settings-content').hidden);
     assert.equal(await page.locator('#map-settings-content').isVisible(),false,'Desktop collapse preference survives resizing');
     await page.locator('#toggle-map-sidebar').focus();
     await page.keyboard.press('Enter');
