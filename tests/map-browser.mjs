@@ -49,9 +49,10 @@ const style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'ba
 try{
  for(const viewport of [{width:1280,height:900},{width:390,height:844}]){
   const page=await browser.newPage({viewport,deviceScaleFactor:1});const errors=[];
-  let releaseBriefing;
+  let releaseBriefing,briefingRequests=0;
   const briefingGate=new Promise(resolve=>{releaseBriefing=resolve;});
   await page.route('**/map-briefing.js*',async route=>{
+   briefingRequests++;
    await briefingGate;
    await route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'map-briefing.js'),'utf8'))+'\nwindow.fixtureBriefingImported=true;'});
   });
@@ -90,6 +91,7 @@ try{
   await page.goto(origin+'/maps.html');
   try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   assert.equal(briefingRequests,0,'Optional briefing code must not compete with the first map frame');
    assert.equal(await page.locator('header .strap').count(),0);
    assert.equal(await page.locator('#open-briefing').textContent(),'Briefing View');
    const selection=()=>page.evaluate(()=>['map-model','map-variable','map-start-time'].map(id=>document.getElementById(id).value));
@@ -158,8 +160,19 @@ try{
    const composite='cloud_precipitation_mslp';
    assert.equal(await page.locator('#map-variable option[value="'+composite+'"]').count(),1);
    await page.locator('#map-mslp-a').uncheck();
+   await page.evaluate(()=>{
+    window.fixtureFrameCommits=[];
+    const proto=Object.getPrototypeOf(window.fixturePanel.frameCache),show=proto.show;
+    proto.show=function(frame,...args){window.fixtureFrameCommits.push({url:frame.url,id:frame.id});return show.call(this,frame,...args);};
+   });
    await page.locator('#map-variable').selectOption(composite);
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Cloud, precipitation & MSLP')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   // Allow the resize observer and the settled-view debounce to fire. The first
+   // composite must remain prepared, rather than being invalidated by its legend.
+   await page.waitForTimeout(300);
+   const committed=await page.evaluate(()=>({commits:window.fixtureFrameCommits,current:window.fixturePanel.frameCache.current?.id,ready:window.fixturePanel.frameCache.isReady(window.fixturePanel.url)}));
+   assert.equal(committed.commits.length,1,'Legend layout must not load the same selected frame twice');
+   assert.equal(committed.current,committed.commits[0].id);assert.equal(committed.ready,true);
    assert.equal(await page.locator('#map-mslp-a').isChecked(),true);
    assert.equal(await page.locator('#map-mslp-a').isDisabled(),true);
    assert.match(await page.locator('#legend-title-a').textContent(),/cloud.*precipitation/i);

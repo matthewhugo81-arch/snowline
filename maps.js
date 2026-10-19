@@ -161,11 +161,15 @@ for(const id of ['map-model','map-model-b']){
 }
 $('map-model').value=state.model;$('map-model-b').value=state.modelB;
 function makeMap(key){
- const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:{compact:true}});
+ const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:{compact:true}});
  map.touchZoomRotate.disableRotation();
  map.once('load',()=>{const credits=map.getContainer().querySelector('.maplibregl-compact-show .maplibregl-ctrl-attrib-button');credits?.click();});
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');fitArea(map);
- const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{if(briefingActive)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});let lastSize='';new ResizeObserver(entries=>{if(briefingActive)return;const r=entries[0].contentRect,size=Math.round(r.width)+'x'+Math.round(r.height);if(size!==lastSize){lastSize=size;map.resize();}}).observe($('map-'+key));
+ const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{if(briefingActive)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();$('zoom-'+key).textContent='Zoom '+map.getZoom().toFixed(1);scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});
+ // One resize owner avoids duplicate movement events invalidating the buffer.
+ let pixelRatio=map.getPixelRatio();
+ panel.resize=()=>{if(briefingActive)return;const container=map.getContainer(),canvas=map.getCanvas(),ratio=map.getPixelRatio();if(container.clientWidth!==canvas.clientWidth||container.clientHeight!==canvas.clientHeight||pixelRatio!==ratio){pixelRatio=ratio;map.resize();}};
+ new ResizeObserver(panel.resize).observe($('map-'+key));window.addEventListener('resize',panel.resize);
  map.on('style.load',()=>{panel.styleOrdered=false;applyMapAppearance(map,{roads,terrain});if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))void restoreMapFrame();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
@@ -341,9 +345,11 @@ async function prepareSelection(index,valid=()=>true){
 function setTime(){return timePending=loadTime();}
 async function loadTime(){
  if(briefingActive)return false;
+ prepareLegendLayout();
  // A released slider may overlap an animated zoom. Its selected time is kept;
  // moveend will load it once the final view is known, without a false failure.
  if(mapsMoving()){queueViewportRefresh();return false;}
+ viewportRefresh.cancel(); // This selection already handles the settled view.
  failedSelection=null;
  if(!state.times.length)return false;
  const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;
@@ -445,6 +451,16 @@ $('retry-preload').addEventListener('click',()=>{
  else for(const {key}of panelSelections(state))warmUpcoming(panels[key]);
  updatePreloadStatus();
 });
+function prepareLegendLayout(){
+ // Reserve the selected scales before fetching tiles. Changing legend height
+ // after committing a frame used to resize the map and discard that very frame.
+ // Keep the displayed legend text with the displayed image until commit.
+ const choices=panelSelections(state),host=document.querySelector('.map-canvases');
+ const composite=choices.some(({field})=>field===WEATHER_COMPOSITE);
+ const winter=choices.some(({field})=>isTypeField(field)||field===THETA_SYMBOLS);
+ host.classList.toggle('composite-legend',composite);host.classList.toggle('winter-legend',winter);
+ for(const {key}of choices)panels[key]?.resize();
+}
 function setLegend(){
  for(const {key,model,field} of panelSelections(state)){
   const f=fields.find(f=>f.key===field);if(!f)continue;
@@ -699,7 +715,6 @@ $('briefing-loading-close').addEventListener('click',closeBriefing);
 // Prepare the optional view when the user approaches either button.
 for(const id of ['open-briefing','mobile-briefing'])for(const event of ['pointerenter','focus'])$(id).addEventListener(event,()=>{void loadBriefing().catch(()=>{});});
 await configure();
-void loadBriefing().catch(()=>{});
 let liveRunTimer=setInterval(refreshLiveRuns,60000);
 window.addEventListener('pagehide',()=>clearInterval(liveRunTimer));
 window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(liveRunTimer);liveRunTimer=setInterval(refreshLiveRuns,60000);refreshLiveRuns();}});

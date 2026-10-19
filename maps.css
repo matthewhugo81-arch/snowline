@@ -226,12 +226,12 @@
 
 /* Combined cloud and precipitation need both scales; keep comparison maps aligned. */
 @media(min-width:651px){
- .map-canvases:has(.map-panel:not([hidden]) .layer-legend .legend-gradient:not([hidden]) ~ .legend-bands:not([hidden])) .layer-legend{height:84px;min-height:84px}
+ .map-canvases.composite-legend .layer-legend{height:84px;min-height:84px}
 }
 
 .winter-legend-note{font-size:10px;line-height:1.4;margin-top:5px;color:#30465b}
 
-.map-canvases:has(.winter-legend-note:not([hidden])) .layer-legend{height:auto;min-height:96px}
+.map-canvases.winter-legend .layer-legend{height:auto;min-height:96px}
 
 /* Keep the desktop collapse control available in the narrow sidebar rail. */
 #toggle-map-sidebar{display:none}
