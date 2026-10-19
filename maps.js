@@ -9,7 +9,7 @@ import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSourc
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
 import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
-import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261019-ensemble-extra4';
+import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261019-mogreps-g';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261019-ensemble-extra4';
@@ -18,29 +18,29 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,preci
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261016-navigation';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261015-comparison-loading';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261019-mogreps-g';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261018-rates';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261019-three-panels';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261019-mogreps-g';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261019-ensemble-extra4';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261019-ensemble-extra4';
-import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261019-mogreps-g';
+import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261019-mogreps-g';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra4';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261019-mogreps-g';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
-import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261019-ensemble-extra4';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261019-ensemble-extra4';
+import {finite} from './data.js?v=20261019-mogreps-g';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261019-mogreps-g';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261019-mogreps-g';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
-import {selectEventPoint} from './event-analysis.js?v=20261019-ec-ens';
+import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-g';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261019-ensemble-extra4';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261019-ensemble-extra4';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261019-mogreps-g';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
@@ -91,7 +91,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
   result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html?v=20261015-direct-vertical">Open-Meteo</a>';
  }
- if(params.type==='json'&&/\/(ukmo_uk_ensemble_2km|snowline_mogreps_uk)\//.test(params.url)){
+ if(params.type==='json'&&/\/(ukmo_uk_ensemble_2km|snowline_mogreps_uk|snowline_mogreps_global)\//.test(params.url)){
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
@@ -695,7 +695,7 @@ window.addEventListener('pagehide',pauseAnimation);document.addEventListener('vi
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261019-12-hour').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261019-mogreps-g').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

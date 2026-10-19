@@ -95,6 +95,7 @@ export async function renderChartImage(snapshot) {
     paragraph(snapshot.total, 12, true, snapshot.ink);
     paragraph(snapshot.status, 11);
     paragraph('Weather data: Open-Meteo · CC BY 4.0', 10);
+    paragraph(snapshot.sourceNote, 10);
     canvas.width = width * scale; canvas.height = Math.ceil(y + pad) * scale;
     ctx.scale(scale, scale);
     ctx.fillStyle = snapshot.background; ctx.fillRect(0, 0, width, canvas.height / scale);

@@ -1,6 +1,7 @@
-import {MODELS,normalise,fetchJSON,forecastURL} from './data.js?v=20261019-ec-ens';
+import {MODELS,normalise,fetchJSON,forecastURL} from './data.js?v=20261019-mogreps-g';
 import {FORECAST_SERVICE_URL,pointForecastURL} from './forecast-service.js?v=20261015-shared-cache-live';
 import {POINT_LOCATIONS,POINT_TTL,POINT_MAX_AGE,pointKey,usableForecast,snapshotFor} from './point-snapshots.js';
+import {fetchMogrepsPoint} from './mogreps-point.js?v=20261019-mogreps-g';
 
 function mergeHourlyFields(json,extra,keys){
  const indices=new Map((extra.hourly?.time??[]).map((t,i)=>[Date.parse(/Z$/.test(t)?t:t+'Z'),i]));
@@ -13,8 +14,8 @@ function mergeHourlyFields(json,extra,keys){
  return {...json,hourly,hourly_units};
 }
 
-export async function loadPointForecasts(location,{signal,force=false,withWindDirection=false,withPressure=false,onModel=()=>{},onError=()=>{},onProgress=()=>{},load=fetchJSON,service=FORECAST_SERVICE_URL}={}){
- const requested=[...(withWindDirection?['wind_direction_10m']:[]),...(withPressure?['pressure_msl']:[])];
+export async function loadPointForecasts(location,{signal,force=false,withWindDirection=false,withPressure=false,withTemperature500=false,onModel=()=>{},onError=()=>{},onProgress=()=>{},load=fetchJSON,loadMogreps=fetchMogrepsPoint,models=MODELS,service=FORECAST_SERVICE_URL}={}){
+ const requested=[...(withTemperature500?['temperature_500hPa']:[]),...(withWindDirection?['wind_direction_10m']:[]),...(withPressure?['pressure_msl']:[])];
  const missingFields=json=>requested.filter(key=>!Object.hasOwn(json.hourly,key));
  let shared=null;
  if(POINT_LOCATIONS.some(point=>pointKey(point)===pointKey(location))){
@@ -22,10 +23,14 @@ export async function loadPointForecasts(location,{signal,force=false,withWindDi
  }
  signal?.throwIfAborted();
  let next=0,done=0;
- async function worker(){while(next<MODELS.length&&!signal?.aborted){
-  const model=MODELS[next++];let json=shared?.models[model.id],checkedService=false;
+ async function worker(){while(next<models.length&&!signal?.aborted){
+  const model=models[next++];let json=shared?.models[model.id],checkedService=false;
   if(!usableForecast(json))json=null;
   try{
+   if(model.api==='mogreps'){
+    const parsed=await loadMogreps(location,model,signal,(partial)=>{if(!signal?.aborted){onModel(partial);onProgress(done,models.length);}});
+    signal?.throwIfAborted();onModel(parsed);continue;
+   }
    if(json&&Date.now()-json._retrievedAt<POINT_TTL)json={...json,_source:'shared cache'};
    else{
     try{checkedService=!!service;const live=await load(pointForecastURL(location,model,service)??forecastURL(location,model),signal,{force,ttl:POINT_TTL,staleTtl:POINT_MAX_AGE,forceMinAge:service?POINT_TTL:60000,preserveRetrievedAt:!!service});if(!usableForecast(live))throw Error('No current forecast data returned.');json=live;}
@@ -60,7 +65,7 @@ export async function loadPointForecasts(location,{signal,force=false,withWindDi
    const parsed=normalise(json,model);
    onModel(parsed);
   }catch(error){if(!signal?.aborted)onError(model,error);}
-  finally{if(!signal?.aborted)onProgress(++done,MODELS.length);}
+  finally{if(!signal?.aborted)onProgress(++done,models.length);}
  }}
  await Promise.all([worker(),worker(),worker()]);
  signal?.throwIfAborted();

@@ -1,13 +1,14 @@
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {accumulationHours,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
-import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
+import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261019-mogreps-g';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261019-ensemble-extra4';
+import {sourceVariable} from './map-catalogue.js?v=20261019-mogreps-g';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261019-ensemble-extra4';
+import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261019-mogreps-g';
 import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
+import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mogreps-global.js?v=20261019-mogreps-g';
 
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
 import {precipitationStepHours,precipitationExistsAt} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -117,6 +118,7 @@ export async function loadSpatialModel(model,load){
  const latest=await chooseRun(...published);
  const family=ukvRunFamily(model);
  let primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
+ if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(primary))throw Error('Unverified MOGREPS-G run metadata.');
  const warnings=[...(primary.selectionWarnings??[])];
  if(domain==='ecmwf_ifs025')warnings.push('IFS 0.25° gusts are unavailable from T+93 to T+144 h in the source feed; those gust steps are omitted. Other fields retain their full timelines.');
  if(results.some(result=>result.status==='rejected'&&result.reason?.status!==404))warnings.push('A live run check failed; using verified published data and retrying automatically.');
@@ -157,7 +159,7 @@ export async function loadSpatialModel(model,load){
    if(Date.now()-Date.parse(snow.reference_time)>8*3600000)warnings.push('MOGREPS snowfall publication is overdue; check the displayed initialization time.');
   }catch{warnings.push('Member snowfall probabilities are currently unavailable; precipitation probability remains available.');}
  }
- return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning,publicationStatus};
+ return {...combineSources(primary,other.filter(Boolean)),ensembleNote:domain===MOGREPS_GLOBAL?MOGREPS_GLOBAL_NOTE:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning,publicationStatus};
 }
 
 // Deliberate historical selection never falls back to latest.json or a different
@@ -173,6 +175,7 @@ export async function loadSpatialRun(model,referenceTime,load){
  if(model===UKV&&Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
+ if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(data))throw Error('Unverified MOGREPS-G archive.');
  const primary={...data,domain,baseURL,runFamily:family},warnings=[];
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
@@ -188,5 +191,5 @@ export async function loadSpatialRun(model,referenceTime,load){
  }
  const mogreps=MOGREPS_MODELS.find(item=>item.id===model);
  if(mogreps){try{other.push(await mogrepsSnow(mogreps,load,referenceTime));}catch{warnings.push('Member snowfall probabilities are unavailable for this archived run.');}}
- return {...combineSources(primary,other.filter(Boolean)),ensembleNote:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings};
+ return {...combineSources(primary,other.filter(Boolean)),ensembleNote:domain===MOGREPS_GLOBAL?MOGREPS_GLOBAL_NOTE:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings};
 }

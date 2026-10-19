@@ -137,7 +137,53 @@ The existing Pages workflow refreshes both imports and publishes them with its o
 
 The location graphs include **EC ENS mean**, the ECMWF IFS 0.25° ensemble mean,
 as a purple dashed line alongside HGEFS mean. Both have dashed legend samples.
-Open-Meteo’s ensemble endpoint supplies the existing 13 chart variables through
+Open-Meteo’s ensemble endpoint supplies the chart variables through
 the shared forecast cache and exact-location snapshots. Missing values remain
 gaps. Each selected ensemble mean counts once in the overall average; ensemble
 means remain excluded from the deterministic snowfall-agreement percentage.
+
+## MOGREPS-G in location charts and maps
+
+The location page adds an 18-member **MOGREPS-G mean** for 850/500 hPa
+temperature, precipitation and snowfall, plus a shared 500 hPa panel for all
+supporting models. `mogreps-client.js` uses Snowline Ensembles' complete-run
+index and existing public Met Office point service. No new account or hosting
+is required. All other MOGREPS-G location variables remain unavailable.
+Temperatures stay at native three-hour instants; the connecting line does not
+create hourly values. Three-hour rain/snow amounts become period-average rates
+held over their actual preceding interval. Summing the rates over its three
+hours conserves each amount. Snowfall uses the same 7:1 depth equivalent as the
+ensemble site. This is not predicted settling depth. Missing members, failed
+steps and below-ground pressure levels remain missing. Ensemble means do not
+enter deterministic snowfall agreement. Tables, CSV and images retain period,
+run and source information.
+
+The independent **MOGREPS-G 20 km** map choice exposes eight fields: temperature
+mean and population SD at 850/500 hPa; mean precipitation and snowfall water
+equivalent; and raw precipitation/snowfall member fractions. All 18 members
+come from one run. Fractions count members with at least 0.3 mm water equivalent
+in the preceding three hours (0.1 mm/h). Statistics require every member;
+probabilities are not thresholded means or averages of hourly probabilities.
+MOGREPS-UK remains a separate regional choice with its existing member rules.
+
+`scripts/build_mogreps_global.py` reads ETag-pinned HDF5 chunks using the shared
+immutable indices at `snowline-ensembles/mogreps/`. Temperature status flags
+mask pressure levels below the model surface. Native rows 644:876 and columns
+404:769 form a 365 × 232 subset covering all four map presets. No regridding or
+time interpolation is applied. Source data are Kelvin and metres water
+equivalent; published values are Celsius, population SD in Celsius, mm/h and
+percent. OM precision is 0.01 display units. Longitude does not wrap around the
+regional subset. There is no invented pressure overlay.
+
+The existing Pages publisher prepares every three-hour step from T+0 to T+246,
+reuses completed frames, retries missing steps, retains three generated runs
+and publishes through the existing URL. Version 2 metadata carries field-level
+valid times and explicit interval bounds; history indices use version 1 and
+initialization strings. Shared index failure preserves a verified prior run
+and appears in publication health. Run labels always retain source
+initialization, rather than the time a file was downloaded.
+
+MOGREPS-G source data and these derived products: © Crown copyright 2026,
+Met Office, **CC BY-SA 4.0**. Source and method details are in `map-credits.html`.
+Validate with `node --test tests/*.test.mjs` and
+`python -m unittest discover -s tests -p 'test_mogreps*.py'`.

@@ -123,18 +123,45 @@ def check_direct(model, site, now, local_root=None):
                 published_frames=len(published.get('valid_times', [])) if published else 0, checked_at=ensemble.iso(now))
 
 
+def check_global(site, now, local_root=None):
+    domain = 'snowline_mogreps_global'
+    manifest = json.loads(ensemble.get('https://matthewhugo81-arch.github.io/snowline-ensembles/mogreps/latest.json'))
+    reference = ensemble.iso(datetime.fromtimestamp(manifest['run'], timezone.utc))
+    if manifest.get('schema') != 1 or manifest.get('intervalHours') != 3 or len(manifest.get('members', [])) != 18:
+        raise ValueError('Invalid global ensemble index')
+    if (now-datetime.fromtimestamp(manifest['run'], timezone.utc)).total_seconds() > 72*3600:
+        raise ValueError('Global source index expired')
+    path = local_root/domain/'latest.json' if local_root else None
+    try:
+        published = json.loads(path.read_text()) if path else json.loads(ensemble.get(site+'/ensemble-data/'+domain+'/latest.json'))
+    except (FileNotFoundError, HTTPError):
+        published = {}
+    same = published.get('reference_time') == reference and published.get('format_version') == 2
+    fields = ['temperature_850hPa_mean','temperature_850hPa_spread','temperature_500hPa_mean','temperature_500hPa_spread',
+              'precipitation_mean','snowfall_water_equivalent_mean','precipitation_probability','snowfall_probability']
+    missing = [h for h in manifest['leads'] if not same or any(
+        ensemble.iso(datetime.fromtimestamp(manifest['run']+h*3600, timezone.utc)) not in published.get('variable_valid_times', {}).get(key, [])
+        for key in (fields if h else fields[:4]))]
+    behind = published.get('reference_time', '') > reference
+    return dict(model=domain, status='upstream-behind' if behind else 'current' if not missing else 'hours-pending' if same else 'newer-source-run',
+                refresh_needed=bool(missing) and not behind, source_reference=reference, source_hours=manifest['leads'],
+                published_reference=published.get('reference_time'), missing_source_hours=[] if behind else missing, checked_at=ensemble.iso(now))
+
+
 def report(site, now, local_root=None):
-    models = list(ensemble.MODELS) + list(DIRECT)
+    models = list(ensemble.MODELS) + list(DIRECT) + ['mogreps-global']
     def check(model):
         try:
+            if model == 'mogreps-global':
+                return check_global(site, now, local_root)
             return (ensemble.check_model if model in ensemble.MODELS else check_direct)(model, site, now, local_root)
         except Exception as error:
-            domain = ensemble.MODELS[model][0] if model in ensemble.MODELS else DIRECT[model][0]
+            domain = 'snowline_mogreps_global' if model == 'mogreps-global' else ensemble.MODELS[model][0] if model in ensemble.MODELS else DIRECT[model][0]
             return dict(model=domain, status='check-failed', error=str(error), refresh_needed=False, checked_at=ensemble.iso(now))
     with ThreadPoolExecutor(max_workers=5) as pool:
         rows = list(pool.map(check, models))
     overdue = False if local_root else ensemble.publication_check_overdue(site, now)
-    return dict(checked_at=ensemble.iso(now), scope='All five generated map feeds: official source availability, same-run hours and statistical archives.',
+    return dict(checked_at=ensemble.iso(now), scope='Generated map feeds: source availability, same-run hours and statistical archives; MOGREPS-G uses the complete shared source index.',
                 publication_check_overdue=overdue, refresh_needed=overdue or any(row['refresh_needed'] for row in rows), models=rows)
 
 

@@ -94,9 +94,9 @@ class GeneratedFeedTests(unittest.TestCase):
                 raise TimeoutError('source unavailable')
             return dict(model=f.DIRECT[model][0], status='hours-pending', refresh_needed=True)
         with patch.object(f.ensemble, 'check_model', side_effect=lambda model, *args: dict(model=f.ensemble.MODELS[model][0], status='current', refresh_needed=False)), \
-             patch.object(f, 'check_direct', side_effect=direct), patch.object(f.ensemble, 'publication_check_overdue', return_value=False):
+             patch.object(f, 'check_direct', side_effect=direct), patch.object(f, 'check_global', return_value=dict(model='snowline_mogreps_global', status='current', refresh_needed=False)), patch.object(f.ensemble, 'publication_check_overdue', return_value=False):
             result = f.report('https://site.test', self.reference)
-        self.assertEqual(len(result['models']), 5)
+        self.assertEqual(len(result['models']), 6)
         self.assertTrue(result['refresh_needed'])
         self.assertEqual(next(row for row in result['models'] if row['model'] == 'snowline_gem_700')['status'], 'check-failed')
 

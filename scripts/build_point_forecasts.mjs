@@ -17,7 +17,7 @@ export async function buildPointForecasts(directory,{fetcher=fetch,now=Date.now(
   const previous=snapshotFor(await read(join(directory,pointKey(location)+'.json')),location);
   return {version:1,location,models:Object.fromEntries(Object.entries(previous?.models??{}).filter(([,value])=>usableForecast(value,now))),errors:previous?.errors??{}};
  }));
- const jobs=snapshots.flatMap(snapshot=>models.map(model=>({snapshot,model})));
+ const jobs=snapshots.flatMap(snapshot=>models.filter(model=>model.api!=='mogreps').map(model=>({snapshot,model})));
  async function worker(){while(next<jobs.length){
   const {snapshot,model}=jobs[next++],prior=snapshot.models[model.id],failure=snapshot.errors[model.id];
   if(prior&&now-prior._retrievedAt<POINT_TTL||failure&&now-failure.checkedAt<POINT_TTL||limit?.retryAt>now)continue;

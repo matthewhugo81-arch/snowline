@@ -1,5 +1,5 @@
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra4';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-mogreps-g';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {isTypeField,NATIVE_PRECIPITATION_TYPE,precipitationTypeScales} from './map-precipitation-type.js?v=20261014-interaction-audit';
 const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';
@@ -45,6 +45,7 @@ export function captureMapFrame(map,getInfo,{root=document,timeout=8000}={}){
 // Weather, isobars, contours and grid labels are already in the map bitmap.
 // Add the actual displayed run/time, matching legends and attribution around it.
 export async function composeChartImage({image,width,title,subtitle='',scales=[],credits=CREDITS},{root=document}={}){
+ if(/MOGREPS/.test(title)&&!credits.includes('CC BY-SA'))credits+=' · MOGREPS data and derived statistics: © Crown copyright 2026, Met Office · CC BY-SA 4.0';
  const nw=image.naturalWidth||image.width,nh=image.naturalHeight||image.height;if(!nw||!nh)throw Error('This chart image has not loaded yet.');
  width=Math.max(240,Math.round(width||nw));const ratio=Math.max(1,nw/width),height=nh*width/nw,pad=12;
  const output=root.createElement('canvas'),ctx=output.getContext('2d');if(!ctx)throw Error('Image export is unavailable in this browser.');

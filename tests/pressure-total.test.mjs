@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {averageSeries,precipitationTotal} from '../average.js';
 import {chartWindow} from '../chart-window.js';
-import {VARIABLES,MODELS,normalise,forecastURL} from '../data.js';
-import {loadPointForecasts} from '../point-forecasts.js';
+import {VARIABLES,MODELS as ALL_MODELS,normalise,forecastURL} from '../data.js';
+import {loadPointForecasts as loadAllPointForecasts} from '../point-forecasts.js';
 import {POINT_LOCATIONS} from '../point-snapshots.js';
+const MODELS=ALL_MODELS.filter(model=>model.api!=='mogreps');
 test('total follows hourly average, selected models and displayed window',()=>{
  const times=['a','b','c','d'];
  const series=[{values:[0,2,4,6]},{values:[2,4,6,8]}];
@@ -93,3 +94,6 @@ test('total averages each available hour before summing when model horizons diff
  const mean=averageSeries([{values:[2,4,null]},{values:[4,null,6]}],3);
  assert.deepEqual(mean.values,[3,4,6]);assert.equal(precipitationTotal(mean.values),13);
 });
+
+
+function loadPointForecasts(location,options){return loadAllPointForecasts(location,{...options,models:MODELS});}

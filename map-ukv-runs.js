@@ -1,6 +1,6 @@
 import {UKV,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
-import {loadSpatialModel,loadSpatialRun} from './map-sources.js?v=20261019-ensemble-extra4';
-import {publishedRun,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
+import {loadSpatialModel,loadSpatialRun} from './map-sources.js?v=20261019-mogreps-g';
+import {publishedRun,retainRunProgress} from './map-runs.js?v=20261019-mogreps-g';
 
 // A map-only run choice, not another operational model or point-forecast ID.
 export const UKV_PREVIOUS=UKV+'_previous';

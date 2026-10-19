@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MODELS,VARIABLES} from '../data.js';
-import {loadPointForecasts} from '../point-forecasts.js';
+import {MODELS as ALL_MODELS,VARIABLES} from '../data.js';
+import {loadPointForecasts as loadAllPointForecasts} from '../point-forecasts.js';
 import {POINT_LOCATIONS,POINT_MAX_AGE,usableForecast} from '../point-snapshots.js';
+const MODELS=ALL_MODELS.filter(model=>model.api!=='mogreps');
 const point=POINT_LOCATIONS[0];
 function forecast(age=0){return {_retrievedAt:Date.now()-age,elevation:161,hourly:{time:[new Date(Math.floor(Date.now()/3600000)*3600000).toISOString()],...Object.fromEntries(VARIABLES.map(v=>[v.key,[v.key==='temperature_2m'?5:0]]))},hourly_units:{wind_speed_10m:'mph',wind_gusts_10m:'mph',snow_depth:'m'}};}
 function snapshot(age=0){return {version:1,location:point,models:Object.fromEntries(MODELS.map(m=>[m.id,forecast(age)]))};}
@@ -35,3 +36,6 @@ test('location cancellation never emits a stale model or error',async()=>{
  await assert.rejects(loadPointForecasts(point,{service:'',signal:controller.signal,load:async()=>{controller.abort();return snapshot();},onModel:m=>models.push(m),onError:(m,e)=>errors.push(e)}),{name:'AbortError'});
  assert.equal(models.length+errors.length,0);
 });
+
+
+function loadPointForecasts(location,options){return loadAllPointForecasts(location,{...options,models:MODELS});}

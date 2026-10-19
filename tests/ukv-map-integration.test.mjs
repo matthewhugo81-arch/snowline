@@ -11,7 +11,7 @@ const reference=(hour)=>`2026-10-10T${String(hour).padStart(2,'0')}:00:00Z`;
 const make=(hour,hours)=>({reference_time:reference(hour),completed:true,variables:['precipitation','temperature_2m'],valid_times:Array.from({length:hours+1},(_,i)=>new Date(Date.parse(reference(hour))+i*3600000).toISOString())});
 test('one map UKV choice does not duplicate location-chart model averages or invent point API IDs',()=>{
  assert.equal(MAP_MODELS.filter(m=>m.id.startsWith(UKV)).length,1);
- for(const model of MODELS.filter(m=>m.api!=='ensemble'))assert.ok(MAP_MODELS.some(m=>m.id===model.id));
+ for(const model of MODELS.filter(m=>m.api==='forecast'))assert.ok(MAP_MODELS.some(m=>m.id===model.id));
  assert.equal(MAP_MODELS.find(m=>m.id===UKV).name,'UKV');
  assert.equal(MAP_MODELS.some(m=>m.id===UKV_NOWCAST),false);
  assert.equal(MODELS.filter(m=>m.id.startsWith(UKV)).length,1);

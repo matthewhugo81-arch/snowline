@@ -1,6 +1,6 @@
-import {hasFieldTime} from './map-sources.js?v=20261019-ensemble-extra4';
+import {hasFieldTime} from './map-sources.js?v=20261019-mogreps-g';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261019-ensemble-extra4';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261019-mogreps-g';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b','c'].map(key=>[key,{contours:false,isobars:true,grid:false}]));

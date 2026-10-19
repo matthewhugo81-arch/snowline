@@ -29,7 +29,11 @@ export function retainRunProgress(previous,next){
  const sources=[...new Set([...incoming,...old].map(source=>source.domain))].map(domain=>{
   const a=old.find(source=>source.domain===domain),b=incoming.find(source=>source.domain===domain);
   if(!a||!b)return b??a;
-  return {...b,completed:a.completed===true||b.completed===true,variables:[...new Set([...b.variables,...a.variables])],valid_times:forecastTimes([a,b])};
+  const variableKeys=[...new Set([...Object.keys(a.variable_valid_times??{}),...Object.keys(b.variable_valid_times??{})])];
+  const periods=[...new Set([...Object.keys(a.variable_intervals??{}),...Object.keys(b.variable_intervals??{})])];
+  return {...b,completed:a.completed===true||b.completed===true,variables:[...new Set([...b.variables,...a.variables])],valid_times:forecastTimes([a,b]),
+   ...(variableKeys.length?{variable_valid_times:Object.fromEntries(variableKeys.map(key=>[key,forecastTimes([{valid_times:a.variable_valid_times?.[key]??[]},{valid_times:b.variable_valid_times?.[key]??[]}])]))}:{}),
+   ...(periods.length?{variable_intervals:Object.fromEntries(periods.map(key=>[key,{...a.variable_intervals?.[key],...b.variable_intervals?.[key]}]))}:{})};
  });
  return {...next,sources,completed:sources.every(source=>source.completed!==false),variables:[...new Set(sources.flatMap(source=>source.variables))],valid_times:forecastTimes(sources)};
 }

@@ -10,7 +10,7 @@ test('EC ENS point mean does not add an unsupported or duplicate map choice',()=
  assert.equal(MAP_MODELS.filter(m=>m.id==='snowline_ecmwf_ensemble').length,1);
 });
 test('point endpoints keep deterministic and HGEFS requests separate from EC ENS',()=>{
- for(const model of MODELS){
+ for(const model of MODELS.filter(m=>m.api!=='mogreps')){
   const url=new URL(forecastURL({latitude:53.9239,longitude:-2.1949},model));
   assert.equal(url.origin+url.pathname,model===ec?'https://ensemble-api.open-meteo.com/v1/ensemble':'https://api.open-meteo.com/v1/forecast');
   assert.equal(url.searchParams.get('models'),model.id);

@@ -20,7 +20,7 @@ const load=url=>{if(!cache.has(url))cache.set(url,get(url));return cache.get(url
 // Statistical files are site-generated, not native precipitation amount feeds.
 const models=MAP_MODELS,results=[];let index=0;
 async function sample(meta,requested){
- const fields=requested?[requested]:['pressure_msl_mean','precipitation','precipitation_probability'].filter(key=>meta.variables.includes(key));
+ const fields=requested?[requested]:['pressure_msl_mean','temperature_850hPa_mean','precipitation','precipitation_probability'].filter(key=>meta.variables.includes(key));
  const reference=Date.parse(meta.reference_time);
  let raw=null,field=null,end=null;
  // Prefer forecast frames. A newly published ensemble cycle may initially
@@ -29,9 +29,11 @@ async function sample(meta,requested){
   const time=meta.valid_times.find(t=>Date.parse(t)>reference&&fieldDataURL(meta,candidate,t));
   if(time){field=candidate;end=time;raw=fieldDataURL(meta,field,end);break;}
  }
- if(!raw&&fields.includes('pressure_msl_mean')){
-  const time=meta.valid_times.find(t=>Date.parse(t)===reference&&fieldDataURL(meta,'pressure_msl_mean',t));
-  if(time){field='pressure_msl_mean';end=time;raw=fieldDataURL(meta,field,end);}
+ if(!raw){
+  for(const instant of ['pressure_msl_mean','temperature_850hPa_mean'].filter(key=>fields.includes(key))){
+   const time=meta.valid_times.find(t=>Date.parse(t)===reference&&fieldDataURL(meta,instant,t));
+   if(time){field=instant;end=time;raw=fieldDataURL(meta,field,end);break;}
+  }
  }
  if(!raw)throw Error('No published sample frame for '+(requested??fields.join(', ')));
  const url=deployed(raw)+(raw.includes('/ensemble-data/')?'.png':'');
@@ -51,7 +53,7 @@ async function worker(){while(index<models.length){
   const threshold=model.id===UKV||model.id===UKV+'_nowcast'?6:model.regional?12:24;
   if(ageHours>threshold)record.warnings.push('Initialization age exceeds the '+threshold+' h review threshold.');
   if(elapsed>10000)record.warnings.push('Metadata check took over 10 seconds.');
-  if(['precipitation','pressure_msl_mean','precipitation_probability'].some(key=>meta.variables.includes(key))){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
+  if(['precipitation','pressure_msl_mean','temperature_850hPa_mean','precipitation_probability'].some(key=>meta.variables.includes(key))){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
   if(meta.variables.includes('snowfall_probability')){try{record.snowSample=await sample(meta,'snowfall_probability');}catch(e){record.warnings.push('Forecast byte-range check failed: snowfall: '+e.message);}}
   if(model.id===UKV){record.history=[];for(const back of [3,6]){const reference=new Date(Date.parse(meta.reference_time)-back*3600000).toISOString();try{const prior=await loadSpatialRun(model.id,reference,load);record.history.push({reference_time:prior.reference_time,available:true});}catch(e){record.history.push({reference_time:reference,available:false,error:e.message});record.warnings.push('An immediately previous UKV main cycle is unavailable: '+reference);}}}
   if(ENSEMBLE_DOMAINS.some(domain=>domain.value===model.id)){

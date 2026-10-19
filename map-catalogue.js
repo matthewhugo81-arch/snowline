@@ -1,7 +1,7 @@
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
-import {ensembleField} from './map-ensemble.js?v=20261019-ensemble-extra4';
+import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261019-mogreps-g';
 import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
@@ -56,7 +56,7 @@ export function sourceVariable(meta,key){
  if(key==='dew_point_2m'&&!vars.includes(key)&&canDeriveDewPoint(meta))return DERIVED_DEW_POINT;
  // These scales describe our verified unit conversions, not similarly named
  // arrays from another provider whose spread units have not been checked.
- if(ensembleField(key))return ['snowline_gefs_ensemble','snowline_ecmwf_ensemble',...ENSEMBLE_EXTRA_DOMAINS.map(d=>d.value)].includes(meta?.domain)&&vars.includes(key)?key:null;
+ if(ensembleField(key))return [...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS].some(d=>d.value===meta?.domain)&&vars.includes(key)?key:null;
  if(key==='pressure_msl'&&vars.includes('pressure_msl_mean'))return 'pressure_msl_mean';
  if(key.startsWith('wind_speed_')){
   const suffix=key.slice(11),u='wind_u_component_'+suffix,v='wind_v_component_'+suffix;
@@ -122,7 +122,7 @@ export function describeVariable(key,OM){
   key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
   stops:[0,10,25,50,75,90,100],colors:['#ffffff','#d9f0ff','#8fc8f5','#5879db','#7652bd','#a63498','#720c68'],
   contourValues:[10,25,50,75,90],contourLabel:'10, 25, 50, 75 and 90%',
-  note:'Percentage of MOGREPS-UK members forecasting falling snow at an average rate of at least 0.1 mm/hour liquid-water equivalent over the stated period. This is a raw member fraction, not a calibrated probability, settling-snow risk or snow depth. Missing members leave a gap; they are never counted as dry.'
+  note:'Percentage of MOGREPS members forecasting falling snow at an average rate of at least 0.1 mm/hour liquid-water equivalent over the stated period. This is a raw member fraction, not a calibrated probability, settling-snow risk or snow depth. Missing members leave a gap; they are never counted as dry.'
  };
  if(isTypeField(key))return precipitationTypeField(key);
  if(key===THETA_SYMBOLS)return thetaSymbolsField();

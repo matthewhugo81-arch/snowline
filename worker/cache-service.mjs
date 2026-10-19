@@ -7,7 +7,7 @@ export function parsePoint(url){
  if([...query.keys()].some(k=>!['latitude','longitude','model'].includes(k))||[...query.keys()].some(k=>query.getAll(k).length!==1))throw Error('Unsupported forecast parameters.');
  const latitude=query.get('latitude'),longitude=query.get('longitude');
  if(!latitude?.trim()||!longitude?.trim()||!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude))||Math.abs(Number(latitude))>90||Math.abs(Number(longitude))>180)throw Error('Invalid coordinates.');
- const model=MODELS.find(m=>m.id===query.get('model'));if(!model)throw Error('Unsupported model.');
+ const model=MODELS.find(m=>m.id===query.get('model')&&m.api!=='mogreps');if(!model)throw Error('Unsupported model.');
  const location={latitude:Number(Number(latitude).toFixed(4)),longitude:Number(Number(longitude).toFixed(4))};
  return {location,model,key:pointKey(location)+'/'+model.id};
 }

@@ -1,8 +1,10 @@
 import {extraEnsembleField} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
+import {MOGREPS_GLOBAL_DOMAIN} from './map-mogreps-global.js?v=20261019-mogreps-g';
 // Same native global grids as the official GEFS/IFS mean and SD GRIB products.
 export const ENSEMBLE_DOMAINS = [
  {value:'snowline_gefs_ensemble',label:'GEFS mean & spread',grid:{type:'regular',nx:720,ny:361,latMin:-90,lonMin:-180,dx:.5,dy:.5,zoom:1},time_interval:'3_hourly',model_interval:'6_hourly'},
- {value:'snowline_ecmwf_ensemble',label:'ECMWF ENS mean & spread',grid:{type:'regular',nx:1440,ny:721,latMin:-90,lonMin:-180,dx:.25,dy:.25,zoom:2},time_interval:'3_hourly',model_interval:'12_hourly'}
+ {value:'snowline_ecmwf_ensemble',label:'ECMWF ENS mean & spread',grid:{type:'regular',nx:1440,ny:721,latMin:-90,lonMin:-180,dx:.25,dy:.25,zoom:2},time_interval:'3_hourly',model_interval:'12_hourly'},
+ MOGREPS_GLOBAL_DOMAIN
 ];
 const spreadColors=['#ffffff','#dceaf2','#9ecae1','#4292c6','#5460ab','#8f479d','#d4486b','#9e1538'];
 const meanColors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643'];
@@ -20,7 +22,7 @@ export function ensembleField(key){
  return {key,name:d.name+' · '+(spread?'ensemble spread (SD)':'ensemble mean'),unit:d.unit,stops,colors:spread?spreadColors:meanColors,
   ensembleStatistic:spread?'spread':'mean',isPressure:!spread&&match[1]==='pressure_msl',
   contourValues:Array.from({length:Math.ceil((max-min)/step)+1},(_,i)=>min+i*step),contourLabel:step+' '+d.unit,
-  note:spread?'Standard deviation of ensemble members, in '+d.unit+'. Higher values indicate greater disagreement; this is not a probability or a forecast anomaly.':'Official ensemble mean: the average of the contributing members, which smooths individual weather features.',
+  note:spread?'Standard deviation of ensemble members, in '+d.unit+'. Higher values indicate greater disagreement; this is not a probability or a forecast anomaly.':'Ensemble mean: the average of the contributing members, which smooths individual weather features.',
   group:spread?'Ensemble spread':'Ensemble mean'};
 }
 

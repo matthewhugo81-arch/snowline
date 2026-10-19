@@ -27,7 +27,7 @@ test('official statistics have six distinct, physically meaningful scales',()=>{
 });
 
 test('own native grids use cycle-specific local URLs with UTC and preserve initialization',async()=>{
- for(const domain of ENSEMBLE_DOMAINS){
+ for(const domain of ENSEMBLE_DOMAINS.filter(d=>d.value!=='snowline_mogreps_global')){
   const grid=OM.GridFactory.create(domain.grid);
   assert.equal(grid.nx*domain.grid.dx,360);
   assert.equal((grid.ny-1)*domain.grid.dy,180);

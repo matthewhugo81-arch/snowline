@@ -1,14 +1,15 @@
-import {MODELS} from './data.js?v=20261019-ec-ens';
+import {MODELS} from './data.js?v=20261019-mogreps-g';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261019-ensemble-extra4';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261019-mogreps-g';
 import {MOGREPS_MODELS} from './map-mogreps.js?v=20261014-clean-symbols';
 // One UKV choice: 00/03/06/...Z main cycles; all hourly valid steps retained.
 // Probability products are explicitly labelled and retain percentage units.
 // Point-only ensemble feeds have separate, already-published spatial products below.
-export const MAP_MODELS = [...MODELS.filter(model=>model.api!=='ensemble').map(model => model.id === UKV ?
+export const MAP_MODELS = [...MODELS.filter(model=>model.api==='forecast').map(model => model.id === UKV ?
  {...model,name:'UKV',runFamily:'main',sourceModel:UKV} : model),
  {id:'snowline_gefs_ensemble',name:'GEFS 0.5° · ensemble mean & spread',ensemble:true},
  {id:'snowline_ecmwf_ensemble',name:'ECMWF ENS 0.25° · mean, spread & probabilities',ensemble:true},
+ {id:'snowline_mogreps_global',name:'MOGREPS-G 20 km · mean, spread & probabilities',ensemble:true},
  ...MOGREPS_MODELS
 ];
 // Menus expose two runs of the same UKV model. The operational catalogue and

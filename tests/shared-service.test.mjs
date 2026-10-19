@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ForecastCache,parsePoint} from '../worker/cache-service.mjs';
-import {loadPointForecasts} from '../point-forecasts.js';
-import {MODELS} from '../data.js';
+import {loadPointForecasts as loadAllPointForecasts} from '../point-forecasts.js';
+import {MODELS as ALL_MODELS} from '../data.js';
+const MODELS=ALL_MODELS.filter(model=>model.api!=='mogreps');
 function fixture(budget=1000){
  let now=Date.now(),calls=0;const values=new Map();
  const db={get:async k=>structuredClone(values.get(k)),put:async(k,v)=>{values.set(k,structuredClone(v));},delete:async keys=>{for(const k of [].concat(keys))values.delete(k);},list:async({prefix})=>new Map([...values].filter(([k])=>k.startsWith(prefix)).map(([k,v])=>[k,structuredClone(v)]))};
@@ -89,3 +90,6 @@ test('unexpected upstream redirects fail as 502 without following the new destin
  const f=fixture(),cache=f.restart();f.setProvider(async()=>new Response(null,{status:302,headers:{Location:'https://other.test/'}}));
  await assert.rejects(cache.get(f.point()),{status:502,message:'Forecast provider unexpectedly redirected the request.'});assert.equal(f.calls,1);
 });
+
+
+function loadPointForecasts(location,options){return loadAllPointForecasts(location,{...options,models:MODELS});}
