@@ -3,10 +3,10 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261019-ensemble-extra2';
+import {sourceVariable} from './map-catalogue.js?v=20261019-ensemble-extra3';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261019-ensemble-extra2';
-import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261019-ensemble-extra2';
+import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261019-ensemble-extra3';
+import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261019-ensemble-extra3';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
 
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
@@ -180,7 +180,7 @@ export async function loadSpatialRun(model,referenceTime,load){
  }));
  if(ENSEMBLE_EXTRAS[model]){
   try{other.push(await ensembleExtra(model,primary.reference_time,load));}
-  catch{warnings.push('Additional ensemble fields are not yet available for this archived run.');}
+  catch{warnings.push('Additional ensemble fields are available on the latest run only. The original mean and spread layers remain available for archived runs.');}
  }
  if(DIRECT_VERTICAL_MODELS[model]){
   try{other.push(await directVertical(model,primary.reference_time,load));}
