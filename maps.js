@@ -636,7 +636,7 @@ async function changeComparison(){
  for(const key of ['b','c']){
   const visible=panelVisible(key);
   if(visible&&!comparisonInitialized.has(key)){
-   const suffix=key.toUpperCase();state['model'+suffix]=state.model;state['field'+suffix]=state.field;
+   const suffix=key.toUpperCase();state['model'+suffix]=state.model;if(key==='c')state['field'+suffix]=state.field;
    $('map-model-'+key).value=state['model'+suffix];comparisonInitialized.add(key);
   }
   $('panel-'+key).hidden=!visible;$('layer-notes-'+key).hidden=!visible;

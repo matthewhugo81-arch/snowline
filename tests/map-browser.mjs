@@ -106,6 +106,7 @@ try{
    await page.locator('#briefing-close').click();await ready();
    if(viewport.width<=650&&!(await page.locator('#compare-maps').isVisible()))await page.locator('#mobile-map-settings').click();
    await page.locator('#compare-maps').check();await ready();
+   assert.equal(await page.locator('#map-variable-b').inputValue(),'precipitation','The existing second-panel default is retained');
    await page.locator('#map-comparison-count').selectOption('3');await ready();
    await page.locator('#map-model-b').selectOption('ecmwf_ifs');await ready();
    await page.locator('#map-model-c').selectOption('icon_global');await ready();
@@ -116,7 +117,7 @@ try{
    assert.equal(await page.locator('#map-variable-c').inputValue(),'cloud_cover');
    if(viewport.width<=650)await page.locator('#mobile-return-map').click();
    await page.locator('#next-time').click();await ready();
-   const labels=await page.locator('.map-panel-label').allTextContents();
+   const labels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
    assert.equal(new Set(labels.map(label=>label.split('Valid ')[1])).size,1);
    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
    await page.locator('#map-comparison-count').selectOption('2');await ready();
@@ -245,7 +246,7 @@ try{
    assert.equal(await page.locator('#map-mslp-a').isDisabled(),false);
    assert.equal(await page.locator('#map-mslp-b').isDisabled(),true);
    assert.equal(await page.locator('.map-error:visible').count(),0);
-   const compositeLabels=await page.locator('.map-panel-label').allTextContents();
+   const compositeLabels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
    assert.equal(compositeLabels[0].split('Valid ')[1],compositeLabels[1].split('Valid ')[1]);
    const legendLayout=await page.evaluate(()=>{
     const bounds=id=>{const r=document.getElementById(id).getBoundingClientRect();return {height:r.height,bottom:r.bottom,top:r.top};};
@@ -285,7 +286,7 @@ try{
     await page.waitForFunction(hour=>document.getElementById('panel-label-a').textContent.split('Valid ')[1]?.includes(String(hour).padStart(2,'0')+':00'),value+firstHour);
    };
    // ICU versions differ on the comma after the weekday; the time must match.
-   const bothAt=time=>page.waitForFunction(time=>[...document.querySelectorAll('.map-panel-label')].every(el=>el.textContent.split('Valid ')[1]?.replaceAll(',','')===time.replaceAll(',','')),time);
+   const bothAt=time=>page.waitForFunction(time=>[...document.querySelectorAll('.map-panel:not([hidden]) .map-panel-label')].every(el=>el.textContent.split('Valid ')[1]?.replaceAll(',','')===time.replaceAll(',','')),time);
    await selectTime(0);
    await page.locator('#play-map').click();
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.split('Valid ')[1]?.includes('07:00'));
@@ -302,7 +303,7 @@ try{
    await selectTime(0);
    for(const value of [1,2,3]){
     await selectTime(value);
-    const labels=await page.locator('.map-panel-label').allTextContents();
+    const labels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
     assert.equal(labels[0].split('Valid ')[1],labels[1].split('Valid ')[1],'Comparison panels commit together');
    }
    // The reported cloud/rain comparison must recover a failed selected tile,
@@ -312,7 +313,7 @@ try{
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Total cloud cover')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.ok(await page.evaluate(()=>window.fixtureFault.remaining<=0));
    assert.equal(await page.locator('.map-error:visible').count(),0,'A recovered frame has no stale error banner');
-   const recovered=await page.locator('.map-panel-label').allTextContents();
+   const recovered=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
    assert.equal(recovered[0].split('Valid ')[1],recovered[1].split('Valid ')[1]);
    await page.evaluate(()=>window.fixtureFault=null);
    // Rapid jumps while background warming is unfinished cannot commit an old request.
@@ -374,8 +375,8 @@ try{
    assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true','Loop restart must not reset Play');
    await bothAt('Sat 10 Oct, 08:00 UTC');
    await page.locator('#play-map').click();
-   const loopPaused=await page.locator('.map-panel-label').allTextContents();await page.waitForTimeout(1000);
-   assert.deepEqual(await page.locator('.map-panel-label').allTextContents(),loopPaused,'Pause still stops after wrapping');
+   const loopPaused=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();await page.waitForTimeout(1000);
+   assert.deepEqual(await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents(),loopPaused,'Pause still stops after wrapping');
    // Adding initialization back in panel B must also reindex panel A's images.
    await page.locator('#map-variable').selectOption('temperature_2m');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature'));
@@ -651,6 +652,7 @@ try{
    await page.locator('#briefing-close').click();
    // Provider latest.json stays at the old complete run. The live pointer has
    // an earlier horizon, and grows while the user keeps this page open.
+   await page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    livePhase=1;
    await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('1200Z'));
@@ -698,7 +700,7 @@ try{
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,passed:true,transportRequests:await page.evaluate(()=>window.fixtureRequests.length)}));
   }catch(error){
-   console.log('DIAGNOSTICS',JSON.stringify(await page.evaluate(()=>({labels:[...document.querySelectorAll('.map-panel-label')].map(e=>e.textContent),errors:[...document.querySelectorAll('.map-error')].map(e=>e.textContent),status:document.getElementById('animation-status').textContent,requests:window.fixtureRequests?.slice(-5).map(r=>({type:r.type,url:r.url.slice(0,120)}))}))));
+   console.log('DIAGNOSTICS',JSON.stringify(await page.evaluate(()=>({labels:[...document.querySelectorAll('.map-panel:not([hidden]) .map-panel-label')].map(e=>e.textContent),errors:[...document.querySelectorAll('.map-error')].map(e=>e.textContent),status:document.getElementById('animation-status').textContent,requests:window.fixtureRequests?.slice(-5).map(r=>({type:r.type,url:r.url.slice(0,120)}))}))));
    throw error;
   }finally{await page.close();}
  }
