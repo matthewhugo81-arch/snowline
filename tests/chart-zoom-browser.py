@@ -62,7 +62,14 @@ def run():
         check('Direction plots hourly dots without connecting paths',page.locator('#plot-wind_direction_10m .direction-dot').count()>100 and page.locator('#plot-wind_direction_10m path').count()==0)
         check('Direction compass runs north clockwise to north',page.locator('#plot-wind_direction_10m text').all_text_contents()[:9]==['N','NE','E','SE','S','SW','W','NW','N'])
         initial_requests=page.evaluate('window.__forecastRequests.length')
-        check('All fifteen forecasts use the shared service',initial_requests==15 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
+        check('All sixteen forecasts use the shared service',initial_requests==16 and page.evaluate("window.__forecastRequests.every(url=>url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?'))"))
+        ec_toggle=page.locator('input[value="ecmwf_ifs025_ensemble_mean"]')
+        check('EC ENS is selected and both ensemble means have dashed lines and legend samples',ec_toggle.is_checked() and page.locator('#plot-temperature_2m path[stroke-dasharray]').count()==2 and page.locator('#values-temperature_2m .ensemble-swatch').count()==2)
+        ec_toggle.uncheck()
+        page.wait_for_function("document.querySelectorAll('#plot-temperature_2m path[stroke-dasharray]').length === 1")
+        check('EC ENS can be hidden independently of HGEFS','EC ENS mean' not in page.locator('#values-temperature_2m').inner_text() and 'HGEFS mean' in page.locator('#values-temperature_2m').inner_text())
+        ec_toggle.check()
+        page.wait_for_function("document.querySelectorAll('#plot-temperature_2m path[stroke-dasharray]').length === 2")
         expected_order=['temperature_2m','dew_point_2m','precipitation','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','relative_humidity_2m','soil_temperature_0cm','pressure_msl','temperature_850hPa','snowfall','snow_depth']
         check('Panels follow the requested reading order',page.locator('#charts .plot').evaluate_all("els=>els.map(el=>el.id.replace('plot-',''))")==expected_order)
         def paired_layout():
@@ -86,7 +93,7 @@ def run():
             expected=sum(i/10 for i in range(first,last+1))
             assert f'{expected:.1f} mm' in page.locator('#precipitation-total').inner_text()
         check_total()
-        check('Pressure shows each model and its average on an absolute hPa axis',page.locator('#plot-pressure_msl path').count()==17 and float(page.locator('#plot-pressure_msl text').first.text_content())>900)
+        check('Pressure shows each model and its average on an absolute hPa axis',page.locator('#plot-pressure_msl path').count()==18 and float(page.locator('#plot-pressure_msl text').first.text_content())>900)
         def coords(selector, index):
             page.locator(selector).scroll_into_view_if_needed()
             return page.locator(selector).evaluate('''(el,i)=>{const s=el.querySelector('svg'),w=s.viewBox.baseVal.width,n=+document.querySelector('#time-slider').max-(+document.querySelector('#time-slider').min);const p=new DOMPoint(43+(w-55)*(i-(+document.querySelector('#time-slider').min))/n,55).matrixTransform(s.getScreenCTM());return {x:p.x,y:p.y}}''',index)

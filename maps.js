@@ -34,10 +34,10 @@ import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATI
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261018-rates';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261019-ec-ens';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261018-rates';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
-import {selectEventPoint} from './event-analysis.js?v=20261015-loading-performance';
+import {selectEventPoint} from './event-analysis.js?v=20261019-ec-ens';
 import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261012-chart-style';
 import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261018-rates';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';

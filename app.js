@@ -1,12 +1,12 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261018-pressure-total2';
-import {loadPointForecasts} from './point-forecasts.js?v=20261018-pressure-total2';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261019-ec-ens';
+import {loadPointForecasts} from './point-forecasts.js?v=20261019-ec-ens';
 import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total2';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261018-context-menu-fix';
-import {createChartImageMenu} from './chart-image-export.js?v=20261018-image-export';
+import {createChartImageMenu} from './chart-image-export.js?v=20261019-ec-ens';
 import {setupChartPanels} from './chart-panels.js?v=20261018-panel-width';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261018-pressure-total2';
-import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261018-pressure-total2';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261019-ec-ens';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261019-ec-ens';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -41,7 +41,7 @@ function scheduleRender(inspectOnly=false){fullRenderPending ||= inspectOnly!==t
 // CSS variables recolour existing SVGs immediately without resetting chart state.
 const modelColour = model => model.average ? 'var(--chart-average, #102235)' : model.id ? `var(--model-${model.id}, ${model.color})` : model.color;
 function populate(){
- $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${modelColour(m)}"><input type="checkbox" value="${m.id}" checked><span class="swatch"></span>${m.name}</label>`).join('');
+ $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${modelColour(m)}"><input type="checkbox" value="${m.id}" checked><span class="swatch${m.ensemble?' ensemble-swatch':''}"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
  const chartVariables=[...VARIABLES.filter(v=>!['snowfall','snow_depth'].includes(v.key)),...VARIABLES.filter(v=>['snowfall','snow_depth'].includes(v.key))];
  $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View hourly data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div>${v.key==='precipitation'?'<p id="precipitation-total" class="chart-note precipitation-total" aria-live="polite"></p>':''}</article>`).join('');
@@ -180,10 +180,10 @@ function renderInspection(){
  if(direction)current.sort((a,b)=>direction*(valueAt(a,v.key,time)-valueAt(b,v.key,time)));
  const mean=average.values[index],count=average.counts[index];
  const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${valueAttributes(mean,v)}>${formatValue(mean,v)}</b> <small>(${count} models)</small></span>`:'';
- $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch" style="--color:${modelColour(m)}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
+ $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch${m.ensemble&&!v.direction?' ensemble-swatch':''}" style="--color:${modelColour(m)}"></i>${m.name} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
  }
 
- $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);return `<tr><td><i class="swatch" style="--color:${modelColour(m)}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage.get(m.id))}</td></tr>`}).join('');
+ $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);return `<tr><td><i class="swatch${m.ensemble?' ensemble-swatch':''}" style="--color:${modelColour(m)}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage.get(m.id))}</td></tr>`}).join('');
 }
 let searchController=null;
 async function searchLocations(query){const coords=parseCoordinates(query);if(coords)return [coords];if(query.trim().length<2)throw new Error('Enter at least two characters.');const data=await fetchJSON('https://geocoding-api.open-meteo.com/v1/search?'+new URLSearchParams({name:query,count:'8',language:'en',format:'json'}),searchController?.signal);return (data.results??[]).sort((a,b)=>Number(b.country_code==='GB')-Number(a.country_code==='GB')).map(r=>({latitude:r.latitude,longitude:r.longitude,elevation:r.elevation,name:[r.name,r.admin2,r.admin1,r.country].filter(Boolean).join(', ')}));}

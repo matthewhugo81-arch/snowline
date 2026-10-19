@@ -116,3 +116,6 @@
 .location-page .meteogram-image-preview img{display:block;max-width:100%;height:auto;margin-top:14px}
 @media(min-width:901px){.location-page .chart-size{display:inline-flex}.location-page .chart-card.chart-wide{grid-column:1 / -1}}
 .precipitation-total{border-top:1px solid var(--line);padding-top:8px;margin-top:10px;color:var(--ink);font-weight:600}
+
+/* Match ensemble legend samples to the dashed forecast lines. */
+.swatch.ensemble-swatch{width:19px;height:0;border-radius:0;background:none;border-top:2px dashed var(--color)}

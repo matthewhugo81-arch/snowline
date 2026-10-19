@@ -39,7 +39,7 @@ with sync_playwright() as p:
         page.locator('#calculate-event').click()
         page.wait_for_function("!document.querySelector('#calculate-event').disabled")
     calculate()
-    assert page.locator('#event-results tr').count()==15
+    assert page.locator('#event-results tr').count()==16
     assert page.evaluate('fixtureRequests.length')==1, 'Known location uses the shared snapshot'
     gfs=page.locator('#event-results tr').filter(has_text='GFS global')
     assert gfs.locator('td').nth(1).inner_text()=='—', 'A missing hour cannot become a complete snow total'

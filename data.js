@@ -1,7 +1,8 @@
 import {cachedJSON} from './cache.js?v=20261015-shared-cache';
 export const MODELS = [
- ['ecmwf_ifs','IFS 9 km','#007a80'],['ecmwf_aifs025_single','ECMWF AIFS','#9450c6'],['icon_global','ICON global','#cc7116'],['gem_global','GEM global','#3778c2'],['gfs_global','GFS global','#d84758'],['ukmo_global_deterministic_10km','UKMO global','#25844c'],['ncep_aigfs025','NOAA AIGFS','#aa427d'],['jma_gsm','JMA GSM','#6a6b30'],['knmi_harmonie_arome_europe','KNMI HARMONIE','#008db6',true],['meteofrance_arpege_europe','ARPEGE Europe','#9e613e',true],['icon_eu','ICON Europe','#5855c5',true],['ukmo_uk_deterministic_2km','UKMO UKV 2 km','#078a7b',true],['ncep_hgefs025_ensemble_mean','HGEFS mean','#7b8491',false,true],['ecmwf_ifs025','IFS 0.25°','#363a8a'],['meteofrance_arome_france','AROME France','#bb7510',true]
-].map(([id,name,color,regional=false,ensemble=false])=>({id,name,color,regional,ensemble}));
+ ['ecmwf_ifs','IFS 9 km','#007a80'],['ecmwf_aifs025_single','ECMWF AIFS','#9450c6'],['icon_global','ICON global','#cc7116'],['gem_global','GEM global','#3778c2'],['gfs_global','GFS global','#d84758'],['ukmo_global_deterministic_10km','UKMO global','#25844c'],['ncep_aigfs025','NOAA AIGFS','#aa427d'],['jma_gsm','JMA GSM','#6a6b30'],['knmi_harmonie_arome_europe','KNMI HARMONIE','#008db6',true],['meteofrance_arpege_europe','ARPEGE Europe','#9e613e',true],['icon_eu','ICON Europe','#5855c5',true],['ukmo_uk_deterministic_2km','UKMO UKV 2 km','#078a7b',true],['ncep_hgefs025_ensemble_mean','HGEFS mean','#7b8491',false,true],['ecmwf_ifs025','IFS 0.25°','#363a8a'],['meteofrance_arome_france','AROME France','#bb7510',true],
+ ['ecmwf_ifs025_ensemble_mean','EC ENS mean','#7c3aed',false,true,'ensemble']
+].map(([id,name,color,regional=false,ensemble=false,api='forecast'])=>({id,name,color,regional,ensemble,api}));
 export const VARIABLES = [
  {key:'snowfall',title:'Hourly snowfall',unit:'cm / hour',note:'New snow during the preceding hour',floor:0,minRange:0.2},
  {key:'snow_depth',title:'Snow depth',unit:'cm',note:'Snow on the ground, including existing cover',floor:0,minRange:1},
@@ -51,4 +52,7 @@ export function agreement(models,time){const eligible=models.filter(m=>!m.ensemb
 export async function fetchJSON(url,signal,options={}){
  return cachedJSON(url,{signal,...options,kind:url.includes('geocoding-api')?'search':'forecast'});
 }
-export function forecastURL(location,model){return 'https://api.open-meteo.com/v1/forecast?'+new URLSearchParams({latitude:location.latitude,longitude:location.longitude,hourly:VARIABLES.map(v=>v.key).join(','),models:model.id,forecast_days:'8',timezone:'GMT',temperature_unit:'celsius',precipitation_unit:'mm',wind_speed_unit:'mph'});}
+export function forecastURL(location,model){
+ const endpoint=model.api==='ensemble'?'https://ensemble-api.open-meteo.com/v1/ensemble':'https://api.open-meteo.com/v1/forecast';
+ return endpoint+'?'+new URLSearchParams({latitude:location.latitude,longitude:location.longitude,hourly:VARIABLES.map(v=>v.key).join(','),models:model.id,forecast_days:'8',timezone:'GMT',temperature_unit:'celsius',precipitation_unit:'mm',wind_speed_unit:'mph'});
+}

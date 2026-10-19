@@ -38,6 +38,7 @@
   --model-icon_eu:#aaa0ff;
   --model-ukmo_uk_deterministic_2km:#54d4bf;
   --model-ncep_hgefs025_ensemble_mean:#b2bfce;
+  --model-ecmwf_ifs025_ensemble_mean:#c4a0ff;
   --model-ecmwf_ifs025:#8f9bea;
   --model-meteofrance_arome_france:#e9b553;
 }

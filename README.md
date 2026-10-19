@@ -120,3 +120,12 @@ Native resolution is retained in regional subsets: GEM 0.15° over 66°W–34.95
 GEM pressure-level files are three-hourly to T+240, even though some surface fields are hourly. ICON main cycles are hourly to T+78 then three-hourly to T+120; 03/09/15/21Z cycles are hourly to T+30 then T+36/42/48. Only published complete frames enter the timeline; there is no temporal filling of unavailable hours. The publisher prepares the same initialization used by the existing model feed and two preceding runs, caches complete frames, retries missing ones, and preserves verified data through source outages. Missing direct data hides this diagnostic for that run while other model fields remain usable. The height and wind overlays are pinned to the diagnostic source, including ICON where the existing feed has other 700 hPa fields.
 
 The existing Pages workflow refreshes both imports and publishes them with its other cached forecasts. Direct-data Python tests run in CI and the publisher: `python -m unittest discover -s tests -p 'test_vertical*.py'`. Run the map/browser checks as above; `SNOWLINE_TEST_MODELS=gem_global,icon_eu` can focus the live data checks on these additions.
+
+## EC ENS location forecasts
+
+The location graphs include **EC ENS mean**, the ECMWF IFS 0.25° ensemble mean,
+as a purple dashed line alongside HGEFS mean. Both have dashed legend samples.
+Open-Meteo’s ensemble endpoint supplies the existing 13 chart variables through
+the shared forecast cache and exact-location snapshots. Missing values remain
+gaps. Each selected ensemble mean counts once in the overall average; ensemble
+means remain excluded from the deterministic snowfall-agreement percentage.

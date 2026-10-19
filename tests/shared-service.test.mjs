@@ -20,6 +20,21 @@ test('coordinate/model isolation and strict input validation',async()=>{
  for(const query of ['latitude=&longitude=0&model=ecmwf_ifs','latitude=91&longitude=0&model=ecmwf_ifs','latitude=NaN&longitude=0&model=ecmwf_ifs','latitude=1&longitude=0&model=other','latitude=1&latitude=2&longitude=0&model=ecmwf_ifs','latitude=1&longitude=0&model=ecmwf_ifs&url=https://evil.test'])assert.throws(()=>parsePoint('https://cache.test/?'+query));
  assert.equal(f.point(53.123456).location.latitude,53.1235);
 });
+
+test('EC ENS mean uses the ensemble endpoint and reuses its own shared cache entry',async()=>{
+ const f=fixture(),cache=f.restart(),model='ecmwf_ifs025_ensemble_mean';
+ f.setProvider(async raw=>{
+  const url=new URL(raw);
+  assert.equal(url.origin+url.pathname,'https://ensemble-api.open-meteo.com/v1/ensemble');
+  assert.equal(url.searchParams.get('models'),model);
+  assert.ok(url.searchParams.get('hourly').split(',').includes('cloud_cover'));
+  return Response.json({hourly:{time:[new Date(f.now).toISOString()],temperature_2m:[6.2],snow_depth:[0.12]},hourly_units:{temperature_2m:'°C',snow_depth:'m'}});
+ });
+ const first=await cache.get(f.point(53,model));
+ const second=await f.restart().get(f.point(53,model));
+ assert.equal(f.calls,1);assert.equal(second._retrievedAt,first._retrievedAt);
+ assert.equal(second.hourly.temperature_2m[0],6.2);
+});
 test('global persistent 429 cooldown and stale data retains age; expired data refused',async()=>{
  const f=fixture(),cache=f.restart(),original=await cache.get(f.point());f.advance(3600001);
  f.setProvider(async()=>Response.json({error:true,reason:'Hourly limit'},{status:429,headers:{'Retry-After':'120'}}));
@@ -39,7 +54,7 @@ test('daily HTTP budget survives restart, permits fresh hits and resets at UTC d
 });
 test('configured client uses service for all models without direct API fallback',async()=>{
  const urls=[],errors=[];await loadPointForecasts({latitude:52,longitude:1},{service:'https://cache.test',load:async(url,signal,options)=>{urls.push(url);assert.equal(options.preserveRetrievedAt,true);assert.equal(options.forceMinAge,3600000);throw Object.assign(Error('Unavailable'),{status:503});},onError:(m,e)=>errors.push(e)});
- assert.equal(urls.length,15);assert.equal(errors.length,15);assert.ok(urls.every(url=>url.startsWith('https://cache.test/forecast?')));
+ assert.equal(urls.length,MODELS.length);assert.equal(errors.length,MODELS.length);assert.ok(urls.every(url=>url.startsWith('https://cache.test/forecast?')));
 });
 test('upstream concurrency stays at three and concurrent reservations cannot exceed daily budget',async()=>{
  const f=fixture(4),cache=f.restart();let active=0,peak=0;
@@ -50,8 +65,8 @@ test('upstream concurrency stays at three and concurrent reservations cannot exc
 test('service results normalise into all model charts with original timestamps and missing values',async()=>{
  const f=fixture(),cache=f.restart(),models=[];
  await loadPointForecasts({latitude:52,longitude:1},{service:'https://cache.test',load:async url=>cache.get(parsePoint(url)),onModel:model=>models.push(model)});
- assert.equal(models.length,15);assert.ok(models.every(m=>m.source==='shared cache'&&m.fetchedAt===f.now&&m.values.temperature_2m[0]===5&&m.values.snowfall[0]===null));
- assert.equal(f.calls,15);
+ assert.equal(models.length,MODELS.length);assert.ok(models.every(m=>m.source==='shared cache'&&m.fetchedAt===f.now&&m.values.temperature_2m[0]===5&&m.values.snowfall[0]===null));
+ assert.equal(f.calls,MODELS.length);
 });
 test('bounded persistent cache evicts old entries and refuses provider data without future values',async()=>{
  const f=fixture(),cache=f.restart();

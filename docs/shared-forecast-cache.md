@@ -16,8 +16,8 @@ recreating the service and rollback.
 2. When a snapshot is unavailable or needs refreshing, the configured service
    supplies one model for the requested location. Other searched locations use
    the same service. Empty configuration retains the existing direct-API behaviour.
-3. The Worker accepts only latitude, longitude and one of Snowline's 15 models.
-   It constructs the existing fixed request itself: the same 11 variables,
+3. The Worker accepts only latitude, longitude and one of Snowline's 16 models.
+   It constructs the existing fixed request itself: the same 13 variables,
    eight-day window, GMT timestamps, Celsius, mm and mph. It cannot proxy arbitrary
    URLs, dates, variables or model lists. Coordinates are rounded to four decimal
    places (about 11 m north–south); this rounding also applies to the provider
@@ -43,7 +43,7 @@ recreating the service and rollback.
    and retains its existing request path.
 
 Storage retains at most 256 coordinate/model entries, evicting oldest stored
-entries first; that is about 17 complete 15-model locations, or more partial
+entries first; that is about 16 complete 16-model locations, or more partial
 locations. Entries past 24 hours are pruned on writes. Eviction may make a later
 search fetch again. Original forecast responses and coordinates are stored; no
 visitor identity is recorded by the application. Cloudflare's own request logs
@@ -113,7 +113,7 @@ Do not put a placeholder host into a live configuration. Bump the `app.js` scrip
 query in `index.html` and the `point-forecasts.js` import query in `app.js`, and the `forecast-service.js` import query in
 `point-forecasts.js` when activating, so already-cached application modules pick up the configuration.
 Verify a newly searched location uses `/forecast` in the browser Network panel,
-all 15 model results settle, a second browser reuses retrieval times, and a Worker
+all 16 model results settle, a second browser reuses retrieval times, and a Worker
 failure displays dated cached results or an unavailable message rather than
 issuing direct forecast requests. Existing six-town snapshots may correctly
 avoid the Worker entirely.
@@ -152,3 +152,11 @@ The native workerd fixture exercises a complete cache miss and cache hit through
 the real fetch implementation using a local data URL, without contacting Open-Meteo.
 It runs in regression CI alongside the Node tests. Prior health/packaging checks
 did not exercise this outbound path.
+
+## EC ENS location charts (19 October 2026)
+
+EC ENS mean uses Open-Meteo’s `ecmwf_ifs025_ensemble_mean` through the ensemble
+endpoint. The shared Worker and town publisher use the same model registry and
+URL builder as the charts. Deploy the updated Worker before the website so it
+accepts the new model. Cache keys, expiry, cooldown and budget rules stay shared.
+The existing selected-model average counts each selected ensemble mean once.

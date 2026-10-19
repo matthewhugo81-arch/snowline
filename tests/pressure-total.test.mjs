@@ -54,7 +54,7 @@ test('a fresh town snapshot checks Cloudflare for new fields before any direct r
   assert.match(url,/workers.dev\/forecast/);assert.equal(options.forceMinAge,3600000);
   return {...base,hourly:{...base.hourly,pressure_msl:[1012],wind_direction_10m:[90]}};
  },onModel:m=>models.push(m)});
- assert.equal(requests.length,16);assert.equal(models.length,15);
+ assert.equal(requests.length,MODELS.length+1);assert.equal(models.length,MODELS.length);
  assert.ok(models.every(m=>m.values.pressure_msl[0]===1012));
 });
 
@@ -64,7 +64,7 @@ test('cache fields, including all-null pressure, never trigger provider suppleme
   requests.push(url);assert.match(url,/workers.dev/);
   return {_retrievedAt:Date.now(),hourly:{time:[time],precipitation:[1],pressure_msl:[null],wind_direction_10m:[90]}};
  },onModel:m=>models.push(m)});
- assert.equal(requests.length,15);assert.equal(models.length,15);
+ assert.equal(requests.length,MODELS.length);assert.equal(models.length,MODELS.length);
  assert.ok(models.every(m=>m.values.pressure_msl[0]===null));
 });
 
@@ -77,7 +77,7 @@ test('missing-field supplements align reordered UTC hours and Refresh respects h
   }
   return {_retrievedAt:Date.now(),hourly:{time,precipitation:[1,2]}};
  },onModel:m=>models.push(m)});
- assert.equal(models.length,15);assert.deepEqual(models[0].values.pressure_msl,[1010,1020]);
+ assert.equal(models.length,MODELS.length);assert.deepEqual(models[0].values.pressure_msl,[1010,1020]);
 });
 
 test('shared-cache failure retains town data without bypassing its limit for pressure',async()=>{
@@ -86,7 +86,7 @@ test('shared-cache failure retains town data without bypassing its limit for pre
   if(url.startsWith('./point-data/'))return {version:1,location:point,models:Object.fromEntries(MODELS.map(m=>[m.id,base]))};
   assert.match(url,/workers.dev/);throw Object.assign(Error('Daily limit'),{status:429});
  },onModel:m=>models.push(m)});
- assert.equal(models.length,15);assert.ok(models.every(m=>m.values.precipitation[0]===1&&m.values.pressure_msl[0]===null));
+ assert.equal(models.length,MODELS.length);assert.ok(models.every(m=>m.values.precipitation[0]===1&&m.values.pressure_msl[0]===null));
 });
 
 test('total averages each available hour before summing when model horizons differ',()=>{
