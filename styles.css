@@ -119,3 +119,8 @@
 
 /* Match ensemble legend samples to the dashed forecast lines. */
 .swatch.ensemble-swatch{width:19px;height:0;border-radius:0;background:none;border-top:2px dashed var(--color)}
+
+/* Ownership credit stays with the footer brand, including on narrow screens. */
+footer .footer-identity{display:grid;gap:6px;min-width:0}
+footer .footer-credit{margin:0;color:var(--muted);font-size:12px;line-height:1.6;letter-spacing:normal}
+footer .footer-credit a{text-underline-offset:3px}
