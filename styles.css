@@ -117,6 +117,14 @@
 @media(min-width:901px){.location-page .chart-size{display:inline-flex}.location-page .chart-card.chart-wide{grid-column:1 / -1}}
 .precipitation-total{border-top:1px solid var(--line);padding-top:8px;margin-top:10px;color:var(--ink);font-weight:600}
 
+/* Cumulative precipitation has its own mm scale; hourly rates keep theirs. */
+:root{--chart-cumulative:#1265dc}
+:root[data-theme="dark"]{--chart-cumulative:#60a5fa}
+#plot-precipitation .cumulative-axis{fill:var(--chart-cumulative);font-size:11px;font-weight:600}
+.cumulative-value{font-weight:600}
+.cumulative-value small{font-weight:400;color:var(--muted)}
+.cumulative-swatch{display:inline-block;width:19px;height:3px;background:var(--chart-cumulative);vertical-align:middle;flex:none}
+
 /* Match ensemble legend samples to the dashed forecast lines. */
 .swatch.ensemble-swatch{width:19px;height:0;border-radius:0;background:none;border-top:2px dashed var(--color)}
 

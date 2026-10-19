@@ -18,8 +18,18 @@ export function circularAverageSeries(series,length){
  return {values,counts};
 }
 
-// Hourly accumulations: sum the displayed hourly means, never average the total.
-// Missing hours must not silently reduce the reported accumulation.
-export function precipitationTotal(values){
- return values.length&&values.every(v=>typeof v==='number'&&Number.isFinite(v))?values.reduce((sum,v)=>sum+v,0):null;
+// Each displayed rate represents the preceding hour, including the first point.
+// Start afresh for the displayed window and stop at an unknown hourly mean;
+// restarting after a gap would present an incomplete amount as a cumulative total.
+export function cumulativePrecipitation(values){
+ let sum=0,complete=true;
+ const cumulative=Array.from(values,value=>{
+  if(typeof value!=='number'||!Number.isFinite(value))complete=false;
+  if(!complete)return null;
+  sum+=value;return sum;
+ });
+ return {values:cumulative,total:values.length&&complete?sum:null};
 }
+
+// Keep the footer and curve on the same inclusive hourly accumulation.
+export function precipitationTotal(values){return cumulativePrecipitation(values).total;}

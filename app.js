@@ -1,6 +1,6 @@
 import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261019-mogreps-uk';
 import {loadPointForecasts} from './point-forecasts.js?v=20261019-mogreps-uk';
-import {averageSeries,precipitationTotal,circularAverageSeries,directionLabel} from './average.js?v=20261018-pressure-total2';
+import {averageSeries,cumulativePrecipitation,circularAverageSeries,directionLabel} from './average.js?v=20261019-cumulative-precipitation';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261018-context-menu-fix';
 import {createChartImageMenu} from './chart-image-export.js?v=20261019-mogreps-uk';
@@ -28,7 +28,7 @@ const chartImages=createChartImageMenu({root:document.querySelector('main'),getI
   firstTime:layout.times[0],period:`${date.format(new Date(layout.times[0]))} – ${date.format(new Date(layout.times.at(-1)))} UTC`,
   status:$('status').textContent,
   sourceNote:layout.series.filter(s=>s.api==='mogreps'||s.id==='ukmo_uk_ensemble_mean_2km').map(s=>`${s.name}: © Crown copyright 2026, Met Office · CC BY-SA 4.0. ${s.run?'Run '+s.run:'3 members via Open-Meteo; hourly'}`).join(' · '),
-  legend:layout.series.filter(s=>s.values.some(finite)).map(s=>({name:mogrepsLabel(s,id.replace('plot-',''))||'Snowfall model agreement',color:modelColour(s),average:!!s.average,ensemble:!!s.ensemble,dots:id==='plot-wind_direction_10m'}))};
+  legend:layout.series.filter(s=>s.values.some(finite)).map(s=>({name:mogrepsLabel(s,id.replace('plot-',''))||'Snowfall model agreement',color:modelColour(s),average:!!(s.average||s.cumulative),ensemble:!!s.ensemble,dots:id==='plot-wind_direction_10m'}))};
 }});
 const chartZoom=createChartZoom({root:document.querySelector('main'),getLayout:id=>chartLayouts.get(id),
  getWindow:()=>{const {start,end}=chartWindow(state);return {start,end,length:Math.min(state.times.length,state.hours)};},
@@ -46,7 +46,7 @@ function populate(){
  $('model-list').innerHTML=MODELS.map(m=>`<label class="model-chip" style="--color:${modelColour(m)}"><input type="checkbox" value="${m.id}" checked><span class="swatch${m.ensemble?' ensemble-swatch':''}"></span>${m.name}</label>`).join('');
  $('model-list').addEventListener('change',e=>{if(e.target.checked)state.selected.add(e.target.value);else state.selected.delete(e.target.value);scheduleRender();});
  const chartVariables=[...VARIABLES.filter(v=>!['snowfall','snow_depth'].includes(v.key)),...VARIABLES.filter(v=>['snowfall','snow_depth'].includes(v.key))];
- $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View forecast data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div>${v.key==='precipitation'?'<p id="precipitation-total" class="chart-note precipitation-total" aria-live="polite"></p>':''}</article>`).join('');
+ $('charts').innerHTML=chartVariables.map(v=>`<article class="chart-card"><div class="chart-heading"><h2>${v.title}</h2><div class="chart-tools"><span class="unit">${v.unit}</span><button type="button" class="zoom-reset secondary" data-reset-zoom hidden title="Restore the selected 1–7 day view on all charts">Reset zoom</button><button type="button" class="data-button secondary" data-variable="${v.key}" aria-label="View and download ${v.title} data" aria-haspopup="dialog" title="View forecast data and download"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M5 16v5h14v-5"/></svg>Data</button></div></div><p class="chart-note">${v.note}${v.key==='precipitation'?' · Blue line: cumulative average, mm on the right axis.':''}</p><p class="chart-time">Inspecting <time id="time-${v.key}"></time></p><div id="plot-${v.key}" class="plot"></div><div id="values-${v.key}" class="chart-values"></div><div id="frost-${v.key}" class="chart-frost"></div>${v.key==='precipitation'?'<p id="precipitation-total" class="chart-note precipitation-total" aria-live="polite"></p>':''}</article>`).join('');
  $('charts').addEventListener('click',e=>{const button=e.target.closest('[data-variable]');if(button)datasetDialog.open(button.dataset.variable,button);});
  setupChartPanels(document.querySelector('main'),()=>{chartZoom.cancel();scheduleRender();});
  chartImages.setup();
@@ -96,15 +96,26 @@ function plot(container,series,config,times){
  if(container.closest('[hidden]')){chartLayouts.delete(container.id);return;}
  const shortView=times.length<120;
  const start=chartWindow(state).start,index=state.index-start;
- const width=Math.max(280,plotWidths.get(container.id)??container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,right=12,top=15,bottom=shortView?46:33,inner=width-left-right,n=times.length;
- const valid=series.flatMap(s=>s.values).filter(finite);
+ const cumulative=series.find(s=>s.cumulative);
+ const cumulativeMax=Math.max(1,...(cumulative?.values??[]).filter(finite))*1.08;
+ const cumulativeTicks=Array.from({length:5},(_,i)=>{const value=cumulativeMax*i/4;return {value,label:value===0?'0':value.toFixed(cumulativeMax<10?1:0)};});
+ const right=cumulative?Math.max(48,...cumulativeTicks.map(t=>14+t.label.length*7)):12;
+ const width=Math.max(280,plotWidths.get(container.id)??container.clientWidth),height=container.id==='agreement-chart'?140:225,left=43,top=cumulative?24:15,bottom=shortView?46:33,inner=width-left-right,n=times.length;
+ // Millimetres accumulated over the window must never inflate the hourly axis.
+ const valid=series.filter(s=>!s.cumulative).flatMap(s=>s.values).filter(finite);
  if(!valid.length){container.innerHTML=`<div class="plot-empty">${state.loading?'Loading available forecasts…':state.selected.size?'No data available for the selected models.':'Select a model to see its forecast.'}</div>`;chartLayouts.delete(container.id);return;}
  let min=config.floor??Math.min(...valid),max=config.ceiling??Math.max(...valid);
  if(config.floor===undefined&&!config.absolute){min=Math.min(min,0);max=Math.max(max,0);}
  if(max-min<config.minRange){if(config.floor!==undefined)max=min+config.minRange;else{const mid=(min+max)/2;min=mid-config.minRange/2;max=mid+config.minRange/2;}}
  if(config.ceiling===undefined)max+=(max-min)*.08;
  const x=i=>left+inner*i/Math.max(1,n-1),y=v=>top+(height-bottom-top)*(config.direction?(v-min)/(max-min):1-(v-min)/(max-min));
- let html=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(config.title)}. Values for the inspected hour appear below and in the data table.">`;
+ const cumulativeY=v=>top+(height-bottom-top)*(1-v/cumulativeMax);
+ const seriesY=series.map(s=>s.cumulative?cumulativeY:y);
+ let html=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(config.title)}.${cumulative?' Hourly precipitation uses the left mm/h axis; the blue cumulative average uses the right mm axis.':''} Values for the inspected hour appear below and in the data table.">`;
+ if(cumulative){
+  html+=`<text class="axis-unit" x="${left}" y="11">mm/h</text><text class="cumulative-axis" x="${width-right}" y="11" text-anchor="end">mm</text>`;
+  for(const tick of cumulativeTicks)html+=`<text class="cumulative-axis" x="${width-right+8}" y="${cumulativeY(tick.value)+4}">${tick.label}</text>`;
+ }
  const ticks=config.direction?8:4;
  for(let j=0;j<=ticks;j++){const v=min+(max-min)*j/ticks,yy=y(v),label=config.direction?directionLabel(v):Math.abs(v)<.0001?'0':v.toFixed(max-min<=2?2:max-min<=8?1:0);html+=`<line class="gridline" x1="${left}" x2="${width-right}" y1="${yy}" y2="${yy}"/><text x="${left-8}" y="${yy+4}" text-anchor="end">${label}</text>`;}
  if(min<0&&max>0)html+=`<line class="zero-line" x1="${left}" x2="${width-right}" y1="${y(0)}" y2="${y(0)}"/>`;
@@ -119,10 +130,15 @@ function plot(container,series,config,times){
  const dayTicks=!state.zoom&&dayStarts.length&&x(dayStarts[0])-left<74?dayStarts:[0,...dayStarts];
  let labelEnd=-Infinity;
  for(const i of new Set(dayTicks)){const xx=x(i),anchor=i===0?'start':i===n-1?'end':'middle',labelWidth=44,labelStart=xx-(anchor==='start'?0:anchor==='end'?labelWidth:labelWidth/2);if(labelStart<labelEnd+8)continue;html+=`<text class="date-tick" x="${xx}" y="${height-8}" text-anchor="${anchor}">${shortDate.format(new Date(times[i]))}</text>`;labelEnd=labelStart+labelWidth;}
- for(const s of series){if(config.direction){s.values.forEach((v,i)=>{if(finite(v))html+=`<circle class="direction-dot" cx="${x(i)}" cy="${y(v)}" r="2.7" fill="${modelColour(s)}" opacity=".8"/>`;});continue;}if(s.average)html+=`<path d="${nativeSeriesPath(s,times,config.key,x,y)}" fill="none" stroke="var(--chart-halo, white)" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;html+=`<path d="${nativeSeriesPath(s,times,config.key,x,y)}" fill="none" stroke="${modelColour(s)}" stroke-width="${s.average?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;}
+ for(const s of series){
+  const sy=s.cumulative?cumulativeY:y;
+  if(config.direction){s.values.forEach((v,i)=>{if(finite(v))html+=`<circle class="direction-dot" cx="${x(i)}" cy="${sy(v)}" r="2.7" fill="${modelColour(s)}" opacity=".8"/>`;});continue;}
+  if(s.average||s.cumulative)html+=`<path d="${nativeSeriesPath(s,times,config.key,x,sy)}" fill="none" stroke="var(--chart-halo, white)" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  html+=`<path ${s.cumulative?'class="cumulative-line" ':''}d="${nativeSeriesPath(s,times,config.key,x,sy)}" fill="none" stroke="${modelColour(s)}" stroke-width="${s.average||s.cumulative?3.2:s.ensemble?1.7:2}" stroke-linejoin="round" stroke-linecap="round" ${s.ensemble?'stroke-dasharray="5 4"':''} opacity=".9"/>`;
+ }
  html+=`<line class="cursor-line" x1="${x(index)}" x2="${x(index)}" y1="${top}" y2="${height-bottom}"/>`;
- for(const s of series){const v=s.values[index];html+=`<circle class="cursor-point" cx="${x(index)}" cy="${finite(v)?y(v):top}" r="3" fill="${modelColour(s)}"${finite(v)?'':' display="none"'}/>`;}
- html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,height,left,inner,top,bottom,n,start,times,x,y,series,cursor:container.querySelector('.cursor-line'),points:[...container.querySelectorAll('.cursor-point')]});
+ for(const [i,s] of series.entries()){const v=s.values[index];html+=`<circle class="cursor-point" cx="${x(index)}" cy="${finite(v)?seriesY[i](v):top}" r="3" fill="${modelColour(s)}"${finite(v)?'':' display="none"'}/>`;}
+ html+='</svg>';container.innerHTML=html;chartLayouts.set(container.id,{width,height,left,inner,top,bottom,n,start,times,x,y,seriesY,series,cursor:container.querySelector('.cursor-line'),points:[...container.querySelectorAll('.cursor-point')]});
 }
 function render(){
  if(chartZoom.active)return; // Keep the drag geometry stable while model responses arrive.
@@ -149,11 +165,14 @@ function render(){
  const average=(v.direction?circularAverageSeries:averageSeries)(series,times.length);
  averages.set(v.key,average);
  if(v.key==='precipitation'){
-  const total=precipitationTotal(average.values);
+  const cumulative=cumulativePrecipitation(average.values),total=cumulative.total;
+  average.cumulative=cumulative.values;
   const detail=!state.selected.size?'Select a model':total===null?'Incomplete hourly data':`${times.length} hourly rate averages (MOGREPS-G: 3 h period means)${state.loading?' · models still loading':''}`;
-  $('precipitation-total').textContent=`Accumulated precipitation: ${total===null?'—':fmt(total)+' mm'} · ${detail} · ${date.format(new Date(times[0]))} – ${date.format(new Date(times.at(-1)))} UTC`;
+  $('precipitation-total').textContent=`Accumulated precipitation: ${total===null?'—':fmt(total)+' mm'} · ${detail} · Covers ${date.format(new Date(Date.parse(times[0])-3600000))} – ${date.format(new Date(times.at(-1)))} UTC`;
  }
- plot($('plot-'+v.key),v.direction?series:[...series,{name:'Average',color:'#102235',average:true,values:average.values}],v,times);
+ const lines=v.direction?series:[...series,{name:'Average',color:'#102235',average:true,values:average.values}];
+ if(v.key==='precipitation')lines.push({name:'Cumulative average · mm (right)',color:'var(--chart-cumulative, #1265dc)',cumulative:true,values:average.cumulative});
+ plot($('plot-'+v.key),lines,v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
  const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);let validTimes=data?coverageCache.get(data):null;if(!validTimes){validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];if(data)coverageCache.set(data,validTimes);}let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data?.detail)text+='; '+data.detail;if(data?.run)text+=`; run ${date.format(new Date(data.run))} UTC · 18 members · ${data.complete?'complete':'partial; '+data.missingSteps.length+' missing steps'} · ${data.periodNote}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
@@ -171,7 +190,7 @@ function renderInspection(){
  if($('nav-maps'))$('nav-maps').href='maps.html?'+new URLSearchParams({lat:state.location.latitude,lon:state.location.longitude,time});
  for(const layout of chartLayouts.values()){
   const xx=layout.x(index);layout.cursor.setAttribute('x1',xx);layout.cursor.setAttribute('x2',xx);
-  layout.points.forEach((point,i)=>{const value=layout.series[i].values[index];point.setAttribute('display',finite(value)?'inline':'none');if(finite(value)){point.setAttribute('cx',xx);point.setAttribute('cy',layout.y(value));}});
+  layout.points.forEach((point,i)=>{const value=layout.series[i].values[index];point.setAttribute('display',finite(value)?'inline':'none');if(finite(value)){point.setAttribute('cx',xx);point.setAttribute('cy',layout.seriesY[i](value));}});
  }
  const vote=votes[index];$('agreement-detail').textContent=vote.valid?`${labelText} · ${vote.snow} of ${vote.valid} available forecasts indicate ≥0.1 cm snowfall (${Math.round(vote.percent)}%).`:'No eligible snowfall forecasts for the inspected hour.';
  for(const v of VARIABLES){
@@ -182,7 +201,8 @@ function renderInspection(){
  if(direction)current.sort((a,b)=>direction*(valueAt(a,v.key,time)-valueAt(b,v.key,time)));
  const mean=average.values[index],count=average.counts[index];
  const meanLabel=finite(mean)?`<span class="average-value"><i class="average-swatch"></i>Average <b ${valueAttributes(mean,v)}>${formatValue(mean,v)}</b> <small>(${count} ${count===1?'model':'models'})</small></span>`:'';
- $('values-'+v.key).innerHTML=current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch${m.ensemble&&!v.direction?' ensemble-swatch':''}" style="--color:${modelColour(m)}"></i>${mogrepsLabel(m,v.key)} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>';
+ const cumulativeLabel=v.key==='precipitation'?`<span class="cumulative-value"><i class="cumulative-swatch"></i>Cumulative <b>${fmt(average.cumulative[index])} mm</b> <small>(right axis)</small></span>`:'';
+ $('values-'+v.key).innerHTML=cumulativeLabel+(current.length?meanLabel+current.map(m=>{const value=valueAt(m,v.key,time);return `<span><i class="swatch${m.ensemble&&!v.direction?' ensemble-swatch':''}" style="--color:${modelColour(m)}"></i>${mogrepsLabel(m,v.key)} <b ${valueAttributes(value,v)}>${formatValue(value,v)}</b></span>`;}).join(''):'<span>No values for this hour.</span>');
  }
 
  $('data-table').innerHTML=MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);return `<tr><td><i class="swatch${m.ensemble?' ensemble-swatch':''}" style="--color:${modelColour(m)}"></i>${m.name}${m.ensemble?' (ensemble mean)':''}</td>${VARIABLES.map(v=>{const value=data?valueAt(data,v.key,time):null;return `<td ${valueAttributes(value,v)}>${formatValue(value,v)}</td>`;}).join('')}<td>${esc(coverage.get(m.id))}</td></tr>`}).join('');
