@@ -9,9 +9,10 @@ import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSourc
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
 import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
-import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261015-ensemble-history';
+import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261019-ensemble-extra';
+import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261019-ensemble-extra';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261011-ensemble-transport';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261019-ensemble-extra';
 import {installDewPoint} from './map-dew-point.js';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
@@ -22,19 +23,19 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261018-rates';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
-import {overlayGroups} from './map-overlay-specs.js?v=20261015-direct-vertical';
+import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261018-rates';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261018-rates';
-import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261010-wind-mph';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261018-rates';
+import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261019-ensemble-extra';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261018-rates';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261010-ukv';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261019-ec-ens';
+import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261019-ensemble-extra';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261018-rates';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-ec-ens';
@@ -72,7 +73,7 @@ const fields=[
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
-const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
 installRangeReads(OM,settings);
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);
@@ -246,7 +247,7 @@ async function drawGridValues(panel){
   note.textContent=features.length?'Grid values · '+(field===WEATHER_COMPOSITE?'precipitation · ':'')+displayUnit(f):'No grid values in this area.';
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
-function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:precipitationRateVariable(sourceVariable(source,field)??field),interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
+function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:precipitationRateVariable(sourceVariable(source,field)??field),interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:!fields.find(f=>f.key===field)?.ensembleStatistic&&/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null;
 function refreshStartingTime(message='No forecast times available'){
  const select=$('map-start-time');if(!select)return;
@@ -494,11 +495,15 @@ function setLegend(){
    note+=' '+(hours?(['precipitation_probability','snowfall_probability'].includes(field)?'Probability threshold: ':rate?'':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
   }
   if(/^temperature_2m_(max|min)$/.test(field))interval='Native period ending at valid time · duration unspecified';
-  el('legend-interval').textContent=f.ensembleStatistic==='spread'?'Standard deviation · higher = more disagreement':f.ensembleStatistic==='mean'?'Ensemble mean':interval;
+  const ensembleInterval=ensemblePeriodLabel(state.metas[model],field,state.times[state.index]);
+  if(ensembleInterval)note+=' Reporting period: '+ensembleInterval+'.';
+  const extraSource=fieldSource(state.metas[model],field,state.times[state.index]);
+  if(extraSource?.coverage)note+=' Coverage: North Atlantic and Europe, including all four map areas. '+extraSource.member_count+' ensemble members.';
+  el('legend-interval').textContent=ensembleInterval||(f.ensembleStatistic==='spread'?'Standard deviation · higher = more disagreement':f.ensembleStatistic==='mean'?'Ensemble mean':interval);
   el('variable-note').textContent=note;
   el('field-availability').textContent=modelName(model)+' · '+f.name;
   const meta=state.metas[model],source=fieldSource(meta,field);
-  if(meta&&source){const end=field===WEATHER_COMPOSITE?meta.valid_times.filter(time=>hasFieldTime(meta,field,time)).at(-1):source.valid_times.at(-1);el('run').textContent='Initialized '+runLabel(meta)+(end?' · layer data ends '+stamp(end)+' UTC':' · awaiting common forecast times');}
+  if(meta&&source){const end=field===WEATHER_COMPOSITE?meta.valid_times.filter(time=>hasFieldTime(meta,field,time)).at(-1):(source.variable_valid_times?.[sourceVariable(source,field)]??source.valid_times).at(-1);el('run').textContent='Initialized '+runLabel(meta)+(end?' · layer data ends '+stamp(end)+' UTC':' · awaiting common forecast times');}
   if(meta&&source&&meta.runFamily)el('run').textContent+=' · '+ukvCoverageText(meta,meta.runFamily);
   const step=f.contourLabel??(field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds');
   el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';

@@ -1,3 +1,4 @@
+import {extraEnsembleField} from './map-ensemble-extra.js?v=20261019-ensemble-extra';
 // Same native global grids as the official GEFS/IFS mean and SD GRIB products.
 export const ENSEMBLE_DOMAINS = [
  {value:'snowline_gefs_ensemble',label:'GEFS mean & spread',grid:{type:'regular',nx:720,ny:361,latMin:-90,lonMin:-180,dx:.5,dy:.5,zoom:1},time_interval:'3_hourly',model_interval:'6_hourly'},
@@ -11,6 +12,7 @@ const definitions={
  pressure_msl:{name:'Mean sea-level pressure',unit:'hPa',mean:[940,960,980,1000,1010,1020,1040,1060],spread:[0,1,2,4,6,8,12,20],step:4,spreadStep:2}
 };
 export function ensembleField(key){
+ const extra=extraEnsembleField(key);if(extra)return extra;
  const match=key.match(/^(.*)_(mean|spread)$/),d=definitions[match?.[1]];
  if(!d)return null;
  const spread=match[2]==='spread',stops=spread?d.spread:d.mean,step=spread?d.spreadStep:d.step;

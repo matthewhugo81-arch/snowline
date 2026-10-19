@@ -1,10 +1,11 @@
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
+import {ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261019-ensemble-extra';
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261014-interaction-audit';
 import {directVerticalNote} from './map-direct-vertical.js?v=20261015-direct-vertical';
-import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261018-rates';
+import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261019-ensemble-extra';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261018-rates';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261019-ensemble-extra';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 
@@ -54,6 +55,8 @@ export function briefingTimes(meta,preset,model,interval='3'){
 export function briefingPage(times,start,count=6){return times.slice(Math.max(0,start),Math.max(0,start)+count);}
 export function briefingCaption(meta,preset,time){
  const lead=(Date.parse(time)-Date.parse(meta.reference_time))/3600000;
+ const ensembleInterval=ensemblePeriodLabel(meta,preset.field,time);
+ if(ensembleInterval)return 'T+'+String(lead).padStart(3,'0')+' · '+ensembleInterval;
  const amount=preset.id==='weather'?'precipitation':preset.field;
  const period=[PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)?fieldIntervalHours(meta,amount,time):null;
  const sourceNote=preset.field===VERTICAL_MOTION?directVerticalNote(fieldSource(meta,preset.field,time)):'';

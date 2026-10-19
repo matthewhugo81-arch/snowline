@@ -1,4 +1,4 @@
-import {isWindField,MPH_PER_MS} from './map-wind-units.js';
+import {isWindField,MPH_PER_MS} from './map-wind-units.js?v=20261019-ensemble-extra';
 import {isJetWind,JET_MIN_MS,contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
 import {VERTICAL_MOTION} from './map-vertical-motion.js?v=20261015-direct-vertical';
 
@@ -21,7 +21,7 @@ export function overlayGroups({field,url,pressureURL,heightURL,windURL,contours,
   return groups;
  }
  if(!field.categorical){
-  if(/^wind_speed_|^ocean_current_speed$/.test(field.key)){
+  if(!field.ensembleStatistic&&/^(wind_speed_|ocean_current_speed$)/.test(field.key)){
    const jet=isJetWind(field.key);
    for(const [id,color,width]of [['wind-halo','#ffffff',jet?1.4:2.6],['wind-arrows','#111111',jet?.65:1]]){
     layers.push({id,type:'line','source-layer':'wind-arrows',...(jet?{filter:['>=',['to-number',['get','value']],JET_MIN_MS]}:{}),paint:{'line-color':color,'line-width':width,'line-opacity':jet?.75:1}});

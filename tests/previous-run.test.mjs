@@ -43,13 +43,14 @@ test('ensemble history loads three distinct exact cycles from the publication in
   const runs=[0,-cadence,-2*cadence].map(h=>({...meta(h),domain,variables:['temperature_850hPa_mean','temperature_850hPa_spread','pressure_msl_mean']}));
   const calls=[];
   const load=async url=>{
-   calls.push(url);assert.ok(url.includes('/ensemble-data/'+domain+'/'));
+   calls.push(url);if(url.includes('_extra/'))throw Object.assign(Error('Not yet prepared'),{status:404});assert.ok(url.includes('/ensemble-data/'+domain+'/'));
    if(url.endsWith('history.json'))return {format_version:1,runs:[...runs.map(m=>m.reference_time),runs[0].reference_time,meta(6).reference_time,meta(-54).reference_time]};
    const found=runs.find(m=>url.includes(new Date(m.reference_time).toISOString().slice(0,10).replaceAll('-','/')+'/'+new Date(m.reference_time).toISOString().slice(11,13)+'00Z/meta.json'));
    assert.ok(found,'Only listed, valid archive cycles are requested');return found;
   };
   const result=await discoverPreviousRuns({model:domain,latest:runs[0],load});
-  assert.equal(result.errors.length,0);assert.equal(calls.length,3);
+  assert.equal(result.errors.length,0);assert.equal(calls.filter(url=>!url.includes('_extra/')).length,3);
+  assert.equal(calls.filter(url=>url.includes('_extra/')).length,2);
   assert.deepEqual(result.runs.map(m=>m.reference_time),runs.map(m=>m.reference_time));
   for(const archived of result.runs.slice(1))assert.match(fieldDataURL(archived,'temperature_850hPa_spread',archived.valid_times[1]),new RegExp('/ensemble-data/'+domain+'/'));
   const time=previousRunTimes(result.runs,{id:'temperature_850hPa_spread',field:'temperature_850hPa_spread',required:['temperature_850hPa_spread']},{regional:false})[0];

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,6 +69,17 @@ jobs:
           wait "$vertical_gem" || failed=1
           wait "$vertical_icon" || failed=1
           exit "$failed"
+      - name: Prepare additional ensemble fields and ECMWF rainfall probabilities
+        shell: bash
+        run: |
+          python scripts/build_ensemble_extras.py --model gefs --workers 12 &
+          extra_gefs=$!
+          python scripts/build_ensemble_extras.py --model ecmwf --workers 16 &
+          extra_ecmwf=$!
+          failed=0
+          wait "$extra_gefs" || failed=1
+          wait "$extra_ecmwf" || failed=1
+          exit "$failed"
       - name: Record source-to-publication health without changing model timestamps
         continue-on-error: true
         run: python scripts/check_generated_freshness.py --local-root ensemble-data --output ensemble-data/health.json
@@ -80,6 +91,7 @@ jobs:
           cp -a point-data _site/point-data
           mkdir -p _site/ensemble-data
           cp -a ensemble-data/snowline_gefs_ensemble ensemble-data/snowline_ecmwf_ensemble ensemble-data/snowline_mogreps_uk ensemble-data/snowline_gem_700 ensemble-data/snowline_icon_eu_700 _site/ensemble-data/
+          cp -a ensemble-data/snowline_gefs_extra ensemble-data/snowline_ecmwf_extra _site/ensemble-data/
           if [ -f ensemble-data/health.json ]; then cp ensemble-data/health.json _site/ensemble-data/; fi
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           git rev-parse HEAD > _site/site-revision.txt

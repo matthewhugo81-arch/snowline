@@ -7,8 +7,8 @@ import {MOGREPS_MODELS} from './map-mogreps.js?v=20261014-clean-symbols';
 // Point-only ensemble feeds have separate, already-published spatial products below.
 export const MAP_MODELS = [...MODELS.filter(model=>model.api!=='ensemble').map(model => model.id === UKV ?
  {...model,name:'UKV',runFamily:'main',sourceModel:UKV} : model),
- {id:'snowline_gefs_ensemble',name:'GEFS 0.5° · mean & spread',ensemble:true},
- {id:'snowline_ecmwf_ensemble',name:'ECMWF ENS 0.25° · mean & spread',ensemble:true},
+ {id:'snowline_gefs_ensemble',name:'GEFS 0.5° · ensemble mean & spread',ensemble:true},
+ {id:'snowline_ecmwf_ensemble',name:'ECMWF ENS 0.25° · mean, spread & probabilities',ensemble:true},
  ...MOGREPS_MODELS
 ];
 // Menus expose two runs of the same UKV model. The operational catalogue and

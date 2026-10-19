@@ -3,9 +3,10 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261011-live-runs';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261018-rates';
+import {sourceVariable} from './map-catalogue.js?v=20261019-ensemble-extra';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261015-ensemble-history';
+import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261019-ensemble-extra';
+import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261019-ensemble-extra';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
 
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
@@ -35,6 +36,7 @@ const gfsForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid'
 const noInitialGust=new Set(['ecmwf_ifs','ecmwf_ifs025','dwd_icon','dwd_icon_eu','meteofrance_arpege_europe','meteofrance_arome_france0025']);
 const aromeForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high']);
 function fieldPublishedAt(source,key,time){
+ if(source.variable_valid_times){const times=source.variable_valid_times[key];return Array.isArray(times)&&times.some(t=>Date.parse(t)===Date.parse(time));}
  const lead=(Date.parse(time)-Date.parse(source.reference_time))/3600000;
  if(key==='precipitation'&&!precipitationExistsAt(source.domain,lead))return false;
  // ECMWF open data switches to 10fg3 for these steps. Open-Meteo's IFS025
@@ -47,6 +49,7 @@ function fieldPublishedAt(source,key,time){
  return true;
 }
 export function fieldIntervalHours(meta,key,time){
+ const period=ensemblePeriod(meta,key,time);if(period)return period.hours;
  if(accumulationHours(key))return accumulationHours(key);
  if(key===THETA_SYMBOLS){const s=fieldSource(compositeMeta(meta),'precipitation',time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
  if(isTypeField(key)){const s=fieldSource(meta,key,time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
@@ -89,6 +92,12 @@ async function directVertical(model,reference,load){
  if(!verifiedDirectVertical(meta,domain)||Date.parse(meta.reference_time)!==Date.parse(reference))throw Error('Unverified direct 700 hPa run');
  return {...meta,domain,baseURL:ownBase};
 }
+async function ensembleExtra(model,reference,load){
+ const domain=ENSEMBLE_EXTRAS[model];
+ const meta=await load(ownBase+domain+'/'+runPath(reference)+'meta.json');
+ if(!verifiedEnsembleExtra(meta,domain,reference))throw Error('Unverified additional ensemble fields');
+ return {...meta,domain,baseURL:ownBase};
+}
 async function mogrepsSnow(model,load,reference){
  const base=ownBase+model.snowDomain+'/';
  const meta=await load(base+(reference?runPath(reference)+'meta.json':'latest.json'));
@@ -124,6 +133,10 @@ export async function loadSpatialModel(model,load){
    return null;
   }
  }));
+ if(ENSEMBLE_EXTRAS[model]){
+  try{const extra=await ensembleExtra(model,primary.reference_time,load);other.push(extra);if(!extra.completed)warnings.push('Additional ensemble fields are still being prepared for this run. Each layer shows only its verified forecast hours.');}
+  catch{warnings.push('Additional ensemble fields are not yet available for this run; the published mean and spread charts remain available.');}
+ }
  if(DIRECT_VERTICAL_MODELS[model]){
   try{other.push(await directVertical(model,primary.reference_time,load));}
   catch{warnings.push('Direct 700 hPa charts are not yet available for this run; other fields remain available. Check latest runs to retry.');}
@@ -165,6 +178,10 @@ export async function loadSpatialRun(model,referenceTime,load){
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
   catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}
  }));
+ if(ENSEMBLE_EXTRAS[model]){
+  try{other.push(await ensembleExtra(model,primary.reference_time,load));}
+  catch{warnings.push('Additional ensemble fields are not yet available for this archived run.');}
+ }
  if(DIRECT_VERTICAL_MODELS[model]){
   try{other.push(await directVertical(model,primary.reference_time,load));}
   catch{warnings.push('Direct 700 hPa charts are not yet available for this run; other fields remain available. Check latest runs to retry.');}

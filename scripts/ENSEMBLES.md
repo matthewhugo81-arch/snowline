@@ -5,7 +5,57 @@ IFS ENS 0.25° em/es products. It retains the full native global grid and publis
 six named OM arrays per forecast time: 500 hPa geopotential height, 850 hPa
 temperature and mean sea-level pressure, each as ensemble mean and standard
 deviation. GEFS products currently contain 30 perturbed members; ECMWF contains
-51 members. We use the provider's statistics, not a reconstructed ensemble.
+51 members. These six fields use the provider's statistics.
+
+## Additional map fields
+
+`build_ensemble_extras.py` publishes exact-cycle companions under
+`snowline_gefs_extra` and `snowline_ecmwf_extra`. It retains native cells within
+80°W–45°E, 20–80°N, covering all four map presets. The original global six-field
+feeds and pressure overlays remain available. Metadata lists actual times for
+each variable. A missing member/frame never becomes zero, and a companion from
+a different initialization is never attached.
+
+GEFS adds mean 2 m temperature, relative humidity, 10 m vector-wind magnitude,
+cloud cover, snow depth, CAPE and precipitation. These are NOAA's official
+30-perturbed-member statistics. Vector magnitude differs from the average of
+member speeds because opposing winds cancel. Additional 300/1000 hPa heights
+and 250/500 hPa temperatures have mean and standard deviation.
+
+ECMWF adds those upper-air statistics plus 250/850 hPa wind-speed mean/spread,
+and official probabilities of at least 1, 5, 10, 20, 25, 50 and 100 mm in 24 hours.
+Probability frames are 12-hourly from T+24; each describes the preceding 24 hours.
+GRIB template, threshold (mm), units (%) and period are verified.
+
+ECMWF surface means (2 m temperature/dew point, 10 m speed/gusts, cloud,
+precipitation and snowfall water equivalent) use all 51 members. With IFS 50r1
+the control is `oper/fc`, the documented replacement for `enfo/cf`:
+https://confluence.ecmwf.int/spaces/FCST/pages/554148365/Data+streams+and+types+to+be+discontinued+in+IFS+cycle+50R1+and+user+impact
+All 50 `enfo/pf` members plus CTRL must have matching cycle, parameter, level,
+grid and reporting period. Wind speed is the arithmetic mean of member speeds.
+Missing cells propagate through the mean; the denominator never shrinks.
+
+Precipitation and snowfall means are displayed in mm/h. GEFS retains its actual
+overlapping 3/6-hour reporting periods. ECMWF cumulative means are differenced
+at consecutive native steps (3-hourly to T+144, then 6-hourly), then divided by
+the interval length. Small packing roundoff is clipped at zero; decreases over
+0.05 mm fail validation. Marginal precipitation spreads are not differenced.
+These rate fields are not raw amounts for the rolling-total reader. Snow depth
+is centimetres; snowfall is liquid-water equivalent. Gust and GEFS cloud
+averaging periods are retained independently of the file cadence.
+
+The first ECMWF surface preparation downloads many member fields. Completed
+frames and cumulative means are cached; later passes prepare only missing
+frames. Latest-run surface processing takes priority. Older retained runs are
+backfilled six surface frames per pass. Partial companions expose only verified
+variable/time pairs and are labelled as still being prepared. Raw calculation
+caches are excluded from the Pages artifact. Additional layers inherit the
+primary feed's three-run retention without altering its initialization.
+
+Checks: `node --test tests/ensemble-extra.test.mjs` and
+`python -m unittest discover -s tests -p 'test_ensemble_extra.py'`.
+`tests/ensemble-extra-browser.mjs` exercises converted real forecast grids on
+desktop and phone layouts when supplied a local preview with scratch data.
 
 GEFS: 0–240 h every 3 h, then every 6 h to 384 h, four cycles/day.
 ECMWF: 0–144 h every 3 h, then every 6 h to 360 h, 00/12 UTC cycles.
