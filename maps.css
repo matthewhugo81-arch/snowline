@@ -244,3 +244,12 @@
  .map-sidebar-collapsed #toggle-map-sidebar{right:2px;top:5px}
 }
 @media(max-width:650px){#map-settings-content{display:contents}}
+
+#comparison-count-control[hidden]{display:none}
+.map-canvases:has(#panel-c:not([hidden])) .panel-selectors{grid-template-columns:1fr;gap:6px}
+.map-canvases:has(#panel-c:not([hidden])) .map-panel-label{font-size:10px;line-height:1.4}
+@media(min-width:1051px){
+ .map-canvases:has(#panel-c:not([hidden])) .panel-controls{padding:8px 10px}
+ .map-canvases:has(#panel-c:not([hidden])) .panel-selectors label{margin-bottom:3px}
+ .map-canvases:has(#panel-c:not([hidden])) .panel-selectors select{padding:6px 7px}
+}

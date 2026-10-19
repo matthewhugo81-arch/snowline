@@ -12,7 +12,7 @@ const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CH
 const fakeOM=`
  const fixtureScale=unit=>({unit,breakpoints:[0,10,20],colors:[[0,0,0,1],[100,100,100,1],[255,255,255,1]]});
  export const defaultOmProtocolSettings={colorScales:{temperature:fixtureScale('°C'),relative:fixtureScale('%'),wind:fixtureScale('m/s')}};
- export const domainOptions=['ncep_gfs013','ncep_gfs025','ukmo_uk_deterministic_2km','ecmwf_ifs'].map(value=>({value,grid:{type:'regular',nx:360,ny:181,latMin:-90,lonMin:-180,dx:1,dy:1}}));
+ export const domainOptions=['ncep_gfs013','ncep_gfs025','ukmo_uk_deterministic_2km','ecmwf_ifs','dwd_icon'].map(value=>({value,grid:{type:'regular',nx:360,ny:181,latMin:-90,lonMin:-180,dx:1,dy:1}}));
  export const GridFactory={create:config=>({...config,originLat:config.latMin,originLon:config.lonMin,longitudeWrap:true,getInterpolatedValue:values=>values[0]})};
  export const getRanges=()=>[{start:0,end:181},{start:0,end:360}];
  window.fixtureGridReads=[];
@@ -85,11 +85,62 @@ try{
    let gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','relative_humidity_850hPa','geopotential_height_500hPa',...['300','400'].flatMap(level=>['wind_u_component_'+level+'hPa','wind_v_component_'+level+'hPa'])]}:null;
    if(gfs&&livePhase&& !url.endsWith('/latest.json'))gfs={...gfs,...fixture(12,livePhase===1?6:livePhase===2?12:18),variables:gfs.variables,completed:false};
    const ifs=domain==='ecmwf_ifs'?{...fixture(0,48),variables:['pressure_msl','temperature_2m','temperature_2m_max','temperature_2m_min',...['temperature','relative_humidity','geopotential_height','wind_u_component','wind_v_component'].flatMap(kind=>[1000,925,850,700,500,400,300,250,200,100,50,10].map(level=>kind+'_'+level+'hPa'))]}:null;
-   const meta=ifs??gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
+   const meta=(domain==='dwd_icon'?fixture(0,48):null)??ifs??gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
-  await page.goto(origin+'/maps.html');
+  await page.goto(origin+'/maps.html'+(process.env.MAP_THREE_PANELS_ONLY?'?time=2026-10-10T00:00:00Z':''));
   try{
+   if(process.env.MAP_THREE_PANELS_ONLY){
+   const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   await ready();
+   if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
+   await page.locator('#map-model').selectOption('gfs_global');await ready();
+   await page.locator('#map-forecast-interval').selectOption('12');await ready();
+   const check12=()=>page.locator('#map-start-time option').evaluateAll(opts=>opts.map(o=>new Date(o.value).getUTCHours()));
+   assert.deepEqual(await check12(),[0,12,0,12,0]);
+   releaseBriefing();
+   await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
+   await page.locator('#briefing-interval').selectOption('12');
+   await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length>0,{},{timeout:60000});
+   assert.equal(await page.locator('#briefing-interval').inputValue(),'12');
+   await page.locator('#briefing-close').click();await ready();
+   if(viewport.width<=650&&!(await page.locator('#compare-maps').isVisible()))await page.locator('#mobile-map-settings').click();
+   await page.locator('#compare-maps').check();await ready();
+   await page.locator('#map-comparison-count').selectOption('3');await ready();
+   await page.locator('#map-model-b').selectOption('ecmwf_ifs');await ready();
+   await page.locator('#map-model-c').selectOption('icon_global');await ready();
+   assert.equal(await page.locator('.map-panel:visible').count(),3);
+   await page.locator('#map-variable-c').selectOption('cloud_cover');await ready();
+   assert.equal(await page.locator('#map-variable').inputValue(),'temperature_2m');
+   assert.equal(await page.locator('#map-variable-b').inputValue(),'temperature_2m');
+   assert.equal(await page.locator('#map-variable-c').inputValue(),'cloud_cover');
+   if(viewport.width<=650)await page.locator('#mobile-return-map').click();
+   await page.locator('#next-time').click();await ready();
+   const labels=await page.locator('.map-panel-label').allTextContents();
+   assert.equal(new Set(labels.map(label=>label.split('Valid ')[1])).size,1);
+   if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
+   await page.locator('#map-comparison-count').selectOption('2');await ready();
+   assert.equal(await page.locator('#panel-c').isVisible(),false);
+   await page.locator('#map-comparison-count').selectOption('3');await ready();
+   assert.equal(await page.locator('#map-model-c').inputValue(),'icon_global');
+   assert.equal(await page.locator('#map-variable-c').inputValue(),'cloud_cover');
+   const boxes=await page.locator('.map-panel').evaluateAll(panels=>panels.map(p=>{const r=p.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
+   if(viewport.width>1050){
+    assert.equal(new Set(boxes.map(b=>b.y)).size,1);assert.ok(boxes[2].x>boxes[1].x);
+    const selection=()=>page.evaluate(()=>['map-model','map-variable','map-model-b','map-variable-b','map-model-c','map-variable-c','map-start-time'].map(id=>document.getElementById(id).value));
+    const before=await selection();
+    await page.locator('#toggle-map-sidebar').click();
+    await page.waitForFunction(()=>['a','b','c'].every(key=>{const box=document.getElementById('map-'+key),canvas=box.querySelector('canvas');return Math.abs(box.clientWidth-canvas.clientWidth)<2;}));
+    const wider=await page.locator('.map-panel').evaluateAll(ps=>ps.map(p=>p.getBoundingClientRect().width));
+    wider.forEach((width,i)=>assert.ok(width>boxes[i].width+40,'Every map gains width when the sidebar collapses'));
+    assert.deepEqual(await selection(),before,'Collapse retains all three model/layer selections and the shared forecast time');
+    await page.locator('#toggle-map-sidebar').click();await ready();
+   }
+   else assert.ok(boxes[2].y>boxes[1].y);
+   assert.deepEqual(errors,[]);
+   console.log(JSON.stringify({viewport,threePanelControlsPassed:true,twelveHourMapsAndBriefingPassed:true}));
+    continue;
+   }
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
    assert.equal(briefingRequests,0,'Optional briefing code must not compete with the first map frame');
    assert.equal(await page.locator('header .strap').count(),0);

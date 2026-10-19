@@ -29,7 +29,7 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
   let lastAttempt = 0;
 
   function attachMenus() {
-    for (const id of ['map-model', 'map-model-b', 'briefing-model', 'previous-model']) {
+    for (const id of ['map-model', 'map-model-b', 'map-model-c', 'briefing-model', 'previous-model']) {
       const select = root.getElementById(id);
       if (!select || selects.has(select)) continue;
       selects.add(select);

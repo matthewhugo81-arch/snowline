@@ -3,20 +3,22 @@ import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261019-ensemble-extra4';
 
 export function createPanelOverlays(){
- return Object.fromEntries(['a','b'].map(key=>[key,{contours:false,isobars:true,grid:false}]));
+ return Object.fromEntries(['a','b','c'].map(key=>[key,{contours:false,isobars:true,grid:false}]));
 }
 
 export function panelSelection(state,key){
- return key==='b'?{key,model:state.modelB,field:state.fieldB}:{key:'a',model:state.model,field:state.field};
+ const suffix=key==='a'?'':key.toUpperCase();
+ return {key,model:state['model'+suffix],field:state['field'+suffix]};
 }
 export function panelSelections(state){
- return (state.compare?['a','b']:['a']).map(key=>panelSelection(state,key));
+ return (state.compare?(state.comparisonCount===3?['a','b','c']:['a','b']):['a']).map(key=>panelSelection(state,key));
 }
 export function panelModelIds(state){
  return [...new Set(panelSelections(state).map(({model})=>model))];
 }
 export function fullUKVComparison(state){
- return state.compare&&state.model!==state.modelB&&[state.model,state.modelB].every(id=>id===UKV||id===UKV_PREVIOUS);
+ const ids=panelModelIds(state);
+ return state.compare&&ids.length>1&&ids.every(id=>id===UKV||id===UKV_PREVIOUS);
 }
 // The completed UKV fallback must remain usable while the latest arrives.
 // Other comparisons retain their matching-time behaviour. Missing UKV slots

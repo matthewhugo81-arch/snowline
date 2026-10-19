@@ -24,7 +24,7 @@ import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261019-ensemble-extra4';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261019-three-panels';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261019-ensemble-extra4';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
@@ -121,12 +121,13 @@ function dismissLocation(){
 }
 document.addEventListener('click',event=>{if(!event.target.closest('.maplibregl-map'))dismissLocation();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')dismissLocation();});
-const mapsMoving=()=>Object.entries(panels).some(([key,panel])=>(key==='a'||state.compare)&&panel.map.isMoving());
+const panelVisible=key=>panelSelections(state).some(item=>item.key===key);
+const mapsMoving=()=>Object.entries(panels).some(([key,panel])=>panelVisible(key)&&panel.map.isMoving());
 const viewportRefresh=createViewRefresh(()=>{if(!briefingActive&&state.times.length&&!playing)setTime();},mapsMoving);
 function queueViewportRefresh(){viewportRefresh.schedule();}
 function viewportBounds(){
  if(briefingActive)return;
- const visible=Object.entries(panels).filter(([key])=>key==='a'||state.compare).map(([,p])=>p.map.getBounds());if(!visible.length)return;
+ const visible=Object.entries(panels).filter(([key])=>panelVisible(key)).map(([,p])=>p.map.getBounds());if(!visible.length)return;
  const bounds=[Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))];
  OM.updateCurrentBounds(bounds);
  // Renderer clipping depends on the view as well as the URL/zoom. Never reuse a
@@ -136,11 +137,13 @@ function viewportBounds(){
   updatePreloadStatus();
  }
 }
-let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',compare:false,field:'temperature_2m',fieldB:'precipitation',interval:'3',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
+let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:'temperature_2m',field:'temperature_2m',fieldB:'precipitation',interval:'3',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(params.get('model')==='ukmo_uk_deterministic_2km_nowcast')params.set('model','ukmo_uk_deterministic_2km');
 if(MODELS.some(m=>m.id===params.get('model')))state.model=params.get('model');
+$('compare-maps').checked=state.compare;$('map-comparison-count').value=String(state.comparisonCount);$('comparison-count-control').hidden=!state.compare;
+for(const key of ['b','c']){$('panel-'+key).hidden=!panelVisible(key);$('layer-notes-'+key).hidden=!panelVisible(key);}
 const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
 if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isFinite(initialLon)&&Math.abs(initialLat)<=90&&Math.abs(initialLon)<=180){state.location={latitude:initialLat,longitude:initialLon};$('nav-charts').href='./?'+new URLSearchParams({lat:initialLat,lon:initialLon,time:params.get('time')??''});}
 function modelName(id){return MODELS.find(m=>m.id===id)?.name??id;}
@@ -153,14 +156,14 @@ const modelGroups=[
  ['Medium-term models',MODELS.filter(model=>!model.regional&&!model.ensemble)],
  ['Ensemble models',MODELS.filter(model=>model.ensemble)]
 ];
-for(const id of ['map-model','map-model-b']){
+for(const id of ['map-model','map-model-b','map-model-c']){
  for(const [label,models] of modelGroups){
   const group=document.createElement('optgroup');group.label=label;
   for(const model of models){const option=document.createElement('option');option.value=model.id;option.textContent=model.name;group.append(option);}
   $(id).append(group);
  }
 }
-$('map-model').value=state.model;$('map-model-b').value=state.modelB;
+$('map-model').value=state.model;$('map-model-b').value=state.modelB;$('map-model-c').value=state.modelC;
 function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:{compact:true}});
  map.touchZoomRotate.disableRotation();
@@ -171,16 +174,17 @@ function makeMap(key){
  let pixelRatio=map.getPixelRatio();
  panel.resize=()=>{if(briefingActive)return;const container=map.getContainer(),canvas=map.getCanvas(),ratio=map.getPixelRatio();if(container.clientWidth!==canvas.clientWidth||container.clientHeight!==canvas.clientHeight||pixelRatio!==ratio){pixelRatio=ratio;map.resize();}};
  new ResizeObserver(panel.resize).observe($('map-'+key));window.addEventListener('resize',panel.resize);
- map.on('style.load',()=>{panel.styleOrdered=false;applyMapAppearance(map,{roads,terrain});if(panel.restyling){panel.restyling=false;panel.sourceId=null;if((key==='a'||state.compare)&&!a.restyling&&(!state.compare||!panels.b.restyling))void restoreMapFrame();}});
+ map.on('style.load',()=>{panel.styleOrdered=false;applyMapAppearance(map,{roads,terrain});if(panel.restyling){panel.restyling=false;panel.sourceId=null;if(panelVisible(key)&&panelSelections(state).every(({key})=>!panels[key]?.restyling))void restoreMapFrame();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
  map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(!panel.loaded||panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
-locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await readMapValue(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${field.categoryLabels?(gridValueLabel(result.value,field)??'Unresolved')+' · '+(field.key===NATIVE_PRECIPITATION_TYPE?'native valid-time type':'estimated interval type'):displayValue(result.value,field).toFixed(1)+' '+displayUnit(field)} · ${modelName(key==='a'?state.model:state.modelB)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
+locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await readMapValue(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${field.categoryLabels?(gridValueLabel(result.value,field)??'Unresolved')+' · '+(field.key===NATIVE_PRECIPITATION_TYPE?'native valid-time type':'estimated interval type'):displayValue(result.value,field).toFixed(1)+' '+displayUnit(field)} · ${modelName(panelSelection(state,key).model)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
  imageMenu.registerMap(map,()=>({...panel.imageInfo,subtitle:$('map-error-'+key).hidden?'':$('map-error-'+key).textContent,ready:panel.loaded&&!!panel.displayedTime&&!!panel.imageInfo&&!!map.getLayer(panel.weatherLayer)}),pauseAnimation);
  return panel;
 }
 const a=makeMap('a');
+for(const {key} of panelSelections(state))if(key!=='a')makeMap(key);
 if(state.location)locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat([state.location.longitude,state.location.latitude]).addTo(a.map);
 function contourLevels(field){
  if(is850Temperature(field.key))return temperatureContourLevels(field);
@@ -255,7 +259,7 @@ function refreshStartingTime(message='No forecast times available'){
  select.disabled=!state.times.length;
  if(state.times.length)select.value=state.times[state.index];
  else select.append(new Option(message,''));
- $('map-start-time-note').textContent=state.compare?'Choose a time for both panels; playback begins here.':'Choose a forecast time; playback begins here.';
+ $('map-start-time-note').textContent=state.compare?'Choose a time for all panels; playback begins here.':'Choose a forecast time; playback begins here.';
 }
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
@@ -512,7 +516,7 @@ function setLegend(){
 }
 function populateVariables(){
  for(const {key,model,field} of panelSelections(state)){
-  const available=availableFields(fields,[state.metas[model]]),select=$(key==='a'?'map-variable':'map-variable-b'),groups=new Map();select.replaceChildren();
+  const available=availableFields(fields,[state.metas[model]]),select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
   for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
   if(state.metas[model]?.variables.includes('precipitation')){
    const supported=ACCUMULATION_KEYS.filter(k=>accumulationSource(state.metas[model],k));
@@ -522,7 +526,7 @@ function populateVariables(){
     const sorted=[...group.children].sort((a,b)=>accumulationHours(a.value)-accumulationHours(b.value));group.replaceChildren(...sorted);}
   }
   const selected=available.some(f=>f.key===field)?field:available.find(f=>f.key==='temperature_2m')?.key??available[0]?.key;
-  state[key==='a'?'field':'fieldB']=selected;select.value=selected??'';
+  state['field'+(key==='a'?'':key.toUpperCase())]=selected;select.value=selected??'';
  }
 }
 function refreshTimeline(){
@@ -597,7 +601,7 @@ async function configure(force=false){
   if(p.map.isStyleLoaded()){}
   clearGridValues(p);$('panel-label-'+p.key).textContent='Checking model run…';$('map-error-'+p.key).hidden=true;
  }
- const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;
+ const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;$('map-variable-c').disabled=true;
  status('Checking model runs…');
  try{
   const load=metadataLoader(force);
@@ -610,11 +614,12 @@ async function configure(force=false){
   refreshTimeline();
   setLegend();setTime();
  }catch(error){if(generation===state.generation){state.times=[];refreshStartingTime('Forecast unavailable');for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
- finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;}}
+ finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;$('map-variable-c').disabled=!state.fieldC;}}
 }
 $('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
 $('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
-for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
+$('map-model-c').addEventListener('change',e=>{state.modelC=e.target.value;configure();});
+for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
  pauseAnimation();failedSelection=null;state[property]=e.target.value;
  try{refreshTimeline();setTime();}
  catch(error){
@@ -622,14 +627,28 @@ for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],
   for(const p of Object.values(panels)){p.frameCache?.clear();p.frameCache=null;p.loaded=false;p.url=null;p.sourceId=null;p.displayedTime=null;if(p.map.isStyleLoaded()){}}
  }
 });
-let comparisonInitialized=false;
-$('compare-maps').addEventListener('change',async e=>{
- state.compare=e.target.checked;
- if(state.compare&&!comparisonInitialized){state.modelB=state.model;$('map-model-b').value=state.modelB;comparisonInitialized=true;}
- $('panel-b').hidden=!state.compare;$('layer-notes-b').hidden=!state.compare;
- if(state.compare&&!panels.b)makeMap('b');a.map.resize();panels.b?.map.resize();for(const p of Object.values(panels))fitArea(p.map);await configure();
-});
-for(const key of ['a','b']){
+const comparisonInitialized=new Set(state.compare?panelSelections(state).map(p=>p.key):['a']);
+async function changeComparison(){
+ pauseAnimation();requestedTime=Date.parse(state.times[state.index])||requestedTime;
+ state.compare=$('compare-maps').checked;
+ state.comparisonCount=Number($('map-comparison-count').value);
+ $('comparison-count-control').hidden=!state.compare;
+ for(const key of ['b','c']){
+  const visible=panelVisible(key);
+  if(visible&&!comparisonInitialized.has(key)){
+   const suffix=key.toUpperCase();state['model'+suffix]=state.model;state['field'+suffix]=state.field;
+   $('map-model-'+key).value=state['model'+suffix];comparisonInitialized.add(key);
+  }
+  $('panel-'+key).hidden=!visible;$('layer-notes-'+key).hidden=!visible;
+  if(visible&&!panels[key])makeMap(key);
+  if(!visible){panels[key]?.frameCache?.clear();if(panels[key])clearGridValues(panels[key]);}
+ }
+ for(const {key} of panelSelections(state)){panels[key].map.resize();fitArea(panels[key].map);}
+ await configure();
+}
+$('compare-maps').addEventListener('change',changeComparison);
+$('map-comparison-count').addEventListener('change',changeComparison);
+for(const key of ['a','b','c']){
  for(const [control,setting]of [['contours','contours'],['mslp','isobars']]){
   $('map-'+control+'-'+key).addEventListener('change',event=>{pauseAnimation();state.overlays[key][setting]=event.target.checked;setTime();});
  }
