@@ -36,12 +36,14 @@ try {
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/*', async route => {
         const url = new URL(route.request().url());
+        // Native-source outage is intentional here; native values have dedicated tests.
+        if (url.pathname.endsWith('/mogreps/latest.json')) return route.fulfill({status:503, body:'{}'});
         if (url.pathname.includes('/point-data/')) return route.fulfill({status:404, body:''});
         if (url.pathname === '/forecast') {
           requests++;
           const time = Array.from({length:192}, (_,i) => new Date(Date.UTC(2026,9,18,6+i)).toISOString());
           const hourly = {time}, hourly_units = {};
-          const variables = ['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','pressure_msl'];
+          const variables = ['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','temperature_500hPa','precipitation','soil_temperature_0cm','relative_humidity_2m','cloud_cover','wind_speed_10m','wind_gusts_10m','wind_direction_10m','pressure_msl'];
           const model = url.searchParams.get('model'), offset = model === 'gfs_global' ? 3 : 0;
           for (const key of variables) {
             hourly[key] = time.map((_,i) => key === 'pressure_msl' ? 1000 + Math.sin(i / 12) * 12 + offset : key === 'precipitation' ? i % 12 / 10 + offset : key === 'wind_direction_10m' ? i * 5 % 360 : key === 'snowfall' ? .1 : key === 'snow_depth' ? 0 : 5 + Math.sin(i / 8) * 7 + offset);
@@ -53,7 +55,7 @@ try {
         return route.abort();
       });
       await page.goto(origin);
-      await page.waitForFunction(() => !document.querySelector('#refresh').disabled && document.querySelectorAll('.plot svg').length === 14).catch(async error => { console.log({kind,requests,errors,status:await page.locator('#status').textContent(),models:await page.locator('#data-table').textContent()}); throw error; });
+      await page.waitForFunction(() => !document.querySelector('#refresh').disabled && document.querySelectorAll('.plot svg').length === 15).catch(async error => { console.log({kind,requests,errors,status:await page.locator('#status').textContent(),models:await page.locator('#data-table').textContent()}); throw error; });
       const count = requests;
       const plot = page.locator('#plot-precipitation'), card = page.locator('.chart-card').filter({has:plot});
       const menu = page.getByRole('menu', {name:'Chart image'});

@@ -25,6 +25,8 @@ with sync_playwright() as p:
         return {hourly,hourly_units:{snowfall:'cm',snow_depth:'m'},_retrievedAt:Date.UTC(2026,9,15,12),_source:'shared cache'};
       };
       window.fetch=async(url,{signal}={})=>{
+        // Exercise native-source failure independently of the shared-cache fixture.
+        if(url.includes('/mogreps/latest.json'))return new Response('{}',{status:503});
         window.fixtureRequests.push(url);
         if(window.fixtureMode==='slow')await new Promise((resolve,reject)=>{window.fixturePending.push(resolve);signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});});
         if(url.startsWith('./point-data/'))return new Response(JSON.stringify({version:1,location:{latitude:53.9239,longitude:-2.1949},models:Object.fromEntries(MODELS.map(m=>[m.id,forecast(m.id)]))}));
@@ -39,7 +41,8 @@ with sync_playwright() as p:
         page.locator('#calculate-event').click()
         page.wait_for_function("!document.querySelector('#calculate-event').disabled")
     calculate()
-    assert page.locator('#event-results tr').count()==16
+    assert page.locator('#event-results tr').count()==17
+    assert 'temporarily unavailable' in page.locator('#event-results tr').filter(has_text='MOGREPS-G').inner_text()
     assert page.evaluate('fixtureRequests.length')==1, 'Known location uses the shared snapshot'
     gfs=page.locator('#event-results tr').filter(has_text='GFS global')
     assert gfs.locator('td').nth(1).inner_text()=='—', 'A missing hour cannot become a complete snow total'

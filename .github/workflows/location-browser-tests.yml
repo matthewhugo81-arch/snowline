@@ -2,10 +2,10 @@ name: Snowline location browser tests
 on:
   push:
     branches: [main]
-    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/meteogram-image-browser.mjs', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
+    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'mogreps-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/meteogram-image-browser.mjs', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
   pull_request:
     branches: [main]
-    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/meteogram-image-browser.mjs', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
+    paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'mogreps-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/meteogram-image-browser.mjs', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
 permissions:
   contents: read
 jobs:
