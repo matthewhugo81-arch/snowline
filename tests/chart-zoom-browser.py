@@ -246,7 +246,7 @@ def run():
         check('Every graph redraws to the same pinch time range',page.locator('.plot svg').evaluate_all('els=>new Set(els.map(el=>[el.querySelector(".time-tick")?.textContent,[...el.querySelectorAll(".time-tick")].at(-1)?.textContent,[...el.querySelectorAll(".date-tick")].map(t=>t.textContent).join() ].join("|"))).size===1'))
         touch('touchEnd',[])
         check('Finger release preserves zoom without inspecting or resetting',bounds()==[42,126,42] and page.locator('.zoom-pinching').count()==0)
-        check('Pinch updates overview statistics and all inspected times',page.locator('#snow-max').inner_text()=='1.26 cm' and page.locator('#temp-min').inner_text()=='0.2°C' and page.locator('.chart-time time').evaluate_all('(els)=>new Set(els.map(e=>e.dateTime)).size')==1)
+        check('Pinch updates overview statistics and all inspected times',page.locator('#snow-max').inner_text()=='1.26 cm/h' and page.locator('#temp-min').inner_text()=='0.2°C' and page.locator('.chart-time time').evaluate_all('(els)=>new Set(els.map(e=>e.dateTime)).size')==1)
         check('Time labels remain separated at intermediate pinch ranges',page.locator(selector+' .time-tick').evaluate_all('els=>els.every((el,i)=>!i||els[i-1].getBoundingClientRect().right+2<=el.getBoundingClientRect().left)'))
         check('Reset returns to the original compact size in each chart heading',page.locator('.chart-heading [data-reset-zoom]').count()==15 and card.locator('[data-reset-zoom]').evaluate('el=>{const s=getComputedStyle(el);return s.fontSize==="11px"&&s.padding==="5px 8px"&&el.getBoundingClientRect().height===30}'))
         card.screenshot(path=str(ROOT.parent/'zoom-mobile-pinch.png'))
