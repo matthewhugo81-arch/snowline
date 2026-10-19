@@ -2,7 +2,7 @@
 // comparisons. The other panel still has to supply each shared valid time.
 export function forecastInterval(models,selection='3'){
  const shortRange=models.some(model=>model?.regional&&!model.ensemble);
- return {shortRange,hours:shortRange||selection==='native'?0:selection==='6'?6:3};
+ return {shortRange,hours:shortRange||selection==='native'?0:selection==='12'?12:selection==='6'?6:3};
 }
 
 // Subset actual available times, never interpolate or change accumulation

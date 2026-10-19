@@ -25,7 +25,7 @@ import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261019-ensemble-extra4';
-import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261011-forecast-interval';
+import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261019-ensemble-extra4';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261019-ensemble-extra4';
@@ -678,7 +678,7 @@ window.addEventListener('pagehide',pauseAnimation);document.addEventListener('vi
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261019-ensemble-extra4').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261019-12-hour').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

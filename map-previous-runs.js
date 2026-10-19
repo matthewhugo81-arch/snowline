@@ -3,9 +3,9 @@ import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance'
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261019-ensemble-extra4';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261019-ensemble-extra4';
-import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-ensemble-extra4';
+import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261019-12-hour';
+import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-12-hour';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-ensemble-extra4';
 import {runLabel,runAvailability} from './map-runs.js?v=20261011-live-runs';
 import {chartScales} from './map-image-export.js?v=20261019-ensemble-extra4';
@@ -23,7 +23,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <label>Chart<select id="previous-preset" disabled></select></label>
  <label>Area<select id="previous-area"></select></label>
  <label><span id="previous-time-heading">Shared valid time · UTC</span><select id="previous-time" disabled></select></label>
- <label>Forecast interval<select id="previous-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
+ <label>Forecast interval<select id="previous-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option><option value="12">12 hourly</option></select></label>
  <button type="button" class="secondary" id="previous-refresh">Load latest three runs</button></div>
  <div class="briefing-overlays"><label class="briefing-background">Map background<select id="previous-background">${backgroundOptions}</select></label><label class="check-row"><input type="checkbox" id="previous-contours"> Contours</label><label class="check-row"><input type="checkbox" id="previous-grid-values"> Grid values</label><span class="small-note">Same area, chart, colour scale and valid time. Each panel retains its own initialization and lead time.</span></div>
  <p id="previous-note" class="small-note"></p></div>

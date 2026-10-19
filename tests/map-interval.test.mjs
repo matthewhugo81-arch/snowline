@@ -8,14 +8,16 @@ const time=hour=>new Date(Date.UTC(2026,9,11,hour)).toISOString();
 const models=(...ids)=>ids.map(id=>MAP_MODELS.find(model=>model.id===id));
 const hourly=Array.from({length:49},(_,index)=>time(index));
 
-test('global and ensemble maps default to three-hour steps, with native and six-hour choices',()=>{
+test('global and ensemble maps default to three-hour steps, with native, six and twelve-hour choices',()=>{
  for(const model of MAP_MODELS.filter(model=>!model.regional||model.ensemble)){
   assert.deepEqual(forecastInterval([model]),{shortRange:false,hours:3},model.id);
   assert.equal(forecastInterval([model],'native').hours,0);
   assert.equal(forecastInterval([model],'6').hours,6);
+  assert.equal(forecastInterval([model],'12').hours,12);
  }
  assert.deepEqual(intervalForecastTimes(hourly,3),Array.from({length:17},(_,i)=>time(i*3)));
  assert.deepEqual(intervalForecastTimes(hourly,6),Array.from({length:9},(_,i)=>time(i*6)));
+ assert.deepEqual(intervalForecastTimes(hourly,12),[0,12,24,36,48].map(time));
  assert.deepEqual(intervalForecastTimes(hourly,0),hourly);
 });
 
@@ -24,7 +26,7 @@ test('every short-range model keeps native detail even after a six-hour global s
  assert.equal(regional.some(model=>model.id==='ukmo_uk_deterministic_2km_nowcast'),false);
  assert.ok(regional.some(model=>model.id==='ukmo_uk_deterministic_2km'));
  for(const model of regional){
-  for(const selection of ['3','6','native']){
+  for(const selection of ['3','6','12','native']){
    const interval=forecastInterval([model],selection);
    assert.deepEqual(interval,{shortRange:true,hours:0},model.id);
    assert.deepEqual(intervalForecastTimes(hourly,interval.hours),hourly);
@@ -49,6 +51,7 @@ test('comparison uses only supplied common hours and never fills gaps in coarser
 test('UTC steps are independent of run cycle, while short and off-cycle feeds remain usable',()=>{
  assert.deepEqual(intervalForecastTimes(hourly.slice(1,13),3),[3,6,9,12].map(time));
  assert.deepEqual(intervalForecastTimes(hourly.slice(1,13),6),[6,12].map(time));
+ assert.deepEqual(intervalForecastTimes(hourly.slice(1,25),12),[12,24].map(time));
  const offCycle=[1,7,13,19].map(time);
  assert.deepEqual(intervalForecastTimes(offCycle,3),offCycle);
  assert.deepEqual(intervalForecastTimes(offCycle,6),offCycle);

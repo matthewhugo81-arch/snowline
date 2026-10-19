@@ -29,7 +29,7 @@ export function fixedAccumulationPeriods(endingTimes, hours, requestedStart) {
 export function configurePeriodInterval(select, hours, selection = '3', regional = false) {
   const choices = hours
     ? [[`period-${hours}`, `${hours}-hour periods`]]
-    : [['native', 'Hourly / all available'], ['3', '3 hourly'], ['6', '6 hourly']];
+    : [['native', 'Hourly / all available'], ['3', '3 hourly'], ['6', '6 hourly'], ['12', '12 hourly']];
   select.replaceChildren(...choices.map(([value, text]) => {
     const option = select.ownerDocument.createElement('option');
     option.value = value; option.textContent = text; return option;

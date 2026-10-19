@@ -58,7 +58,7 @@ test('three different initializations share one absolute period rather than thre
 test('fixed-interval label is disabled, ordinary global and regional choices restore without carrying over a rainfall duration',()=>{
  const select={ownerDocument:{createElement:()=>({})},replaceChildren(...os){this.options=os;}};
  configurePeriodInterval(select,24,'6',false);assert.equal(select.disabled,true);assert.deepEqual(select.options.map(o=>o.textContent),['24-hour periods']);
- configurePeriodInterval(select,null,'6',false);assert.equal(select.disabled,false);assert.equal(select.value,'6');assert.equal(select.options.length,3);
+ configurePeriodInterval(select,null,'12',false);assert.equal(select.disabled,false);assert.equal(select.value,'12');assert.equal(select.options.length,4);
  configurePeriodInterval(select,null,'6',true);assert.equal(select.disabled,true);assert.equal(select.value,'native');
 });
 test('invalid and empty selections fail safely',()=>{

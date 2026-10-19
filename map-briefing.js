@@ -1,12 +1,12 @@
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
-import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261019-ensemble-extra4';
+import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261019-12-hour';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-ensemble-extra4';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-12-hour';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-ensemble-extra4';
-import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
+import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra4';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
@@ -24,7 +24,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <label>Chart<select id="briefing-preset"></select></label>
  <label>Area<select id="briefing-area"></select></label>
  <label><span id="briefing-time-heading">Starting time</span><select id="briefing-time"></select></label>
- <label>Forecast interval<select id="briefing-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option></select></label>
+ <label>Forecast interval<select id="briefing-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option><option value="12">12 hourly</option></select></label>
  <label>Layout<select id="briefing-count"><option value="6">6 panels</option><option value="9">9 panels</option></select></label></div>
  <div class="briefing-overlays" role="group" aria-label="Briefing chart overlays"><label class="briefing-background">Map background<select id="briefing-background">${backgroundOptions}</select></label><label class="check-row"><input id="briefing-contours" type="checkbox" autocomplete="off"> Contours</label><label class="check-row"><input id="briefing-grid-values" type="checkbox" autocomplete="off"> Grid values</label></div>
  <div id="briefing-legend" class="briefing-legend" role="group" aria-label="Chart colour scale"></div></div>
