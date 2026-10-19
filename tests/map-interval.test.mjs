@@ -72,3 +72,19 @@ test('three-hour viewing reduces downloads without changing the rain or snow ave
   for(const valid of selected)assert.equal(fieldIntervalHours(meta,field,valid),1);
  }
 });
+
+test('interactive panels can choose intervals for UKV and mixed comparisons without losing hourly availability',()=>{
+ const options={allowRegionalSteps:true};
+ for(const selected of [models('ukmo_uk_deterministic_2km'),models('gfs_global','ukmo_uk_deterministic_2km','icon_global')]){
+  assert.equal(forecastInterval(selected,null,options).hours,0,'Regional default retains all supplied hours');
+  for(const choice of ['3','6','12']){
+   const {hours}=forecastInterval(selected,choice,options);
+   assert.equal(hours,Number(choice));
+   const shown=intervalForecastTimes(hourly,hours);
+   assert.ok(shown.length<hourly.length);
+   assert.ok(shown.every(t=>Date.parse(t)%(hours*3600000)===0));
+  }
+  assert.deepEqual(intervalForecastTimes(hourly,forecastInterval(selected,'native',options).hours),hourly);
+ }
+ assert.equal(forecastInterval(models('gfs_global'),null,options).hours,3);
+});

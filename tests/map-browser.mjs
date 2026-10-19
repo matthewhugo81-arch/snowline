@@ -93,6 +93,18 @@ try{
    if(process.env.MAP_THREE_PANELS_ONLY){
    const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    await ready();
+   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
+   assert.equal(await page.locator('#map-forecast-interval').isEnabled(),true,'UKV viewing interval is selectable');
+   assert.equal(await page.locator('.map-start-controls #map-forecast-interval').isVisible(),true,'Interval is alongside the shared starting time');
+   const nativeUKV=await page.locator('#map-start-time option').evaluateAll(opts=>opts.map(o=>o.value));
+   for(const choice of ['3','6','12']){
+    await page.locator('#map-forecast-interval').selectOption(choice);await ready();
+    const times=await page.locator('#map-start-time option').evaluateAll(opts=>opts.map(o=>o.value));
+    assert.ok(times.length<nativeUKV.length);
+    assert.ok(times.every(t=>new Date(t).getUTCHours()%Number(choice)===0));
+   }
+   await page.locator('#map-forecast-interval').selectOption('native');await ready();
+   assert.deepEqual(await page.locator('#map-start-time option').evaluateAll(opts=>opts.map(o=>o.value)),nativeUKV,'Hourly restores every supplied UKV time');
    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
    await page.locator('#map-model').selectOption('gfs_global');await ready();
    await page.locator('#map-forecast-interval').selectOption('12');await ready();
@@ -135,9 +147,19 @@ try{
     const wider=await page.locator('.map-panel').evaluateAll(ps=>ps.map(p=>p.getBoundingClientRect().width));
     wider.forEach((width,i)=>assert.ok(width>boxes[i].width+40,'Every map gains width when the sidebar collapses'));
     assert.deepEqual(await selection(),before,'Collapse retains all three model/layer selections and the shared forecast time');
+    assert.equal(await page.locator('#map-forecast-interval').isVisible(),true,'Interval remains available with the sidebar collapsed');
+    await page.locator('#map-forecast-interval').selectOption('6');await ready();
+    assert.ok((await check12()).every(hour=>hour%6===0));
+    await page.locator('#map-forecast-interval').selectOption('12');await ready();
     await page.locator('#toggle-map-sidebar').click();await ready();
    }
    else assert.ok(boxes[2].y>boxes[1].y);
+   await page.locator('#map-model').selectOption('ukmo_uk_deterministic_2km');await ready();
+   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'12','Adding UKV retains the chosen shared interval');
+   assert.ok((await check12()).every(hour=>hour%12===0));
+   await page.locator('#map-forecast-interval').selectOption('native');await ready();
+   const commonHours=await check12();
+   assert.ok(commonHours.some(hour=>hour%3!==0),'Hourly restores supplied common times in a mixed three-model comparison');
    assert.deepEqual(errors,[]);
    console.log(JSON.stringify({viewport,threePanelControlsPassed:true,twelveHourMapsAndBriefingPassed:true}));
     continue;
@@ -203,7 +225,7 @@ try{
     continue;
    }
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
-   assert.equal(await page.locator('#map-forecast-interval').isDisabled(),true,'UKV always retains every supplied hour');
+   assert.equal(await page.locator('#map-forecast-interval').isDisabled(),false,'UKV defaults to hourly and allows other viewing intervals');
    await page.locator('#map-variable').selectOption('dew_point_2m');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m dew point'));
    assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.url.includes('variable=dew_point_2m_derived'))),'UKV dew point uses calculated imagery');
@@ -461,13 +483,12 @@ try{
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
    assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'16');
    assert.equal(await page.locator('#legend-interval-a').textContent(),'Mean rate over preceding 1 h');
-   // Adding a regional panel restores all common native hours; returning to
-   // globals remembers the chosen six-hour setting.
+   // Adding a regional panel preserves the explicitly selected shared interval.
    await page.locator('#map-model-b').selectOption(main);
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('UKV')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
-   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
-   assert.equal(await page.locator('#map-forecast-interval').isDisabled(),true);
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'42','Mixed comparison preserves every common hourly step');
+   assert.equal(await page.locator('#map-forecast-interval').inputValue(),'6');
+   assert.equal(await page.locator('#map-forecast-interval').isDisabled(),false);
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'7','Mixed comparison uses the chosen six-hour steps');
    await page.locator('#map-model-b').selectOption('gfs_global');
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('GFS global')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'6');

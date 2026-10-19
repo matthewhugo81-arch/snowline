@@ -1,8 +1,9 @@
-// Regional short-range guidance always keeps its native detail, including in
-// comparisons. The other panel still has to supply each shared valid time.
-export function forecastInterval(models,selection='3'){
+// Regional guidance defaults to native detail. Interactive panels can opt
+// into explicit viewing steps; chart sequences retain their existing policy.
+export function forecastInterval(models,selection='3',{allowRegionalSteps=false}={}){
  const shortRange=models.some(model=>model?.regional&&!model.ensemble);
- return {shortRange,hours:shortRange||selection==='native'?0:selection==='12'?12:selection==='6'?6:3};
+ const nativeRegional=shortRange&&(!allowRegionalSteps||selection==null);
+ return {shortRange,hours:nativeRegional||selection==='native'?0:selection==='12'?12:selection==='6'?6:3};
 }
 
 // Subset actual available times, never interpolate or change accumulation

@@ -25,7 +25,7 @@ import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261019-three-panels';
-import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
+import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261019-ensemble-extra4';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261019-ensemble-extra4';
@@ -137,7 +137,7 @@ function viewportBounds(){
   updatePreloadStatus();
  }
 }
-let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:'temperature_2m',field:'temperature_2m',fieldB:'precipitation',interval:'3',times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
+let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:'temperature_2m',field:'temperature_2m',fieldB:'precipitation',interval:null,times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(params.get('model')==='ukmo_uk_deterministic_2km_nowcast')params.set('model','ukmo_uk_deterministic_2km');
@@ -531,14 +531,12 @@ function populateVariables(){
 }
 function refreshTimeline(){
  const models=panelModelIds(state).map(id=>MODELS.find(model=>model.id===id));
- const {shortRange,hours}=forecastInterval(models,state.interval);
+ const {hours}=forecastInterval(models,state.interval,{allowRegionalSteps:true});
  state.times=intervalForecastTimes(panelForecastTimes(state),hours);
- $('map-forecast-interval').value=shortRange?'native':state.interval;
- $('map-forecast-interval').disabled=shortRange||!state.times.length;
+ $('map-forecast-interval').value=hours?String(hours):'native';
+ $('map-forecast-interval').disabled=!state.times.length;
  $('forecast-interval-note').textContent=fullUKVComparison(state)
-  ?'Both UKV runs keep every available hour. A panel is blank where its selected run has no forecast yet.'
-  :shortRange
-  ?'Short-term models keep every available hour. Comparison uses matching times.'
+  ?'Both UKV runs use the selected interval across their available forecast range. A panel is blank where its selected run has no forecast yet.'
   :hours?'Only the selected forecast hours load. Coarser model steps are retained.':'Every available forecast hour loads; longer forecasts take more time.';
  if(!state.times.length){
   refreshStartingTime();
@@ -711,7 +709,7 @@ function closeBriefing(){
 async function openBriefing(){
  if(briefingActive)return;
  // Carry explicit area presets; retain the UK briefing default after free panning.
- const bounds=a.map.getBounds(),selection={model:state.model,field:state.field,time:state.times[state.index],interval:state.interval,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
+ const bounds=a.map.getBounds(),selection={model:state.model,field:state.field,time:state.times[state.index],interval:$('map-forecast-interval').value,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
  briefingScroll=window.scrollY;briefingActive=true;pauseAnimation();++timeGeneration;viewportRefresh.cancel();
  const opening=++briefingOpening;
  if($('expanded-map').open)$('expanded-map').close();
