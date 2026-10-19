@@ -1,5 +1,7 @@
 import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-three-run-charts';
 import {hideProtectedAreas} from './map-backgrounds.js?v=20261013-map-appearance';
+import {coastlineController} from './map-coastline.js?v=20261019-coastline';
+export {coastlineController};
 
 // Interactive maps, briefing PNGs and their exports share these drawing rules.
 export const mapAppearance=({opacity=.8,terrain=true,roads=false}={})=>({opacity,terrain,roads});
@@ -8,12 +10,11 @@ export const rasterResampling=field=>field?.bands?'nearest':'linear';
 export function applyRoads(map,roads=false){for(const layer of map.getStyle().layers)if(['transportation','transportation_name'].includes(layer['source-layer']))map.setLayoutProperty(layer.id,'visibility',roads?'visible':'none');}
 export function applyMapAppearance(map,appearance={}){
  const {roads,terrain}=mapAppearance(appearance);
+ coastlineController(map).ensure();
  hideUKCountryLabel(map);hideProtectedAreas(map);applyRoads(map,roads);drawTerrain(map,terrain);
 }
 export function drawCoastline(map,before){
- if(!map.getSource('coastline'))map.addSource('coastline',{type:'geojson',data:'coastline.geojson'});
- if(!map.getLayer('coast-line'))map.addLayer({id:'coast-line',type:'line',source:'coastline',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#000000','line-width':['interpolate',['linear'],['zoom'],3,1,6,1.25,10,1.6],'line-opacity':1}},before);
- else map.moveLayer('coast-line',before);
+ coastlineController(map).ensure(before);
 }
 export function drawTerrain(map,terrain=true){
  if(!terrain){if(map.getLayer('terrain-shading'))map.setLayoutProperty('terrain-shading','visibility','none');return;}

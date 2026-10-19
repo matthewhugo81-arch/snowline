@@ -1,5 +1,5 @@
 import {installPrecipitationRates,precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
-import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rasterResampling,gridLabelLayer} from './map-appearance.js?v=20261013-shared-appearance';
+import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
@@ -23,11 +23,12 @@ import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-mo
 export {briefingSettings};
 
 const aborted=()=>new DOMException('Aborted','AbortError');
-function rendered(map,signal){
+async function rendered(map,signal){
+ const coast=coastlineController(map);await coast.wait({signal});
  return new Promise((resolve,reject)=>{
   if(signal.aborted){reject(aborted());return;}
   const finish=error=>{clearTimeout(timer);map.off('render',check);signal.removeEventListener('abort',cancel);error?reject(error):resolve();};
-  const check=()=>{if(map.areTilesLoaded()&&map.isSourceLoaded('coastline'))finish();};
+  const check=()=>{if(map.areTilesLoaded()&&coast.isReady())finish();};
   const cancel=()=>finish(aborted());
   const timer=setTimeout(()=>finish(Error('The chart background could not finish loading.')),30000);
   signal.addEventListener('abort',cancel,{once:true});map.on('render',check);map.triggerRepaint();
@@ -57,6 +58,7 @@ export class BriefingRenderer{
   maplibre.addProtocol('briefing',(params,controller)=>this.cache.protocol(params,controller));
   this.container=document.createElement('div');this.container.className='briefing-renderer';this.container.setAttribute('aria-hidden','true');document.body.append(this.container);
   this.map=new maplibre.Map({container:this.container,style:backgroundStyle(background),center:[-3,55],zoom:4,interactive:false,attributionControl:false,preserveDrawingBuffer:true,fadeDuration:0,renderWorldCopies:false});
+  this.coastline=coastlineController(this.map);
   this.ready=new Promise((resolve,reject)=>{
    const timer=setTimeout(()=>reject(Error('The chart map could not start. Try again.')),30000);
    this.cancelReady=()=>{clearTimeout(timer);reject(aborted());};
@@ -83,6 +85,7 @@ export class BriefingRenderer{
  }
  async render({model,meta,preset,bounds,size=[960,660],time,signal,overlays={},onProgress,nextFrame}){
   await this.ready;if(signal.aborted)throw aborted();
+  if(this.coastline.state.status==='error')this.coastline.retry();
   // A newly selected model may add a pressure-level scale to the catalogue.
   const weather=preset.id==='weather';
   this.settings.colorScales=(weather?briefingSettings(this.baseSettings):this.baseSettings).colorScales;

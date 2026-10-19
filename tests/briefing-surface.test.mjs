@@ -6,6 +6,7 @@ import {BriefingRenderer,briefingSettings} from '../map-briefing-renderer.js';
 import {sourceVariable} from '../map-catalogue.js';
 import {combineSources,fieldDataURL} from '../map-sources.js';
 import {DERIVED_DEW_POINT,dewPointRule} from '../map-dew-point.js';
+import {coastlineController} from '../map-appearance.js';
 
 const time=hour=>new Date(Date.UTC(2026,9,12,hour)).toISOString();
 const ukv={domain:'ukmo_uk_deterministic_2km',reference_time:time(3),variables:['temperature_2m','relative_humidity_2m','pressure_msl'],valid_times:[3,4,5,6,7,8,9,10,11,12].map(time)};
@@ -57,17 +58,46 @@ test('briefing keeps the existing temperature and dew-point Celsius colour scale
 
 test('briefing renderer installs UKV dew-point derivation for its own reader and reads matching temperature/RH grids',async t=>{
  const savedDocument=globalThis.document;
- globalThis.document={createElement:()=>({setAttribute(){},remove(){}}),body:{append(){}}};
- t.after(()=>{if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;});
- class MapStub{
-  once(name,callback){if(name==='load')queueMicrotask(callback);}
-  getStyle(){return {layers:[]};}
-  getSource(){} getLayer(){} addSource(){} addLayer(){} remove(){}
+ let renderer;
+ const documentEvents=new EventTarget();
+ globalThis.document={hidden:false,addEventListener:documentEvents.addEventListener.bind(documentEvents),removeEventListener:documentEvents.removeEventListener.bind(documentEvents),createElement:()=>({setAttribute(){},remove(){}}),body:{append(){}}};
+ t.after(()=>{renderer?.destroy();if(savedDocument===undefined)delete globalThis.document;else globalThis.document=savedDocument;});
+ t.mock.method(globalThis,'fetch',async url=>{assert.equal(url,'coastline.geojson');return {ok:true,json:async()=>({type:'FeatureCollection',features:[]})};});
+ class Events{
+  events=new Map();
+  on(name,callback){if(!this.events.has(name))this.events.set(name,new Set());this.events.get(name).add(callback);return this;}
+  off(name,callback){this.events.get(name)?.delete(callback);return this;}
+  emit(name,event={}){for(const callback of [...this.events.get(name)??[]])callback(event);}
+  once(name,callback){const wrapped=event=>{this.off(name,wrapped);callback(event);};return this.on(name,wrapped);}
+ }
+ class MapStub extends Events{
+  layers=[];sources=new Map();styleLoaded=false;removed=false;
+  constructor(){super();queueMicrotask(()=>{this.styleLoaded=true;this.emit('style.load');this.emit('load');});}
+  getStyle(){return this.styleLoaded?{layers:this.layers}:undefined;}
+  isStyleLoaded(){return this.styleLoaded;}
+  getSource(id){return this.sources.get(id);}
+  getLayer(id){return this.layers.find(layer=>layer.id===id);}
+  isSourceLoaded(id){return !!this.getSource(id)?.loaded;}
+  addSource(id,options){
+   const map=this,source=Object.assign(new Events(),options,{loaded:false,setData(data){
+    this.data=data;this.loaded=false;this.emit('dataloading',{dataType:'source'});
+    queueMicrotask(()=>{if(map.getSource(id)!==this||map.removed)return;this.loaded=true;this.emit('data',{dataType:'source',sourceDataType:'content'});map.triggerRepaint();});
+    return this;
+   }});
+   this.sources.set(id,source);if(options.type==='geojson')source.setData(options.data);
+  }
+  removeSource(id){this.sources.delete(id);}
+  addLayer(layer,before){const i=this.layers.findIndex(item=>item.id===before);this.layers.splice(i<0?this.layers.length:i,0,layer);}
+  removeLayer(id){this.layers=this.layers.filter(layer=>layer.id!==id);}
+  moveLayer(id,before){const layer=this.getLayer(id);this.removeLayer(id);this.addLayer(layer,before);}
+  triggerRepaint(){queueMicrotask(()=>{if(!this.removed)this.emit('render');});}
+  remove(){this.removed=true;this.emit('remove');}
  }
  const settings={...OM.defaultOmProtocolSettings,colorScales:{...OM.defaultOmProtocolSettings.colorScales,cloud_cover:{breakpoints:[0,100],colors:[[0,0,0,1],[255,255,255,1]]},precipitation:{breakpoints:[0,1],colors:[[255,255,255,1],[0,0,255,1]]}}};
- const renderer=new BriefingRenderer({maplibre:{Map:MapStub,addProtocol(){},removeProtocol(){}},OM,settings,fields:[],createURL(){}});
- t.after(()=>renderer.destroy());
+ renderer=new BriefingRenderer({maplibre:{Map:MapStub,addProtocol(){},removeProtocol(){}},OM,settings,fields:[],createURL(){}});
  await renderer.ready;
+ const coastline=coastlineController(renderer.map);await coastline.wait({timeout:1000});
+ assert.equal(coastline.isReady(),true,'the briefing uses the same completed coastline controller');
  const reader=OM.getProtocolInstance(renderer.settings).omFileReader;
  assert.equal(reader.allDerivationRules.filter(r=>r.pattern.toString()===dewPointRule.pattern.toString()).length,1);
  const original=reader.withReader,reads=[],ranges=[{start:0,end:1},{start:0,end:3}],signal=new AbortController().signal;
