@@ -1,0 +1,3 @@
+# Review routing only; ordinary updates do not require an extra approver.
+* @matthewhugo81-arch
+/.github/CODEOWNERS @matthewhugo81-arch
