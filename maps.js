@@ -2,7 +2,7 @@ import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate}
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261015-direct-vertical';
 import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261015-direct-vertical';
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
-import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline';
+import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline2';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -725,7 +725,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261019-coastline').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261019-coastline2').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

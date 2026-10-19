@@ -109,6 +109,22 @@ test('a fresh visible-view waiter finishes even if source loading had no interve
  assert.equal(coast.isReady(),true);
 });
 
+test('viewport tile loads preserve successful GeoJSON content and wait for the new view to render',async t=>{
+ const map=new MapFixture(),coast=coastlineController(map,{loadData:async()=>coastline,renderTimeout:100});t.after(()=>coast.destroy());
+ await flush();const source=map.getSource('coastline');source.complete();await flush();
+ // MapLibre fires these source events both while adding the first visible
+ // tiles and when a later fitBounds/pan requests another coastline tile.
+ // Tile completion has no sourceDataType: 'content' event.
+ for(const tile of [{id:'initial-view'},{id:'changed-view'}]){
+  source.loaded=false;source.fire('dataloading',{tile,coord:tile.id});
+  const ready=assert.doesNotReject(coast.wait({timeout:500}));
+  map.render();assert.equal(coast.isReady(),false);assert.equal(coast.state.status,'loading');
+  source.loaded=true;source.fire('data',{tile,coord:tile.id});await flush();
+  assert.equal(coast.isReady(),false,'a completed tile still needs a render');
+  map.render();await ready;assert.equal(coast.isReady(),true);
+ }
+});
+
 test('a source error is never counted ready even when MapLibre reports it loaded; retry replaces it',async t=>{
  const map=new MapFixture(),errors=[],coast=coastlineController(map,{loadData:async()=>coastline,onError:error=>errors.push(error)});t.after(()=>coast.destroy());
  await flush();const failedSource=map.getSource('coastline'),error=Error('Worker could not parse geometry');

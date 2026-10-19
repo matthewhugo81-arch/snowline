@@ -1,4 +1,4 @@
-import {appearanceKey} from './map-appearance.js?v=20261019-coastline';
+import {appearanceKey} from './map-appearance.js?v=20261019-coastline2';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261019-mogreps-uk';
@@ -6,7 +6,7 @@ import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
 import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261019-mogreps-uk';
 import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-mogreps-uk';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-coastline';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-coastline2';
 import {runLabel,runAvailability} from './map-runs.js?v=20261019-mogreps-uk';
 import {chartScales} from './map-image-export.js?v=20261019-mogreps-uk';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -119,7 +119,12 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
     try{const src=await renderer.render({...opts,meta:item.meta,time,signal,nextFrame:nextTask?{meta:nextTask.meta,time}:null,onProgress:({done,total})=>{
      if(signal.aborted)return;item.c.button.textContent=done<total?'Preparing '+accumulationHours(p.field)+' h total · '+done+'/'+total+' native intervals':'Drawing map and grid values…';
     }});if(signal.aborted){URL.revokeObjectURL(src);return;}images.set(item.key,src);show(item.c,src,item.meta);}
-    catch(error){if(signal.aborted)return;item.c.button.textContent='This run/time is unavailable. Use Retry charts.';item.c.card.dataset.failed='true';failed++;$('retry').hidden=false;}
+    catch(error){
+     if(signal.aborted)return;
+     const message=error?.message||'This run/time is unavailable.';
+     console.warn('Previous-run chart could not render:',{run:item.meta.reference_time,time,field:p.field,message,error});
+     item.c.button.textContent=message+' Use Retry charts.';item.c.card.dataset.failed='true';failed++;$('retry').hidden=false;
+    }
     progress();
    }
    // Do not download an entire archive or pre-render all historical hours.

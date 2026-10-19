@@ -20,6 +20,7 @@ try{
   const context=await browser.newContext({viewport,timezoneId:'America/Los_Angeles'}),page=await context.newPage(),errors=[],metadata=[];
   let phase=0,offline=false,partialHorizon=8;
   page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',message=>{if(message.type()==='warning'||message.type()==='error')console.error('UKV BROWSER',message.text());});
   await page.addInitScript(()=>{
    localStorage.setItem('snowline-terrain','false');window.fixtureDelay=5;
    const interval=window.setInterval,timeout=window.setTimeout,clear=window.clearTimeout,now=Date.now;
@@ -135,7 +136,8 @@ try{
    assert.deepEqual(await page.locator(visible+' select').evaluateAll(ss=>ss.map(s=>new Date(s.value).getUTCHours())),[3,9,12],'History rolls automatically on the shared minute check');
    await page.screenshot({path:`review-output/ukv-pair-${viewport.width}.png`,fullPage:true});
    assert.deepEqual(errors,[]);console.log(`UKV latest/previous, completion, rollover, failed checks, hourly steps, exact-cycle maps/briefing/history passed at ${viewport.width}px`);
-  }catch(error){console.error('UKV STATE',await page.locator('#map-status,#run-update-status,#briefing-run,#previous-status,#previous-progress').allTextContents());await page.screenshot({path:`review-output/ukv-failure-${viewport.width}.png`,fullPage:true}).catch(()=>{});throw error;}
+  }catch(error){console.error('UKV STATE',await page.locator('#map-status,#run-update-status,#briefing-run,#previous-status,#previous-progress').allTextContents());console.error('UKV CHART ERRORS',await page.locator('#previous-grid .briefing-card[data-failed] .briefing-chart').allTextContents());await page.screenshot({path:`review-output/ukv-failure-${viewport.width}.png`,fullPage:true}).catch(()=>{});throw error;}
   finally{await context.close();}
  }
 }finally{await browser.close();server.close();}
+

@@ -129,9 +129,13 @@ function createController(map,{loadData=loadCoastlineData,renderTimeout=15000,is
     if(event.sourceDataType==='content')contentSeen=true;
     map.triggerRepaint();
    };
-   const loading=()=>{
+   const loading=event=>{
     if(!current(version,item)||!dataApplied||state.status==='error')return;
-    contentSeen=false;renderedEpoch=-1;update('loading');armWatchdog(version,item);
+    // New viewport tiles emit dataloading/data without a GeoJSON content
+    // event. Only a source data update invalidates successful geometry;
+    // tile loads still require their own completed render below.
+    if(!event.tile)contentSeen=false;
+    renderedEpoch=-1;update('loading');armWatchdog(version,item);
    };
    const error=event=>{if(current(version,item)&&event.error?.name!=='AbortError')fail(event.error??Error('The coastline outline could not be drawn.'),version,item);};
    sourceListeners=[['data',data],['dataloading',loading],['error',error]];

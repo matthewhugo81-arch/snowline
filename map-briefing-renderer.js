@@ -1,5 +1,5 @@
 import {installPrecipitationRates,precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
-import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline';
+import {applyMapAppearance,orderForecastBasemap,mapAppearance,appearanceKey,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline2';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
