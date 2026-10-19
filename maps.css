@@ -246,7 +246,8 @@
 @media(max-width:650px){#map-settings-content{display:contents}}
 
 #comparison-count-control[hidden]{display:none}
-.map-canvases:has(#panel-c:not([hidden])) .panel-selectors{grid-template-columns:1fr;gap:6px}
+.map-canvases:has(#panel-c:not([hidden])) .panel-selectors{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+@media(max-width:650px){.map-canvases:has(#panel-c:not([hidden])) .panel-selectors{grid-template-columns:1fr}}
 .map-canvases:has(#panel-c:not([hidden])) .map-panel-label{font-size:10px;line-height:1.4}
 @media(min-width:1051px){
  .map-canvases:has(#panel-c:not([hidden])) .panel-controls{padding:8px 10px}
