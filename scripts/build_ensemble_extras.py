@@ -17,8 +17,8 @@ import numpy as np
 from omfiles import OmFileWriter
 import build_ensembles as core
 
-VERSION = 1
-BOUNDS = (-80, 20, 45, 80)  # All four map presets, with a margin; no regridding.
+VERSION = 2
+BOUNDS = (-66, 31, 36, 74)  # All four map presets, with a margin; no regridding.
 DOMAINS = {m: f'snowline_{m}_extra' for m in core.MODELS}
 THRESHOLDS = (1, 5, 10, 20, 25, 50, 100)
 # key: NOAA parameter/level, ECMWF parameter/level, GRIB identities, units
@@ -113,6 +113,16 @@ def mean_complete(arrays, count):
  return total/count
 
 
+def cached_crop(array, bounds, step):
+ """Reuse already verified member means when narrowing the publication area."""
+ west,south,east,north=bounds
+ expected=(int(round((north-south)/step))+1,int(round((east-west)/step))+1)
+ if array.shape!=expected or west>BOUNDS[0] or south>BOUNDS[1] or east<BOUNDS[2] or north<BOUNDS[3]:
+  raise ValueError('Cached member grid does not cover the map presets')
+ return np.ascontiguousarray(array[int(round((BOUNDS[1]-south)/step)):int(round((BOUNDS[3]-south)/step))+1,
+                                   int(round((BOUNDS[0]-west)/step)):int(round((BOUNDS[2]-west)/step))+1])
+
+
 def interval_amount(current, previous, start, end, previous_end):
  if not 0<=start<=previous_end<end:raise ValueError('Invalid accumulation bounds')
  if start==previous_end:return np.maximum(current,0)
@@ -201,7 +211,8 @@ def surface_raw(source,hour,cache,pool):
  with lock:
   if path.exists():
    with np.load(path,allow_pickle=False) as saved:
-    return {k:saved[k] for k in saved.files if not k.startswith('_')},json.loads(str(saved['_periods']))
+    bounds=saved['_bounds'] if '_bounds' in saved.files else (-80,20,45,80)
+    return {k:cached_crop(saved[k],bounds,source.config['step']) for k in saved.files if not k.startswith('_')},json.loads(str(saved['_periods']))
   jobs=[]
   for url,control in surface_urls(source,hour):
    rows=indexed(url)
@@ -249,7 +260,7 @@ def surface_raw(source,hour,cache,pool):
     if periods[key]!=[0,hour,'accum']:raise ValueError('Expected ECMWF cumulative precipitation from initialization')
     arrays[key]*=1000
   cache.mkdir(parents=True,exist_ok=True)
-  tmp=path.with_suffix('.tmp.npz');np.savez_compressed(tmp,**{k:a.astype(np.float32) for k,a in arrays.items()},_periods=json.dumps(periods));tmp.replace(path)
+  tmp=path.with_suffix('.tmp.npz');np.savez_compressed(tmp,**{k:a.astype(np.float32) for k,a in arrays.items()},_periods=json.dumps(periods),_bounds=BOUNDS);tmp.replace(path)
   return arrays,periods
 
 
@@ -299,7 +310,7 @@ def build_run(model,root,reference,workers=12,max_surface_frames=128,hours=None)
      try:
       surface,intervals=surface_fields(source,hour,cache,pool);values.update(surface);periods.update(intervals);complete=True;surface_done+=1
      except Exception as error:errors.append(f'T+{hour} surface: {error}')
-    if old.get('surface_complete') and not complete:continue
+    if old.get('version')==VERSION and old.get('surface_complete') and not complete:continue
     write_frame(path,values)
     atomic_json(record,dict(version=VERSION,variables=list(values),periods=periods,surface_complete=complete))
     if hour%24==0:print(f'{model} extra: T+{hour} verified ({len(values)} fields)',flush=True)
@@ -307,7 +318,9 @@ def build_run(model,root,reference,workers=12,max_surface_frames=128,hours=None)
  records=[]
  for hour in available:
   path=core.frame_path(root,DOMAINS[model],run,hour);record=path.with_suffix('.json')
-  if path.exists() and record.exists():records.append((hour,json.loads(record.read_text())))
+  if path.exists() and record.exists():
+   saved=json.loads(record.read_text())
+   if saved.get('version')==VERSION:records.append((hour,saved))
  if not records:raise ValueError('No additional ensemble fields verified: '+str(errors[:2]))
  times={};intervals={}
  for hour,record in records:
@@ -338,14 +351,9 @@ def main():
  meta=build_run(args.model,args.output,latest['reference_time'],args.workers,args.max_surface_frames,hours)
  atomic_json(args.output/DOMAINS[args.model]/'latest.json',meta)
  if hours is not None:return
- history_path=args.output/domain/'history.json'
- history=json.loads(history_path.read_text()) if history_path.exists() else {'runs':[latest['reference_time']]}
- # Existing prepared history remains usable; backfill surface fields in bounded
- # batches after the current run, without delaying publication indefinitely.
- for reference in history['runs'][1:]:
-  try:build_run(args.model,args.output,reference,args.workers,6)
-  except Exception as error:print(f'::warning::{args.model} extra history {reference}: {error}',flush=True)
- keep={datetime.fromisoformat(r).strftime('%Y%m%d%H') for r in history['runs']}
+ # Additional fields are latest-run only so the full-resolution primary
+ # three-run archive continues to fit within the existing hosting allowance.
+ keep={datetime.fromisoformat(latest['reference_time']).strftime('%Y%m%d%H')}
  for path in (args.output/'_extra_cache'/args.model).glob('*'):
   if path.is_dir() and path.name not in keep:shutil.rmtree(path)
  for path in (args.output/DOMAINS[args.model]).glob('*/*/*/*Z'):

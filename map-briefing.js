@@ -4,12 +4,12 @@ import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261013-fixed-periods';
 import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261018-rates';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-ensemble-extra';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-ensemble-extra2';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261018-rates';
 import {forecastInterval} from './map-interval.js?v=20261011-forecast-interval';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261011-live-runs';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra';
-import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra2';
+import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra2';
 import {chartScales} from './map-image-export.js?v=20261018-rates';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';

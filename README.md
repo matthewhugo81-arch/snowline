@@ -6,7 +6,8 @@ precipitation in mm/h; ECMWF also includes mean snowfall water equivalent and
 official 24-hour precipitation probabilities for thresholds of 1, 5, 10, 20, 25,
 50 and 100 mm. Legends state the actual reporting period. ECMWF surface means
 use all 51 members; GEFS uses NOAA's official 30-member statistics. Additional
-fields appear only for verified times from the selected run. See
+fields appear only for verified times on the latest run; the original six-field
+three-run archive remains available. See
 [ensemble data definitions](scripts/ENSEMBLES.md).
 
 UK model maps and local multi-model weather charts: snowfall, snow depth, temperature, dew point, humidity, precipitation, wind speed and wind gusts.

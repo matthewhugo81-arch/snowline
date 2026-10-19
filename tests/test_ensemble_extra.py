@@ -25,9 +25,17 @@ class EnsembleExtraTests(unittest.TestCase):
  def test_crop_retains_cell_orientation_and_native_spacing(self):
   step=.5;a=e.np.arange(361*720,dtype=float).reshape(361,720)
   cropped=e.crop(a.ravel(),step,0)
-  self.assertEqual(cropped.shape,(121,251))
-  self.assertEqual(cropped[0,0],a[140,560])
-  self.assertEqual(cropped[-1,-1],a[20,90])
+  self.assertEqual(cropped.shape,(87,205))
+  self.assertEqual(cropped[0,0],a[118,588])
+  self.assertEqual(cropped[-1,-1],a[32,72])
+
+ def test_cached_wider_member_means_keep_the_same_native_cells(self):
+  source=e.np.arange(721*1440,dtype=float).reshape(721,1440)
+  previous=source[440:681,400:901]
+  narrowed=e.cached_crop(previous,(-80,20,45,80),.25)
+  e.np.testing.assert_array_equal(narrowed,source[484:657,456:865])
+  e.np.testing.assert_array_equal(e.cached_crop(narrowed,e.BOUNDS,.25),narrowed)
+  with self.assertRaises(ValueError):e.cached_crop(previous,(-80,20,40,80),.25)
 
  def test_probability_threshold_interval_and_grid_are_checked(self):
   ec=e.core.ec;g=ec.codes_grib_new_from_samples('regular_ll_sfc_grib2')
@@ -49,7 +57,7 @@ class EnsembleExtraTests(unittest.TestCase):
 
  def test_om_preserves_small_rates_zero_and_missing_cells(self):
   with tempfile.TemporaryDirectory() as directory:
-   path=Path(directory)/'test.om';a=e.np.full((121,251),.03);a[0,0]=0;a[0,1]=e.np.nan
+   path=Path(directory)/'test.om';a=e.np.full((87,205),.03);a[0,0]=0;a[0,1]=e.np.nan
    e.write_frame(path,{'precipitation_mean':a})
    reader=OmFileReader(str(path));values=reader.get_child_by_name('precipitation_mean')[:,:]
    self.assertEqual(values[0,0],0);self.assertTrue(e.np.isnan(values[0,1]));self.assertAlmostEqual(values[1,1],.03,places=2)

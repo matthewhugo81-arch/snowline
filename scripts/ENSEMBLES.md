@@ -11,7 +11,7 @@ deviation. GEFS products currently contain 30 perturbed members; ECMWF contains
 
 `build_ensemble_extras.py` publishes exact-cycle companions under
 `snowline_gefs_extra` and `snowline_ecmwf_extra`. It retains native cells within
-80°W–45°E, 20–80°N, covering all four map presets. The original global six-field
+66°W–36°E, 31–74°N, covering all four map presets. The original global six-field
 feeds and pressure overlays remain available. Metadata lists actual times for
 each variable. A missing member/frame never becomes zero, and a companion from
 a different initialization is never attached.
@@ -46,11 +46,11 @@ averaging periods are retained independently of the file cadence.
 
 The first ECMWF surface preparation downloads many member fields. Completed
 frames and cumulative means are cached; later passes prepare only missing
-frames. Latest-run surface processing takes priority. Older retained runs are
-backfilled six surface frames per pass. Partial companions expose only verified
+frames. Additional fields are published for the latest run only, to retain native
+resolution within the existing hosting size allowance. The original six-field
+three-run archive is unchanged. Partial companions expose only verified
 variable/time pairs and are labelled as still being prepared. Raw calculation
-caches are excluded from the Pages artifact. Additional layers inherit the
-primary feed's three-run retention without altering its initialization.
+caches are excluded from the Pages artifact. No initialization is altered.
 
 Checks: `node --test tests/ensemble-extra.test.mjs` and
 `python -m unittest discover -s tests -p 'test_ensemble_extra.py'`.

@@ -1,4 +1,4 @@
-import {MPH_PER_MS} from './map-wind-units.js?v=20261019-ensemble-extra';
+import {MPH_PER_MS} from './map-wind-units.js?v=20261019-ensemble-extra2';
 export const isJetWind=key=>/^wind_speed_(300|200)hPa$/.test(key);
 export const JET_MIN_MS=60/MPH_PER_MS;
 export const JET_WIND_SCALE={

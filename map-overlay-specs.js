@@ -1,4 +1,4 @@
-import {isWindField,MPH_PER_MS} from './map-wind-units.js?v=20261019-ensemble-extra';
+import {isWindField,MPH_PER_MS} from './map-wind-units.js?v=20261019-ensemble-extra2';
 import {isJetWind,JET_MIN_MS,contourLineWidth} from './map-chart-style.js?v=20261012-chart-style';
 import {VERTICAL_MOTION} from './map-vertical-motion.js?v=20261015-direct-vertical';
 

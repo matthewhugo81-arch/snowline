@@ -10,7 +10,7 @@ import {overlayGroups} from '../map-overlay-specs.js';
 const t=h=>new Date(Date.UTC(2026,9,19,h)).toISOString();
 const probability='precipitation_probability_10mm_24h';
 const variables=['temperature_2m_mean','dew_point_2m_mean','wind_speed_10m_mean','wind_gusts_10m_mean','cloud_cover_mean','precipitation_mean','snowfall_water_equivalent_mean','wind_speed_250hPa_mean','wind_speed_250hPa_spread',probability];
-const extra={format_version:1,domain:'snowline_ecmwf_extra',reference_time:t(0),completed:true,member_count:51,variables,
+const extra={format_version:2,domain:'snowline_ecmwf_extra',reference_time:t(0),completed:true,member_count:51,variables,
  valid_times:[0,3,6,12,24,36,48].map(t),
  variable_valid_times:Object.fromEntries(variables.map(key=>[key,(key===probability?[24,36,48]:['precipitation_mean','snowfall_water_equivalent_mean','wind_gusts_10m_mean'].includes(key)?[3,6,12,24,36,48]:[0,3,6,12,24,36,48]).map(t)])),
  variable_intervals:{[probability]:Object.fromEntries([24,36,48].map(h=>[t(h),{start:t(h-24),end:t(h),hours:24}])),precipitation_mean:{[t(6)]:{start:t(3),end:t(6),hours:3}}}};
@@ -49,5 +49,5 @@ test('companions load the exact main initialization for latest and archived maps
  assert.equal(verifiedEnsembleExtra({...extra,member_count:50},extra.domain,t(0)),false);
 });
 test('extra grids preserve the native spacing and cover all map presets',()=>{
- for(const domain of ENSEMBLE_EXTRA_DOMAINS){const grid=OM.GridFactory.create(domain.grid);assert.equal(grid.nx,domain.grid.nx);assert.equal(domain.grid.lonMin+(domain.grid.nx-1)*domain.grid.dx,45);assert.equal(domain.grid.latMin+(domain.grid.ny-1)*domain.grid.dy,80);}
+ for(const domain of ENSEMBLE_EXTRA_DOMAINS){const grid=OM.GridFactory.create(domain.grid);assert.equal(grid.nx,domain.grid.nx);assert.equal(domain.grid.lonMin+(domain.grid.nx-1)*domain.grid.dx,36);assert.equal(domain.grid.latMin+(domain.grid.ny-1)*domain.grid.dy,74);}
 });
