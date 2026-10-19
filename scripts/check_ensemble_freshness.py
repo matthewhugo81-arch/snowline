@@ -6,6 +6,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timedelta,timezone
 import json,os
+import time
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -20,7 +21,20 @@ VARIABLES={f'{field}_{stat}' for field in ('geopotential_height_500hPa','tempera
 HOURS={'gefs':list(range(0,241,3))+list(range(246,385,6)), 'ecmwf':list(range(0,145,3))+list(range(150,361,6))}
 def iso(t):return t.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 def get(url):
- with urlopen(Request(url,headers={'User-Agent':'Snowline-ensemble-health/1.0','Cache-Control':'no-cache'}),timeout=20) as r:return r.read()
+ # A single transient TLS/network error must not fail a three-minute check.
+ # Retry only transport failures and retryable HTTP responses; preserve 404
+ # and other permanent errors so source availability remains truthful.
+ for attempt in range(3):
+  try:
+   with urlopen(Request(url,headers={'User-Agent':'Snowline-ensemble-health/1.0','Cache-Control':'no-cache'}),timeout=20) as r:
+    return r.read()
+  except HTTPError as error:
+   if error.code not in (408,429,500,502,503,504) or attempt == 2:
+    raise
+  except (URLError,TimeoutError,ConnectionError):
+   if attempt == 2:
+    raise
+  time.sleep(2 ** (attempt + 1))
 def ecmwf_hours(text):
  groups={}
  for line in text.splitlines():
