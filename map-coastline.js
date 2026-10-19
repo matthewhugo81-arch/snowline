@@ -5,12 +5,14 @@ const emptyCollection=()=>({type:'FeatureCollection',features:[]});
 const aborted=()=>new DOMException('Coastline loading was cancelled.','AbortError');
 
 function validLine(line){return Array.isArray(line)&&line.length>=2&&line.every(point=>Array.isArray(point)&&point.length>=2&&point.every(Number.isFinite));}
+function validFeature(feature){
+ if(feature?.type!=='Feature')return false;
+ const geometry=feature.geometry;
+ return geometry===null||geometry?.type==='LineString'&&validLine(geometry.coordinates)||geometry?.type==='MultiLineString'&&Array.isArray(geometry.coordinates)&&geometry.coordinates.every(validLine);
+}
 function validateData(data){
- if(!data||data.type!=='FeatureCollection'||!Array.isArray(data.features)||!data.features.every(feature=>{
-  if(feature?.type!=='Feature')return false;
-  const geometry=feature.geometry;
-  return geometry===null||geometry?.type==='LineString'&&validLine(geometry.coordinates)||geometry?.type==='MultiLineString'&&Array.isArray(geometry.coordinates)&&geometry.coordinates.every(validLine);
- }))throw Error('The coastline map data is not valid GeoJSON.');
+ const valid=data?.type==='FeatureCollection'?Array.isArray(data.features)&&data.features.every(validFeature):validFeature(data);
+ if(!valid)throw Error('The coastline map data is not valid GeoJSON.');
  return data;
 }
 

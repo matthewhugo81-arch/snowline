@@ -83,6 +83,21 @@ test('permanent HTTP errors and invalid responses are not retried; valid empty f
  assert.equal(await createCoastlineDataLoader({fetcher:async()=>response(empty)})(),empty);
 });
 
+test('a standalone coastline Feature is preserved, cached and ready after its geometry renders',async t=>{
+ // The image export browser test uses this valid GeoJSON Feature to assert
+ // that the coastline is present in the captured pixels.
+ const feature={type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[[-3,53],[-3,57]]}};
+ let calls=0;const loadData=createCoastlineDataLoader({fetcher:async()=>{calls++;return response(feature);}});
+ assert.equal(await loadData(),feature);assert.equal(await loadData(),feature);assert.equal(calls,1);
+ const map=new MapFixture(),coast=coastlineController(map,{loadData});t.after(()=>coast.destroy());
+ await flush();const source=map.getSource('coastline');assert.equal(source.updates[0],feature);
+ source.complete();await flush();assert.equal(coast.isReady(),false);
+ map.render();await coast.wait();assert.equal(coast.isReady(),true);assert.equal(calls,1);
+ for(const geometry of [{type:'LineString',coordinates:[[-3,53]]},{type:'LineString',coordinates:[[-3,53],[-3,'57']]},{type:'Point',coordinates:[-3,53]}]){
+  await assert.rejects(createCoastlineDataLoader({fetcher:async()=>response({...feature,geometry})})(),/not valid GeoJSON/);
+ }
+});
+
 test('a loaded placeholder cannot make delayed geography ready; successful data needs a completed render',async t=>{
  const download=deferred(),map=new MapFixture(),states=[];
  const coast=coastlineController(map,{loadData:()=>download.promise,onState:state=>states.push(state.status)});t.after(()=>coast.destroy());

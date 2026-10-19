@@ -1,6 +1,6 @@
 import {hideUKCountryLabel} from './map-base-labels.js?v=20261013-three-run-charts';
 import {hideProtectedAreas} from './map-backgrounds.js?v=20261013-map-appearance';
-import {coastlineController} from './map-coastline.js?v=20261019-coastline2';
+import {coastlineController} from './map-coastline.js?v=20261019-coastline3';
 export {coastlineController};
 
 // Interactive maps, briefing PNGs and their exports share these drawing rules.
