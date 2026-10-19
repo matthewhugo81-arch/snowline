@@ -1,4 +1,4 @@
-import {extraEnsembleField} from './map-ensemble-extra.js?v=20261019-ensemble-extra3';
+import {extraEnsembleField} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
 // Same native global grids as the official GEFS/IFS mean and SD GRIB products.
 export const ENSEMBLE_DOMAINS = [
  {value:'snowline_gefs_ensemble',label:'GEFS mean & spread',grid:{type:'regular',nx:720,ny:361,latMin:-90,lonMin:-180,dx:.5,dy:.5,zoom:1},time_interval:'3_hourly',model_interval:'6_hourly'},

@@ -1,5 +1,5 @@
-import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra3';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra3';
+import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-ensemble-extra4';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {isTypeField,NATIVE_PRECIPITATION_TYPE,precipitationTypeScales} from './map-precipitation-type.js?v=20261014-interaction-audit';
 const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';

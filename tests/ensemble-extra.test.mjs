@@ -10,7 +10,7 @@ import {overlayGroups} from '../map-overlay-specs.js';
 const t=h=>new Date(Date.UTC(2026,9,19,h)).toISOString();
 const probability='precipitation_probability_10mm_24h';
 const variables=['temperature_2m_mean','dew_point_2m_mean','wind_speed_10m_mean','wind_gusts_10m_mean','cloud_cover_mean','precipitation_mean','snowfall_water_equivalent_mean','wind_speed_250hPa_mean','wind_speed_250hPa_spread',probability];
-const extra={format_version:2,domain:'snowline_ecmwf_extra',reference_time:t(0),completed:true,member_count:51,variables,
+const extra={format_version:2,domain:'snowline_ecmwf_extra_v2',reference_time:t(0),completed:true,member_count:51,variables,
  valid_times:[0,3,6,12,24,36,48].map(t),
  variable_valid_times:Object.fromEntries(variables.map(key=>[key,(key===probability?[24,36,48]:['precipitation_mean','snowfall_water_equivalent_mean','wind_gusts_10m_mean'].includes(key)?[3,6,12,24,36,48]:[0,3,6,12,24,36,48]).map(t)])),
  variable_intervals:{[probability]:Object.fromEntries([24,36,48].map(h=>[t(h),{start:t(h-24),end:t(h),hours:24}])),precipitation_mean:{[t(6)]:{start:t(3),end:t(6),hours:3}}}};
@@ -40,13 +40,15 @@ test('probabilities keep their 24-hour window and only actual 12-hourly valid ti
  assert.deepEqual(briefingTimes(meta,{field:probability,required:[probability]}, {ensemble:true},'3'),[24,36,48].map(t));
 });
 test('companions load the exact main initialization for latest and archived maps',async()=>{
- const calls=[];const load=async url=>{calls.push(url);if(url.endsWith('/snowline_ecmwf_ensemble/latest.json')||url.endsWith('/snowline_ecmwf_ensemble/2026/10/19/0000Z/meta.json'))return primary;if(url.endsWith('/snowline_ecmwf_extra/2026/10/19/0000Z/meta.json'))return extra;throw Error('not found');};
+ const calls=[];const load=async url=>{calls.push(url);if(url.endsWith('/snowline_ecmwf_ensemble/latest.json')||url.endsWith('/snowline_ecmwf_ensemble/2026/10/19/0000Z/meta.json'))return primary;if(url.endsWith('/snowline_ecmwf_extra_v2/2026/10/19/0000Z/meta.json'))return extra;throw Error('not found');};
  for(const loaded of [await loadSpatialModel(primary.domain,load),await loadSpatialRun(primary.domain,t(0),load)]){
-  assert.equal(loaded.sources.length,2);assert.ok(fieldDataURL(loaded,probability,t(24)).endsWith('/snowline_ecmwf_extra/2026/10/19/0000Z/2026-10-20T0000.om'));
+  assert.equal(loaded.sources.length,2);assert.ok(fieldDataURL(loaded,probability,t(24)).endsWith('/snowline_ecmwf_extra_v2/2026/10/19/0000Z/2026-10-20T0000.om'));
  }
- assert.ok(!calls.some(url=>url.endsWith('/snowline_ecmwf_extra/latest.json')));
+ assert.ok(!calls.some(url=>url.endsWith('/snowline_ecmwf_extra_v2/latest.json')));
  assert.equal(verifiedEnsembleExtra({...extra,reference_time:t(12)},extra.domain,t(0)),false);
  assert.equal(verifiedEnsembleExtra({...extra,member_count:50},extra.domain,t(0)),false);
+ assert.equal(verifiedEnsembleExtra({...extra,format_version:1},extra.domain,t(0)),false,'Never read a wider old grid with the new geometry');
+ assert.equal(verifiedEnsembleExtra({...extra,domain:'snowline_ecmwf_extra'},extra.domain,t(0)),false);
 });
 test('extra grids preserve the native spacing and cover all map presets',()=>{
  for(const domain of ENSEMBLE_EXTRA_DOMAINS){const grid=OM.GridFactory.create(domain.grid);assert.equal(grid.nx,domain.grid.nx);assert.equal(domain.grid.lonMin+(domain.grid.nx-1)*domain.grid.dx,36);assert.equal(domain.grid.latMin+(domain.grid.ny-1)*domain.grid.dy,74);}

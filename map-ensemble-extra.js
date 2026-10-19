@@ -1,8 +1,8 @@
 // Native cells cropped to include all four map areas; no interpolation in time.
-export const ENSEMBLE_EXTRAS={snowline_gefs_ensemble:'snowline_gefs_extra',snowline_ecmwf_ensemble:'snowline_ecmwf_extra'};
+export const ENSEMBLE_EXTRAS={snowline_gefs_ensemble:'snowline_gefs_extra_v2',snowline_ecmwf_ensemble:'snowline_ecmwf_extra_v2'};
 export const ENSEMBLE_EXTRA_DOMAINS=[
- {value:'snowline_gefs_extra',label:'GEFS additional fields',grid:{type:'regular',nx:205,ny:87,latMin:31,lonMin:-66,dx:.5,dy:.5,zoom:1},time_interval:'3_hourly',model_interval:'6_hourly'},
- {value:'snowline_ecmwf_extra',label:'ECMWF ENS additional fields',grid:{type:'regular',nx:409,ny:173,latMin:31,lonMin:-66,dx:.25,dy:.25,zoom:2},time_interval:'3_hourly',model_interval:'12_hourly'}
+ {value:'snowline_gefs_extra_v2',label:'GEFS additional fields',grid:{type:'regular',nx:205,ny:87,latMin:31,lonMin:-66,dx:.5,dy:.5,zoom:1},time_interval:'3_hourly',model_interval:'6_hourly'},
+ {value:'snowline_ecmwf_extra_v2',label:'ECMWF ENS additional fields',grid:{type:'regular',nx:409,ny:173,latMin:31,lonMin:-66,dx:.25,dy:.25,zoom:2},time_interval:'3_hourly',model_interval:'12_hourly'}
 ];
 const colors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643'];
 const blue=['#ffffff','#dbeefd','#9ecae1','#4292c6','#2171b5','#08519c','#08306b'];
@@ -51,7 +51,7 @@ export function extraEnsembleField(key){
 }
 export function verifiedEnsembleExtra(meta,domain,reference){
  return meta?.format_version===2&&meta.domain===domain&&Date.parse(meta.reference_time)===Date.parse(reference)&&
-  meta.member_count===(domain==='snowline_gefs_extra'?30:51)&&Array.isArray(meta.variables)&&Array.isArray(meta.valid_times)&&
+  meta.member_count===(domain==='snowline_gefs_extra_v2'?30:51)&&Array.isArray(meta.variables)&&Array.isArray(meta.valid_times)&&
   meta.variables.every(key=>Array.isArray(meta.variable_valid_times?.[key])&&meta.variable_valid_times[key].every(time=>meta.valid_times.includes(time)));
 }
 export function ensemblePeriod(meta,key,time){

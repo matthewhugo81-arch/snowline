@@ -19,7 +19,7 @@ import build_ensembles as core
 
 VERSION = 2
 BOUNDS = (-66, 31, 36, 74)  # All four map presets, with a margin; no regridding.
-DOMAINS = {m: f'snowline_{m}_extra' for m in core.MODELS}
+DOMAINS = {m: f'snowline_{m}_extra_v2' for m in core.MODELS}
 THRESHOLDS = (1, 5, 10, 20, 25, 50, 100)
 # key: NOAA parameter/level, ECMWF parameter/level, GRIB identities, units
 UPPER = {
@@ -358,6 +358,12 @@ def main():
   if path.is_dir() and path.name not in keep:shutil.rmtree(path)
  for path in (args.output/DOMAINS[args.model]).glob('*/*/*/*Z'):
   if path.is_dir() and ''.join(path.parts[-4:]).replace('00Z','') not in keep:shutil.rmtree(path)
+ # The first rollout used wider grids. Never reuse their URLs or retain their
+ # generated payload in the publisher cache after the versioned feed succeeds.
+ legacy=args.output/f'snowline_{args.model}_extra'
+ if legacy.is_dir():
+  if not legacy.resolve().is_relative_to(args.output.resolve()):raise ValueError('Refusing cleanup outside generated data')
+  shutil.rmtree(legacy)
 
 
 if __name__=='__main__':main()

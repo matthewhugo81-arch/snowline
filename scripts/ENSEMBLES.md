@@ -10,7 +10,7 @@ deviation. GEFS products currently contain 30 perturbed members; ECMWF contains
 ## Additional map fields
 
 `build_ensemble_extras.py` publishes exact-cycle companions under
-`snowline_gefs_extra` and `snowline_ecmwf_extra`. It retains native cells within
+`snowline_gefs_extra_v2` and `snowline_ecmwf_extra_v2`. It retains native cells within
 66°W–36°E, 31–74°N, covering all four map presets. The original global six-field
 feeds and pressure overlays remain available. Metadata lists actual times for
 each variable. A missing member/frame never becomes zero, and a companion from

@@ -15,7 +15,7 @@ export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-da
  if(typeof reader.readVariable==='function'&&typeof reader.readSimpleVariable==='function'){
   const read=reader.readVariable.bind(reader);
   reader.readVariable=(url,key,ranges=null,signal)=>
-   url.startsWith(base+'snowline_ecmwf_extra/')&&/^wind_speed_(?:10m_mean|(?:250|850)hPa_(?:mean|spread))$/.test(key)
+   url.startsWith(base+'snowline_ecmwf_extra_v2/')&&/^wind_speed_(?:10m_mean|(?:250|850)hPa_(?:mean|spread))$/.test(key)
     ?reader.withReader(url,file=>reader.readSimpleVariable(file,key,ranges,signal))
     :read(url,key,ranges,signal);
  }

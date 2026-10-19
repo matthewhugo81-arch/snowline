@@ -1,4 +1,4 @@
-import {displayValue,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra3';
+import {displayValue,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
 const wrap=(value,size)=>((value%size)+size)%size;
 const longitude=value=>wrap(value+180,360)-180;
 

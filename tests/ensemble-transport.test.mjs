@@ -22,12 +22,12 @@ test('EC ensemble scalar wind reads preserve ranges and cancellation without a f
  };
  const OM={getProtocolInstance(){return{omFileReader:reader};}},base='https://site.test/ensemble-data/';
  installEnsembleTransport(OM,{},base);installEnsembleTransport(OM,{},base);
- const url=base+'snowline_ecmwf_extra/run/frame.om';
+ const url=base+'snowline_ecmwf_extra_v2/run/frame.om';
  for(const key of ['wind_speed_10m_mean','wind_speed_250hPa_mean','wind_speed_850hPa_spread']){
   assert.deepEqual(await reader.readVariable(url,key,ranges,signal),{values,directions:undefined});
   assert.deepEqual(calls.splice(0),[['file',url+'.png'],['scalar',key]]);
  }
- for(const [source,key] of [[url,'wind_speed_10m'],[url,'temperature_2m_mean'],[base+'other/run/frame.om','wind_speed_10m_mean'],['https://other.test/snowline_ecmwf_extra/run/frame.om','wind_speed_10m_mean']]){
+ for(const [source,key] of [[url,'wind_speed_10m'],[url,'temperature_2m_mean'],[base+'other/run/frame.om','wind_speed_10m_mean'],['https://other.test/snowline_ecmwf_extra_v2/run/frame.om','wind_speed_10m_mean']]){
   assert.equal(await reader.readVariable(source,key,ranges,signal),'normal');
   assert.deepEqual(calls.splice(0),[['normal',source,key]]);
  }
