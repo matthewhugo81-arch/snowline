@@ -9,6 +9,7 @@ export class TestScheduler extends ModelScheduler {
    if(options.method==='POST'){await ctx.storage.put(key,count+1);return Response.json({workflow_run_id:42});}
    return Response.json({workflow_runs:[]});
   };
+  this.companion.fetcher=this.scheduler.fetcher;
  }
  async posts(){return await this.ctx.storage.get('fixture-posts')??0;}
 }
@@ -22,7 +23,7 @@ export default {
   const object=env.MODEL_SCHEDULER.get(env.MODEL_SCHEDULER.idFromName('snowline-model-scheduler-v1'));
   const response=await worker.fetch(new Request('https://fixture.test/health'),env);
   const status=await response.json(),posts=await object.posts();
-  if(!status.ok||status.status!=='cooldown'||status.lastDispatchedRunId!==42||posts!==1)throw Error(JSON.stringify({status,posts}));
+  if(!status.ok||status.status!=='cooldown'||status.companion.status!=='cooldown'||status.lastDispatchedRunId!==42||posts!==2)throw Error(JSON.stringify({status,posts}));
   return Response.json({ok:true,rpc:true,posts,leaseReused:true});
  }
 };

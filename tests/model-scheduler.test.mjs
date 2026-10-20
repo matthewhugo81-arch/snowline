@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {ModelSchedulerService,HEALTH_WORKFLOW} from '../scheduler/service.mjs';
+import {ModelSchedulerService,HEALTH_WORKFLOW,COMPANION_REPOSITORY} from '../scheduler/service.mjs';
 const instant=Date.parse('2026-10-16T10:00:00Z');
 function fixture({health=[],publish=[],postStatus=200,token='fixture-only'}={}){
  let now=instant;const values=new Map(),calls=[];
@@ -47,6 +47,50 @@ test('missing credentials, stale ticks and HTTP read failures cannot report heal
  const h=fixture();h.service.fetcher=async()=>new Response(null,{status:401});await assert.rejects(h.service.tick(),/HTTP 401/);assert.equal((await h.service.status()).ok,false);
 });
 test('legacy empty dispatch response is accepted',async()=>{assert.equal((await fixture({postStatus:204}).service.tick()).status,'dispatched');});
+
+test('companion dispatch uses freshness gating and an independent persistent lease',async()=>{
+ const f=fixture();
+ const companion=new ModelSchedulerService(f.storage,{token:'fixture-only',fetcher:f.fetcher,now:()=>instant,companion:true});
+ await f.service.tick();
+ await Promise.all([companion.tick(),companion.tick()]);
+ const restarted=new ModelSchedulerService(f.storage,{token:'fixture-only',fetcher:f.fetcher,now:()=>instant+1000,companion:true});
+ assert.equal((await restarted.tick()).status,'cooldown');
+ const posts=f.calls.filter(call=>call.options.method==='POST');
+ assert.equal(posts.length,2);
+ assert.equal(posts[1].url,`https://api.github.com/repos/${COMPANION_REPOSITORY}/actions/workflows/pages.yml/dispatches`);
+ assert.deepEqual(JSON.parse(posts[1].options.body),{ref:'main',inputs:{check_freshness:true}});
+ assert.equal(f.values.get('state').repository,'matthewhugo81-arch/snowline');
+ assert.equal(f.values.get('companion-state').repository,COMPANION_REPOSITORY);
+});
+test('active companion conversion is never cancelled or duplicated and permits its 90-minute build',async()=>{
+ const f=fixture({publish:[{id:77,status:'in_progress',created_at:new Date(instant-60*60000).toISOString()}]});
+ const companion=new ModelSchedulerService(f.storage,{token:'fixture-only',fetcher:f.fetcher,now:()=>instant,companion:true});
+ const result=await companion.tick();
+ assert.equal(result.status,'busy');assert.deepEqual(result.activeRunIds,[77]);
+ assert.equal(f.calls.length,1);assert.equal((await companion.status()).ok,true);
+});
+test('companion dispatch failures remain visible across cooldown and do not use the main lease',async()=>{
+ const f=fixture({postStatus:403});
+ const companion=new ModelSchedulerService(f.storage,{token:'fixture-only',fetcher:f.fetcher,now:()=>instant,companion:true});
+ await assert.rejects(companion.tick(),/HTTP 403/);
+ await companion.tick();
+ assert.equal((await companion.status()).ok,false);
+ assert.equal(f.values.has('state'),false);
+ assert.equal(f.calls.filter(call=>call.options.method==='POST').length,1);
+});
+test('a failed main check still dispatches the companion and exposes both statuses',async()=>{
+ const source=(await readFile(new URL('../scheduler/index.mjs',import.meta.url),'utf8'))
+  .replace("import {DurableObject} from 'cloudflare:workers';",'class DurableObject {}')
+  .replace("'./service.mjs'",JSON.stringify(new URL('../scheduler/service.mjs',import.meta.url).href));
+ const {ModelScheduler}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const f=fixture(),object=new ModelScheduler({storage:f.storage},{GITHUB_ACTIONS_TOKEN:'fixture-only'});
+ object.scheduler.fetcher=async()=>new Response(null,{status:503});
+ object.companion.fetcher=f.fetcher;
+ await assert.rejects(object.tick(),/publication check failed/);
+ const status=await object.status();
+ assert.equal(status.ok,false);assert.equal(status.mainOk,false);assert.equal(status.companion.ok,true);
+ assert.equal(f.calls.filter(call=>call.options.method==='POST').length,1);
+});
 test('public endpoint is read-only and scheduled handler awaits Durable Object dispatch',async()=>{
  const source=(await readFile(new URL('../scheduler/index.mjs',import.meta.url),'utf8'))
   .replace("import {DurableObject} from 'cloudflare:workers';",'class DurableObject {}')

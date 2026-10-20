@@ -27,6 +27,21 @@ The health workflow runs `scripts/check_generated_freshness.py`, requests
 complete site atomically. A further check catches files that arrived during
 the preceding build. Existing GitHub schedules remain independent fallbacks.
 
+The same external clock independently checks `snowline-ensembles/pages.yml`.
+Its `check_freshness` input runs the source/field-hour gate before deciding to
+build. An unfinished MOGREPS-G run therefore resumes on subsequent ticks even
+when GitHub's own schedule is delayed. The companion finishes a published
+partial run before advancing to a newer initialization (up to the source's
+48-hour retention window). Its importer continues protecting the last complete
+run and publishing verified progress atomically. No map controls are changed.
+
+Main and companion dispatches have separate persisted leases. A busy or failed
+main build cannot suppress the companion, and an active companion build is
+never duplicated or cancelled. The companion's stalled threshold is 110 minutes
+to accommodate its existing 90-minute conversion timeout and publishing.
+`/health` retains the main status and adds `mainOk` and `companion`; overall `ok`
+requires both checks to be healthy.
+
 Normal detection latency is up to three minutes, followed by GitHub queue,
 conversion and Pages publication time. This is a polling target, not a hard
 delivery SLA: provider outages, Cloudflare or GitHub outages can still delay
@@ -45,7 +60,10 @@ configure its secret before describing the external clock as operational.
 
 The dedicated GitHub credential needs access to **only**
 `matthewhugo81-arch/snowline`, with repository **Actions: Read and write** and
-the mandatory Metadata read permission. Do not give it Contents, Administration,
+the mandatory Metadata read permission. The companion additionally needs the
+same permissions on `matthewhugo81-arch/snowline-ensembles`, either through that
+credential or a separate `COMPANION_GITHUB_ACTIONS_TOKEN` Worker secret.
+Do not give it Contents, Administration,
 Secrets or account-wide access. GitHub's Actions permission includes more than
 dispatching, so treat this credential as sensitive. Store it only as the
 Cloudflare Worker secret `GITHUB_ACTIONS_TOKEN`, never in source, frontend
