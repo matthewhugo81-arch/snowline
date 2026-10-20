@@ -1,8 +1,8 @@
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261020-native-levels';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261020-ifs-coverage';
 import {sourceVariable} from './map-catalogue.js?v=20261020-ifs-coverage';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261019-ensemble-extra4';
+import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261020-ifs-coverage';
 
 // One clipped native grid supplies every label, including derived diagnostics.
 // There are no point-forecast API calls and no requests per labelled cell.

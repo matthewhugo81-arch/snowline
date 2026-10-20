@@ -48,8 +48,18 @@ Provider references:
 - [Provider meteorological calculations](https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Helper/Meteorology.swift)
 - [ECMWF's announced 0.1° release](https://forum.ecmwf.int/t/ecmwf-free-and-open-data-at-9-km-soon-to-come/15366)
 
-ECMWF's 30 September announcement expects the free 0.1° distribution by the
-end of October 2026. The actual 20 October 00Z IFS directory still lists only
+ECMWF's 16 October update targets the week beginning 19 October for the free
+0.1° distribution, following its initial end-of-October announcement. This
+will use a regular latitude/longitude grid, rather than native O1280.
+The actual 20 October 00Z IFS directory still lists only
 `0p25`. The announced product must be verified and integrated when published;
 it is not presently collected by Snowline and is distinct from the existing
 O1280 surface feed.
+
+All seven additions rendered with real T+12 spatial data in the browser
+without page errors. For that bounded rendering check, the metadata's time
+list was restricted to the single audited frame to avoid unrelated preload
+traffic; the production run's complete 145-step metadata remains unchanged.
+Versioned imports propagate through the map and briefing dependency chains so
+returning browsers load the new catalogue, source selection and derivations
+together.

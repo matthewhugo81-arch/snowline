@@ -1,4 +1,4 @@
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261019-mogreps-uk';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261020-ifs-coverage';
 // Decorate native model options only: model IDs and selections stay unchanged.
 const runDate = new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short', timeZone: 'UTC'});
 
