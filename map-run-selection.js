@@ -1,7 +1,8 @@
 import {loadSpatialModel,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261020-run-selector';
 import {publishedRun,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
-import {runCandidates} from './map-previous-run-data.js?v=20261020-run-selector';
+import {runCandidates} from './map-previous-run-data.js?v=20261020-compact-controls';
 import {formatModelRun} from './map-model-run-menu.js?v=20261020-run-selector';
+import {ukvRunFamily,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 
 export const sourceModel=id=>id.split('@')[0].replace(/_previous$/,'');
 export const selectedReference=id=>id.includes('@')?id.slice(id.indexOf('@')+1):null;
@@ -32,8 +33,10 @@ export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpati
    }catch{/* Exact-cycle checks below still retain a verified fallback. */}
   }
   // latest.json identifies the provider's last complete run during publication.
-  const hint=incoming.completedReferenceTime;
-  if(hint&&Date.parse(hint)<reference&&!candidates.some(t=>Date.parse(t)===Date.parse(hint)))candidates.push(hint);
+  // UKV's shared latest index can point to an intervening nowcast. It must
+  // not interrupt discovery of the previous complete main initialization.
+  const hint=incoming.completedReferenceTime,family=ukvRunFamily(model);
+  if(hint&&(!family||cycleFamily(hint)===family)&&Date.parse(hint)<reference&&!candidates.some(t=>Date.parse(t)===Date.parse(hint)))candidates.push(hint);
   candidates.sort((a,b)=>Date.parse(b)-Date.parse(a));
   for(const ref of candidates){
    if(previous&&Date.parse(ref)<=Date.parse(previous.reference_time))break;

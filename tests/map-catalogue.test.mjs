@@ -59,10 +59,11 @@ test('switching models hides stale fields; comparison offers the supported union
  assert.equal(availableFields(fields,[first,second]).length,5);
  assert.equal(availableFields(fields,[]).length,0);
 });
-test('upper-air menus expose every supported published level',()=>{
+test('upper-air menus retain the compact selection while native levels remain described',()=>{
  const meta={variables:['temperature_10hPa','temperature_500hPa','temperature_925hPa','temperature_300hPa']};
  const fields=[];extendCatalogue(fields,[meta],OM,{colorScales:{}});
- assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['temperature_925hPa','temperature_500hPa','temperature_300hPa','temperature_10hPa']);
+ assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['temperature_500hPa']);
+ assert.ok(fields.some(f=>f.key==='temperature_925hPa'));
 });
 
 test('precipitation renderer preserves rain boundaries with an opaque white dry band',()=>{

@@ -28,8 +28,9 @@ test('GEM upper-air comparisons use native same-run files for latest and archive
  assert.equal(fieldDataURL(wrong,'wind_speed_300hPa',time),null);
  assert.equal(verifiedDirectVertical({...upper,units:{...upper.units,wind_u_component_300hPa:'km/h'}}),false);
 });
-test('published heights and clouds at non-curated levels remain selectable',()=>{
+test('extra native heights and clouds do not expand the shared menus',()=>{
  const meta={variables:['temperature_6750m','wind_u_component_40m','wind_v_component_40m','cloud_cover_975hPa','cloud_cover_1000m','temperature_175hPa','geopotential_height_650hPa']};
  const fields=[];assert.deepEqual(extendCatalogue(fields,[meta],OM,{colorScales:{}}),[]);
- assert.equal(availableFields(fields,[meta]).length,6);
+ assert.equal(fields.length,6);
+ assert.deepEqual(availableFields(fields,[meta]),[]);
 });

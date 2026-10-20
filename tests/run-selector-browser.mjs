@@ -38,7 +38,9 @@ try{
     const newest=phase<3?run(6,phase===2,phase===2?54:phase===1?16:8):phase===3?run(12,false,5):run(18,false,3);
     let meta;
     if(url.endsWith('/in-progress.json'))meta=newest;
-    else if(url.endsWith('/latest.json'))meta=phase<2?run(0):run(6);
+    // UKV's provider index also publishes intervening nowcasts. A completed
+    // 05Z hint must not block discovery of the complete 00Z main cycle.
+    else if(url.endsWith('/latest.json'))meta=phase<2?run(id==='ukmo_uk_deterministic_2km'?5:0):run(6);
     else{
      const match=url.match(/\/2026\/10\/20\/(\d{2})00Z\/meta.json$/),hour=match?Number(match[1]):null;
      if(hour===0)meta=run(0);

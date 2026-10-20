@@ -1,17 +1,25 @@
 # Model comparison availability
 
-The comparison catalogue now follows the variables published for the selected
-model run. It no longer removes native temperature, wind, humidity and height
-fields using the former small pressure-level allowlist. Published temperature
-and wind heights through 10 km, plus cloud fractions at pressure and height
-levels, are described using the corresponding physical units. Native latent and
-sensible surface heat fluxes use W/m².
+The weather-layer menus use the compact selection restored on 20 October 2026,
+filtered to fields published for the selected model run:
+
+- Temperature: 1000, 850, 500 and 250 hPa.
+- Wind: 1000, 500, 300 and 200 hPa.
+- Relative humidity: 1000, 700 and 300 hPa.
+- Geopotential height: 500, 300 and 200 hPa.
+- Height-level temperature and wind: 50, 100, 200 and 300 m, alongside standard
+  2 m temperature and 10 m wind.
+- Cloud: total, low, middle, high and near-surface cloud, where supplied.
+
+Other native levels remain available internally for derived charts. They do not
+add long profiles of temperature, wind, cloud, humidity or height to the menus.
 
 The same catalogue serves the main panels, forecast sequences and archived-run
 comparisons. Wind arrows require both components, or speed and direction, from
 one source. Companion sources must match the selected initialization.
 
-Additional pressure-level vertical motion is available on the six verified
+The menu retains the established 700 hPa vertical-motion chart. Internally,
+additional pressure-level vertical motion is supported on the six verified
 deterministic feeds wherever same-source velocity and temperature are supplied.
 The hydrostatic conversion uses that level’s pressure, not a fixed 700 hPa
 density. JMA’s native pressure velocity is converted directly to 0.1 Pa/s.

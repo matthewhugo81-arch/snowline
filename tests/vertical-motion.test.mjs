@@ -109,7 +109,8 @@ test('additional pressure levels use their own density and require paired same-s
  assert.equal(sourceVariable({...m,domain:'unknown'},'vertical_motion_500hPa'),null);
  assert.equal(sourceVariable({...m,domain:'jma_gsm'},'vertical_motion_500hPa'),'omega_500hPa_from_pressure');
  const fields=[],settings={colorScales:{}};extendCatalogue(fields,[m],OM,settings);
- const field=availableFields(fields,[m]).find(f=>f.key==='vertical_motion_500hPa');
+ const field=fields.find(f=>f.key==='vertical_motion_500hPa');
+ assert.ok(!availableFields(fields,[m]).includes(field),'The compact menu retains the established 700 hPa chart');
  assert.equal(field.unit,'0.1 Pa/s');assert.equal(field.name,'500 hPa vertical motion');
  assert.ok(!field.legendNote.includes('700'));
  assert.ok(settings.colorScales.omega_500hPa_from_w);

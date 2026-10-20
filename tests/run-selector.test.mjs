@@ -28,6 +28,26 @@ test('two panels select the same model independently and share discovery',async(
  assert.match(fieldDataURL(incoming.meta,'temperature_2m',ref(7)),/0600Z/);
  assert.equal(fieldDataURL(incoming.meta,'temperature_2m',ref(20)),null);
 });
+
+test('UKV completed-index hints cannot cross main and nowcast run families',async()=>{
+ for(const [model,newest,hint,previous] of [['ukmo_uk_deterministic_2km',9,8,6],['ukmo_uk_deterministic_2km_nowcast',10,9,8]]){
+  const requested=[];
+  const catalogue=createRunCatalogue({
+   loadModel:async()=>({...run(newest,false,1),completedReferenceTime:ref(hint)}),
+   loadRun:async(id,reference)=>{
+    requested.push(reference);
+    if(reference===ref(hint))throw Error('Archived UKV run is in a different run family.');
+    if(reference!==ref(previous))throw missing();
+    return run(previous);
+   }
+  });
+  const selected=await catalogue.select(model,async()=>({}));
+  assert.equal(selected.meta.reference_time,ref(previous));
+  assert.equal(selected.previous.reference_time,ref(previous));
+  assert.equal(selected.warning,null);
+  assert.ok(!requested.includes(ref(hint)));
+ }
+});
 test('an open complete or incoming run remains pinned across completion and later cycles',async()=>{
  const f=fixture(),first=await f.catalogue.select('ecmwf_ifs',async()=>({}));
  f.setLatest(run(6));let r=await f.catalogue.select(first.key,async()=>({}));

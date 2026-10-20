@@ -259,3 +259,10 @@
 
 .panel-run-selector{grid-column:1/-1}
 .panel-run-selector select{width:100%}
+
+/* One compact selector row leaves more height for one- and two-panel maps. */
+@media(min-width:651px){
+ .map-canvases:not(:has(#panel-c:not([hidden]))) .panel-selectors{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.2fr);gap:8px}
+ .map-canvases:not(:has(#panel-c:not([hidden]))) .panel-run-selector{grid-column:auto}
+ .map-canvases:not(:has(#panel-c:not([hidden]))) .panel-selectors select{padding:6px 7px}
+}

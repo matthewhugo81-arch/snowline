@@ -14,7 +14,24 @@ export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
 export const PRESSURE_LEVELS = [1000,975,950,925,900,875,850,825,800,775,750,725,700,675,650,625,600,575,550,525,500,475,450,425,400,375,350,325,300,275,250,225,200,175,150,125,100,70,50,40,30,20,15,10];
-// Availability comes from the selected run, not a curated pressure-level menu.
+// Keep the shared menu compact. Other native levels remain available internally
+// for derived charts, without creating hundreds of entries in each selector.
+const MENU_PRESSURE_LEVELS = {
+ temperature:[1000,850,500,250],
+ wind_speed:[1000,500,300,200],
+ relative_humidity:[1000,700,300],
+ geopotential_height:[500,300,200]
+};
+const MENU_HEIGHT_LEVELS = [50,100,200,300];
+function menuField(key){
+ const pressure=key.match(/^(temperature|wind_speed|relative_humidity|geopotential_height)_(\d+)hPa$/);
+ if(pressure)return MENU_PRESSURE_LEVELS[pressure[1]].includes(Number(pressure[2]));
+ const height=key.match(/^(temperature|wind_speed)_(\d+)m$/);
+ if(height)return key==='temperature_2m'||key==='wind_speed_10m'||MENU_HEIGHT_LEVELS.includes(Number(height[2]));
+ if(/^cloud_cover_\d+(hPa|m)$/.test(key))return key==='cloud_cover_2m';
+ if(/^vertical_motion_\d+hPa$/.test(key))return key===VERTICAL_MOTION;
+ return true;
+}
 const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Ensemble probabilities','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Marine','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
@@ -125,7 +142,7 @@ export function describeVariable(key,OM){
   sea_water_salinity:{name:'Sea-water salinity',unit:'g/kg',decimals:1,stops:[0,10,20,25,30,32,34,36,40],colors:['#eef8e8','#c6e6bc','#90d2bd','#57b9c6','#3193bd','#3472ad','#4e5498','#783c88','#9a2a69'],note:'Native sea-water salinity in g/kg. Missing land cells remain blank.'}
  }[key];
  if(additional)return {key,group:variableGroup(key),...additional};
- if(/^cloud_cover_\d+(hPa|m)$/.test(key))return {key,name:key.match(/\d+/)[0]+(key.endsWith('hPa')?' hPa':' m')+' cloud cover',group:'Cloud & visibility',unit:'%',...CLOUD_COVER_SCALE,note:'Native model cloud fraction at the stated level; pressure surfaces can lie below terrain.'};
+ if(key!=='cloud_cover_2m'&&/^cloud_cover_\d+(hPa|m)$/.test(key))return {key,name:key.match(/\d+/)[0]+(key.endsWith('hPa')?' hPa':' m')+' cloud cover',group:'Cloud & visibility',unit:'%',...CLOUD_COVER_SCALE,note:'Native model cloud fraction at the stated level; pressure surfaces can lie below terrain.'};
  if(/^vertical_motion_\d+hPa$/.test(key))return pressureMotionField(key);
  if(key==='snowfall_probability')return {
   key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
@@ -183,7 +200,7 @@ export function describeVariable(key,OM){
  return {key,name,group:variableGroup(key),unit:unit??raw.unit,note,stops,colors:raw.colors.map(hex)};
 }
 export function availableFields(fields,metas){
- return fields.filter(f=>!f.overlayOnly&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
+ return fields.filter(f=>!f.overlayOnly&&menuField(f.key)&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
   const group=GROUPS.indexOf(variableGroup(a.key))-GROUPS.indexOf(variableGroup(b.key));
   if(group)return group;
   const ap=a.key.match(/_(\d+)hPa$/),bp=b.key.match(/_(\d+)hPa$/);
