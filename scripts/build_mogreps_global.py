@@ -5,7 +5,8 @@ Every range is pinned to its source ETag; pressure flags and missing members
 are respected before calculating statistics. No credentials are needed.
 """
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+import multiprocessing
 from datetime import datetime, timedelta, timezone
 import gzip
 import itertools
@@ -215,10 +216,17 @@ def metadata(manifest, records):
                 grid=GRID, coverage=[GRID['lonMin'], GRID['latMin'], 36.140625, 74.15625],
                 generated_at=iso(datetime.now(timezone.utc)), threshold_mm_per_hour=.1,
                 source='Met Office MOGREPS-G native ensemble members', source_url='https://registry.opendata.aws/met-office-global-ensemble/',
-                licence='© Crown copyright 2026, Met Office; CC BY-SA 4.0',
+                licence='Â© Crown copyright 2026, Met Office; CC BY-SA 4.0',
                 method='All 18 same-cycle members; arithmetic mean, population standard deviation (ddof=0), raw member fractions at >=0.1 mm/h over the preceding 3 hours. Missing/below-ground cells stay missing. No time-lagging or smoothing.',
                 grid_processing='Native latitude/longitude cells cropped without interpolation; rows 644:876, columns 404:769',
                 anomaly_reference=dict(dataset='NOAA NCEP/NCAR Reanalysis 1', period='1991-2020', statistic='daily mean', level_hPa=500, units='m', interpolation='Bilinear climatology to native forecast cells; Feb 29 averages Feb 28 and Mar 1'))
+
+
+def initialize_frame_worker(index_root):
+    global INDEX
+    import sys
+    INDEX = index_root
+    sys.modules['build_mogreps_global'] = sys.modules[__name__]
 
 
 def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison_frames=24):
@@ -238,7 +246,10 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison
         raise ValueError('Invalid lead')
     records, failures = {}, []
     comparison_budget = comparison_frames if hours is None else len(requested)
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    # HDF5 serializes threads globally; independent processes let remote metadata
+    # reads overlap without one frame holding up every other forecast hour.
+    with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context('spawn'),
+                             initializer=initialize_frame_worker, initargs=(INDEX,)) as pool:
         jobs = {}
         for h in manifest['leads']:
             path = folder / ((run+timedelta(hours=h)).strftime('%Y-%m-%dT%H%M')+'.om')
@@ -251,6 +262,7 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison
                     continue
                 comparison_budget -= int(include_comparison)
                 jobs[pool.submit(write_frame, manifest, h, path, range_workers, include_comparison)] = h
+        print(f'MOGREPS-G: converting {len(jobs)} frames with {workers} independent workers', flush=True)
         for i, job in enumerate(as_completed(jobs), 1):
             h = jobs[job]
             try:

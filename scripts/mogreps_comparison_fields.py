@@ -44,7 +44,7 @@ def pressure_members(manifest, lead, name, unit, levels, workers, crop):
         raise ValueError('Missing source range support')
     etag = response.headers['ETag']
     size = int(response.headers['Content-Range'].split('/')[-1])
-    with fsspec.open(SOURCE + key, 'rb', block_size=1048576, cache_type='blockcache', headers={'If-Match': etag}) as remote:
+    with fsspec.open(SOURCE + key, 'rb', block_size=16384, cache_type='blockcache', headers={'If-Match': etag}) as remote:
         with h5py.File(remote, 'r') as f:
             if int(f['forecast_reference_time'][()]) != manifest['run'] or int(f['time'][()]) != int(valid.timestamp()):
                 raise ValueError('Mismatched MOGREPS cycle/time')
