@@ -73,6 +73,8 @@ test('map native crop, metadata, all published fields, and exact periods load wi
  assert.equal(fieldDataURL(meta,'precipitation_mean',time(0)),null);
  assert.equal(fieldIntervalHours(meta,'snowfall_probability',time(3)),3);
  assert.equal(sourceVariable(meta,'pressure_msl'),'pressure_msl_mean');
+ assert.ok(fieldDataURL(meta,'pressure_msl',time(3)),'Pressure overlay follows the published ensemble-mean field times');
+ assert.equal(fieldDataURL(meta,'pressure_msl',time(4)),null);
  assert.equal(settings.colorScales.temperature_500hPa_mean.unit,'°C');
  assert.equal(settings.colorScales.precipitation_mean.unit,'mm/h');
  await assert.rejects(loadSpatialRun(MOGREPS_GLOBAL,time(0),async()=>({...fixture,member_count:17})),/Unverified/);

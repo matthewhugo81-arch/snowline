@@ -39,6 +39,7 @@ const gfsForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid'
 const noInitialGust=new Set(['ecmwf_ifs','ecmwf_ifs025','dwd_icon','dwd_icon_eu','meteofrance_arpege_europe','meteofrance_arome_france0025']);
 const aromeForecastOnly=new Set(['cloud_cover','cloud_cover_low','cloud_cover_mid','cloud_cover_high']);
 function fieldPublishedAt(source,key,time){
+ if(key==='pressure_msl'&&source.variables?.includes('pressure_msl_mean')&&!source.variables.includes(key))key='pressure_msl_mean';
  if(source.variable_valid_times){const times=source.variable_valid_times[key];return Array.isArray(times)&&times.some(t=>Date.parse(t)===Date.parse(time));}
  const lead=(Date.parse(time)-Date.parse(source.reference_time))/3600000;
  if(key==='precipitation'&&!precipitationExistsAt(source.domain,lead))return false;
