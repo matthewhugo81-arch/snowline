@@ -17,7 +17,7 @@ test('one map UKV choice does not duplicate location-chart model averages or inv
  assert.equal(MODELS.filter(m=>m.id.startsWith(UKV)).length,1);
  assert.ok(!forecastURL({latitude:54,longitude:-2},MODELS.find(m=>m.id===UKV)).includes('_nowcast'));
 });
-test('both UKV choices use real domain/cycle URLs and compare matching valid times',async()=>{
+test('both UKV choices use real domain/cycle URLs and preserve their available valid times',async()=>{
  const main=make(0,54),latest=make(2,12),base=SPATIAL_BASE+UKV+'/';
  const load=async url=>{if(url===base+'latest.json')return latest;if(url===base+ukvRunPath(main.reference_time)+'meta.json')return main;throw Object.assign(Error('Absent'),{status:404});};
  const a=await loadSpatialModel(UKV,load),b=await loadSpatialModel(UKV_NOWCAST,load);
@@ -28,7 +28,7 @@ test('both UKV choices use real domain/cycle URLs and compare matching valid tim
  assert.equal(fieldDataURL(b,'precipitation',time),base+'2026/10/10/0200Z/2026-10-10T1400.om');
  assert.equal(fieldDataURL(b,'precipitation','2026-10-10T15:00Z'),null);
  const state={model:UKV,modelB:UKV_NOWCAST,field:'precipitation',fieldB:'temperature_2m',compare:true,metas:{[UKV]:a,[UKV_NOWCAST]:b}};
- assert.deepEqual(panelModelIds(state),[UKV,UKV_NOWCAST]);assert.equal(panelForecastTimes(state).length,13);
+ assert.deepEqual(panelModelIds(state),[UKV,UKV_NOWCAST]);assert.equal(panelForecastTimes(state).length,54);
  state.compare=false;assert.equal(panelForecastTimes(state).length,54);
  assert.match(ukvCoverageText(a,'main'),/main cycle/);assert.match(ukvCoverageText(b,'nowcast'),/nowcast cycle/);
 });

@@ -36,16 +36,26 @@ test('every short-range model keeps native detail even after a six-hour global s
  assert.equal(forecastInterval(models('ukmo_uk_deterministic_2km','gfs_global'),'6').hours,0);
 });
 
-test('comparison uses only supplied common hours and never fills gaps in coarser data',()=>{
+test('comparison retains each panel at the chosen interval without filling gaps in its data',()=>{
  const sixHourly=hourly.filter((_,i)=>i%6===0);
  const meta=times=>({reference_time:time(0),valid_times:times,variables:['temperature_2m']});
  const state={compare:true,model:'gfs_global',field:'temperature_2m',modelB:'ncep_gefs05',fieldB:'temperature_2m',metas:{gfs_global:meta(hourly),ncep_gefs05:meta(sixHourly)}};
- const common=panelForecastTimes(state);
- assert.deepEqual(intervalForecastTimes(common,3),sixHourly);
- assert.deepEqual(intervalForecastTimes(common,0),sixHourly);
+ assert.deepEqual(panelForecastTimes(state,3),Array.from({length:17},(_,i)=>time(i*3)));
+ assert.deepEqual(panelForecastTimes(state,0),hourly);
+ assert.deepEqual(state.metas.ncep_gefs05.valid_times,sixHourly,'Coarse panel metadata keeps its own native steps');
  const missing=hourly.filter((_,i)=>i!==9);
  assert.equal(intervalForecastTimes(missing,3).includes(time(9)),false);
  assert.deepEqual(intervalForecastTimes([],3),[]);
+});
+
+test('off-cycle coarse panel times survive beside an hourly model at a selected interval',()=>{
+ const meta=times=>({reference_time:time(0),valid_times:times,variables:['temperature_2m']});
+ const offCycle=[1,7,13,19].map(time);
+ const state={compare:true,model:'hourly',field:'temperature_2m',modelB:'coarse',fieldB:'temperature_2m',metas:{hourly:meta(hourly.slice(0,25)),coarse:meta(offCycle)}};
+ assert.deepEqual(panelForecastTimes(state,3),[0,1,3,6,7,9,12,13,15,18,19,21,24].map(time));
+ assert.deepEqual(panelForecastTimes(state,6),[0,1,6,7,12,13,18,19,24].map(time));
+ state.compare=false;
+ assert.deepEqual(panelForecastTimes(state,6),[0,6,12,18,24].map(time));
 });
 
 test('UTC steps are independent of run cycle, while short and off-cycle feeds remain usable',()=>{

@@ -1,6 +1,5 @@
 import {hasFieldTime} from './map-sources.js?v=20261019-mogreps-uk';
-import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261019-mogreps-uk';
+import {intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 
 export function createPanelOverlays(){
  return Object.fromEntries(['a','b','c'].map(key=>[key,{contours:false,isobars:true,grid:false}]));
@@ -16,21 +15,17 @@ export function panelSelections(state){
 export function panelModelIds(state){
  return [...new Set(panelSelections(state).map(({model})=>model))];
 }
-export function fullUKVComparison(state){
- const ids=panelModelIds(state);
- return state.compare&&ids.length>1&&ids.every(id=>id===UKV||id===UKV_PREVIOUS);
+function orderedTimes(times){
+ const valid=times.filter(time=>Number.isFinite(Date.parse(time)));
+ return [...new Map(valid.map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
 }
-// The completed UKV fallback must remain usable while the latest arrives.
-// Other comparisons retain their matching-time behaviour. Missing UKV slots
-// are explicitly blanked by the renderer, never filled from another cycle.
-export function panelForecastTimes(state){
- const choices=panelSelections(state);
- if(!choices.length)return [];
- const available=choices.map(({model,field})=>{
+// A shorter or coarser panel must not truncate forecasts in the other panels.
+// Apply viewing intervals per selected field before merging, so coarse/off-cycle
+// feeds keep their supplied times. The renderer blanks missing panel slots.
+export function panelForecastTimes(state,hours=0){
+ return orderedTimes(panelSelections(state).flatMap(({model,field})=>{
   const meta=state.metas[model];
-  return (meta?.valid_times??[]).filter(time=>hasFieldTime(meta,field,time));
- });
- const common=available.slice(1).map(times=>new Set(times.map(time=>Date.parse(time))));
- const times=(fullUKVComparison(state)?available.flat():available[0].filter(time=>common.every(set=>set.has(Date.parse(time))))).filter(time=>Number.isFinite(Date.parse(time)));
- return [...new Map(times.map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
+  const available=orderedTimes((meta?.valid_times??[]).filter(time=>hasFieldTime(meta,field,time)));
+  return intervalForecastTimes(available,hours);
+ }));
 }

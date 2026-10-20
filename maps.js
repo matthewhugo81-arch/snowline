@@ -24,12 +24,12 @@ import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,fullUKVComparison,createPanelOverlays} from './map-panels.js?v=20261019-mogreps-uk';
-import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-panel-times';
+import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261019-ensemble-extra4';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261019-mogreps-uk';
-import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261019-mogreps-uk';
+import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-panel-times';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261019-mogreps-uk';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
@@ -359,7 +359,7 @@ async function prepareSelection(index,valid=()=>true){
  if(!valid()||metas!==state.metas||choices.some(({key,model,field})=>panels[key].restyling||model!==panelSelection(state,key).model||field!==panelSelection(state,key).field))return null;
  const prepared=await Promise.all(choices.map(async({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
-  if(!url)return fullUKVComparison(state)?{panel,cache,frame:null,key,model,field,time}:null;
+  if(!url)return state.compare?{panel,cache,frame:null,key,model,field,time}:null;
   const frame=await cache.acquire(url,valid);
   return frame?{panel,cache,frame,key,model,field,time}:null;
  }));
@@ -380,7 +380,7 @@ async function loadTime(outlineSignal){
  const time=state.times[index],generation=++timeGeneration;
  const valid=()=>generation===timeGeneration&&state.times[index]===time&&state.index===index&&!mapsMoving();
  dismissLocation();requestedTime=Date.parse(time);
- // The displayed valid-time label does not advance until BOTH panels are ready.
+ // Advance the shared label only when each panel has its chart or an explicit gap.
  $('animation-status').textContent='Loading '+stamp(time)+' UTC…';
  for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
  try{
@@ -408,12 +408,13 @@ async function loadTime(outlineSignal){
   for(const {panel,cache,frame,key,model,field}of prepared){
    clearGridValues(panel);
    if(!frame){
-    cache.hide();panel.sourceId=null;panel.url=null;panel.loaded=false;panel.weatherLayer=null;panel.imageInfo=null;
+    cache.hide();panel.sourceId=null;panel.url=null;panel.loaded=false;panel.weatherLayer=null;panel.imageInfo=null;panel.outlineWarning=false;
+    if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';
     panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
     const meta=state.metas[model],end=meta.valid_times.filter(t=>hasFieldTime(meta,field,t)).at(-1);
     const pending=meta.completed===false&&end&&Date.parse(time)>Date.parse(end);
     $('panel-label-'+key).textContent=forecastLabel(model,field,time)+' · unavailable';
-    $('map-error-'+key).textContent=(pending?'Not yet published for this run.':'No forecast for this layer at the selected time.')+(end?' Latest available: '+stamp(end)+' UTC.':'')+' The other UKV run remains available.';
+    $('map-error-'+key).textContent=(pending?'Not yet published for this run.':'No forecast for this layer at the selected time.')+(end?' Latest available: '+stamp(end)+' UTC.':'')+' Other panels continue where forecasts are available.';
     $('map-error-'+key).hidden=false;
     continue;
    }
@@ -562,17 +563,15 @@ function populateVariables(){
 function refreshTimeline(){
  const models=panelModelIds(state).map(id=>MODELS.find(model=>model.id===id));
  const {hours}=forecastInterval(models,state.interval,{allowRegionalSteps:true});
- state.times=intervalForecastTimes(panelForecastTimes(state),hours);
+ state.times=panelForecastTimes(state,hours);
  $('map-forecast-interval').value=hours?String(hours):'native';
  $('map-forecast-interval').disabled=!state.times.length;
- $('forecast-interval-note').textContent=fullUKVComparison(state)
-  ?'Both UKV runs use the selected interval across their available forecast range. A panel is blank where its selected run has no forecast yet.'
-  :hours?'Only the selected forecast hours load. Coarser model steps are retained.':'Every available forecast hour loads; longer forecasts take more time.';
+ $('forecast-interval-note').textContent=(hours?'Only the selected forecast hours load. Coarser model steps are retained.':'Every available forecast hour loads; longer forecasts take more time.')+(state.compare?' All available panel times are included; a panel is blank where it has no forecast.':'');
  if(!state.times.length){
   refreshStartingTime();
   $('map-time').disabled=true;$('play-map').disabled=true;$('previous-time').disabled=true;$('next-time').disabled=true;
   $('map-time').max=0;$('map-time').value=0;$('range-start').textContent='';$('range-end').textContent='';
-  throw new Error(state.compare?'The selected panels have no common forecast times. Choose another model or layer.':'The selected layer has no available forecast times for this model run.');
+  throw new Error(state.compare?'The selected panels have no available forecast times. Choose another model or layer.':'The selected layer has no available forecast times for this model run.');
  }
  $('map-time').disabled=false;$('play-map').disabled=false;
  state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);

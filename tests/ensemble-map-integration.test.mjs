@@ -43,12 +43,14 @@ test('probability periods follow changing native steps and preserve the first co
  assert.equal(fieldIntervalHours({...fixture,valid_times:fixture.valid_times.slice(1)},probability,t(3)),3);
 });
 
-test('ensemble comparisons intersect native times across cycles without extending horizons',()=>{
+test('ensemble comparisons retain native times across cycles without extending either model horizon',()=>{
  const state={model:ensembles[0],modelB:ensembles[2],field:probability,fieldB:probability,compare:true,metas:{
   [ensembles[0]]:fixture,
   [ensembles[2]]:{...fixture,reference_time:t(6),valid_times:[6,12,18,24,30].map(t)}
  }};
- assert.deepEqual(panelForecastTimes(state),[12,18,24].map(t));
+ assert.deepEqual(panelForecastTimes(state),[3,6,9,12,18,24,30].map(t));
+ assert.equal(hasFieldTime(state.metas[ensembles[0]],probability,t(30)),false);
+ assert.equal(hasFieldTime(state.metas[ensembles[2]],probability,t(3)),false);
  assert.equal(fieldIntervalHours(state.metas[ensembles[0]],probability,t(12)),3);
  assert.equal(fieldIntervalHours(state.metas[ensembles[2]],probability,t(12)),6);
  state.compare=false;assert.deepEqual(panelForecastTimes(state),[3,6,9,12,18,24].map(t));

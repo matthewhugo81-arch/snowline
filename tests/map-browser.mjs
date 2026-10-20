@@ -64,7 +64,7 @@ try{
    window.setInterval=(callback,delay,...args)=>{if(delay===60000)window.fixtureRefreshers.push(callback);return original(callback,delay,...args);};
   });
   await page.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
-  await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'maps.js'),'utf8'))+'\nwindow.fixturePanel=panels.a;'}));
+  await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'maps.js'),'utf8'))+'\nwindow.fixturePanel=panels.a;window.fixturePanels=panels;'}));
   await page.route('**/map-tile-cache.js*',async route=>{
    const code=await readFile(resolve(root,'map-tile-cache.js'),'utf8');
    // Exercise restoration from disk, not only the hot memory cache.
@@ -84,8 +84,9 @@ try{
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
    let gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','relative_humidity_850hPa','geopotential_height_500hPa',...['300','400'].flatMap(level=>['wind_u_component_'+level+'hPa','wind_v_component_'+level+'hPa'])]}:null;
    if(gfs&&livePhase&& !url.endsWith('/latest.json'))gfs={...gfs,...fixture(12,livePhase===1?6:livePhase===2?12:18),variables:gfs.variables,completed:false};
-   const ifs=domain==='ecmwf_ifs'?{...fixture(0,48),variables:['pressure_msl','temperature_2m','temperature_2m_max','temperature_2m_min',...['temperature','relative_humidity','geopotential_height','wind_u_component','wind_v_component'].flatMap(kind=>[1000,925,850,700,500,400,300,250,200,100,50,10].map(level=>kind+'_'+level+'hPa'))]}:null;
-   const meta=(domain==='dwd_icon'?fixture(0,48):null)??ifs??gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
+   const ifs=domain==='ecmwf_ifs'?{...fixture(0,process.env.MAP_THREE_PANELS_ONLY?24:48),variables:['pressure_msl','temperature_2m','temperature_2m_max','temperature_2m_min',...['temperature','relative_humidity','geopotential_height','wind_u_component','wind_v_component'].flatMap(kind=>[1000,925,850,700,500,400,300,250,200,100,50,10].map(level=>kind+'_'+level+'hPa'))]}:null;
+   if(ifs&&process.env.MAP_THREE_PANELS_ONLY)ifs.valid_times=ifs.valid_times.filter((_,i)=>i%3===0);
+   const meta=(domain==='dwd_icon'?fixture(0,process.env.MAP_THREE_PANELS_ONLY?60:48):null)??ifs??gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
   await page.goto(origin+'/maps.html'+(process.env.MAP_THREE_PANELS_ONLY?'?time=2026-10-10T00:00:00Z':''));
@@ -154,14 +155,67 @@ try{
     await page.locator('#toggle-map-sidebar').click();await ready();
    }
    else assert.ok(boxes[2].y>boxes[1].y);
+   // Shorter and coarser model feeds must not remove another panel's hours.
+   // GFS supplies 0–48 hourly, IFS 0–24 every three hours, ICON 0–60 hourly.
+   const validTime=hour=>new Date(Date.UTC(2026,9,10,hour)).toISOString();
+   const allTimes=()=>page.locator('#map-start-time option').evaluateAll(opts=>opts.map(o=>o.value));
+   const selectTime=async hour=>{await page.locator('#map-start-time').selectOption(validTime(hour));await ready();};
+   const panelState=()=>page.evaluate(()=>Object.fromEntries(['a','b','c'].map(key=>{
+    const panel=window.fixturePanels[key];
+    return [key,{time:panel.displayedTime,loaded:panel.loaded,url:panel.url,current:!!panel.frameCache?.current,image:!!panel.imageInfo,error:!document.getElementById('map-error-'+key).hidden}];
+   })));
+   await page.locator('#map-forecast-interval').selectOption('native');await ready();
+   assert.deepEqual(await allTimes(),Array.from({length:61},(_,i)=>validTime(i)),'Three-panel timeline retains the longest selected forecast');
+   assert.equal(await page.locator('#preload-status').getAttribute('data-total'),'119','Preloading counts only the 49 + 9 + 61 supplied frames');
+   await selectTime(12);
+   const previousIFSLayers=await page.evaluate(()=>window.fixturePanels.b.frameCache.current.layers);
+   await selectTime(36);
+   let shown=await panelState();
+   for(const panel of Object.values(shown))assert.equal(panel.time,validTime(36),'Every panel identifies the requested valid time');
+   assert.equal(shown.a.loaded,true);assert.equal(shown.c.loaded,true);
+   assert.deepEqual(shown.b,{time:validTime(36),loaded:false,url:null,current:false,image:false,error:true},'An expired panel is cleared while the other forecasts continue');
+   assert.ok(await page.evaluate(ids=>{
+    const layers=window.fixturePanels.b.map.getStyle().layers;
+    const background=layers.findIndex(layer=>layer.type==='background');
+    return ids.every(id=>{const index=layers.findIndex(layer=>layer.id===id);return index<0||index<background;});
+   },previousIFSLayers),'Old IFS imagery and overlays are removed or covered by the opaque basemap');
+   assert.equal((await page.locator('#map-error-b').textContent()).includes('UKV'),false,'Missing data identifies the selected layer without a UKV-only message');
+   await selectTime(12);
+   shown=await panelState();assert.equal(shown.b.loaded,true);assert.equal(shown.b.error,false);assert.equal(shown.b.current,true);
+   await selectTime(13);
+   shown=await panelState();assert.equal(shown.a.loaded,true);assert.equal(shown.c.loaded,true);assert.equal(shown.b.loaded,false);
+   assert.equal(shown.b.url,null,'A coarse model never borrows or interpolates a neighbouring hour');
+   await selectTime(12);
+   await page.locator('#compare-maps').uncheck();await ready();
+   assert.deepEqual(await allTimes(),Array.from({length:49},(_,i)=>validTime(i)),'Single-panel mode uses the selected model alone');
+   await page.locator('#compare-maps').check();await ready();
+   assert.equal((await allTimes()).at(-1),validTime(60),'Reopening comparison restores the third model horizon');
+   await page.locator('#map-comparison-count').selectOption('2');await ready();
+   assert.deepEqual(await allTimes(),Array.from({length:49},(_,i)=>validTime(i)),'Hiding the third panel removes only its unique extra times');
+   await selectTime(48);shown=await panelState();assert.equal(shown.a.loaded,true);assert.equal(shown.b.loaded,false);
+   await page.locator('#map-comparison-count').selectOption('3');await ready();
+   await selectTime(60);shown=await panelState();
+   assert.equal(shown.a.loaded,false);assert.equal(shown.b.loaded,false);assert.equal(shown.c.loaded,true,'Panel three continues even after the first two horizons end');
+   await page.locator('#map-forecast-interval').selectOption('12');await ready();
+   assert.deepEqual(await allTimes(),[0,12,24,36,48,60].map(validTime),'Twelve-hour steps cover the full comparison horizon');
+   await selectTime(48);
+   await page.locator('#map-playback-speed').selectOption('1200');
+   if(viewport.width<=650)await page.locator('#mobile-return-map').click();
+   await page.locator('#play-map').click();
+   await page.waitForFunction(time=>window.fixturePanels.c.displayedTime===time,validTime(60));
+   assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true','Playback continues past shorter panels');
+   await page.waitForFunction(time=>window.fixturePanels.a.loaded&&window.fixturePanels.b.loaded&&window.fixturePanels.c.displayedTime===time,validTime(0));
+   await page.locator('#play-map').click();
+   assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'false');
+   if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
    await page.locator('#map-model').selectOption('ukmo_uk_deterministic_2km');await ready();
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'12','Adding UKV retains the chosen shared interval');
    assert.ok((await check12()).every(hour=>hour%12===0));
    await page.locator('#map-forecast-interval').selectOption('native');await ready();
-   const commonHours=await check12();
-   assert.ok(commonHours.some(hour=>hour%3!==0),'Hourly restores supplied common times in a mixed three-model comparison');
+   const availableHours=await check12();
+   assert.ok(availableHours.some(hour=>hour%3!==0),'Hourly restores all supplied times in a mixed three-model comparison');
    assert.deepEqual(errors,[]);
-   console.log(JSON.stringify({viewport,threePanelControlsPassed:true,twelveHourMapsAndBriefingPassed:true}));
+   console.log(JSON.stringify({viewport,threePanelControlsPassed:true,twelveHourMapsAndBriefingPassed:true,fullPanelHorizonsPassed:true,missingPanelPlaybackPassed:true}));
     continue;
    }
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
@@ -346,7 +400,7 @@ try{
    await page.evaluate(()=>window.fixtureFault=null);
    // Rapid jumps while background warming is unfinished cannot commit an old request.
    await page.locator('#map-time').evaluate(el=>{for(const value of ['20','40','6']){el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));}});
-   await bothAt('Sat 10 Oct, 13:00 UTC');
+   await bothAt('Sat 10 Oct, 12:00 UTC');
    assert.equal(await page.locator('.map-error:visible').count(),0);
    // Starting another drag supersedes a pending request before release. The
    // cancelled request cannot commit its label or overwrite the preview thumb.
@@ -361,12 +415,12 @@ try{
    assert.equal(await page.locator('.map-error:visible').count(),0);
    await page.evaluate(()=>window.fixtureDelay=80);
    await page.locator('#map-time').evaluate(el=>{el.value='6';el.dispatchEvent(new Event('change',{bubbles:true}));});
-   await bothAt('Sat 10 Oct, 13:00 UTC');
+   await bothAt('Sat 10 Oct, 12:00 UTC');
    // After a genuinely failed selected time, Retry must display that original
    // time and clear both banners, not merely warm files behind the old image.
    await page.evaluate(()=>window.fixtureFault={match:'2026-10-11T0300.om?variable=cloud_cover_high',remaining:100});
    await page.locator('#map-variable').selectOption('cloud_cover_high');
-   await page.locator('#map-time').evaluate(el=>{el.value='20';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.locator('#map-time').evaluate(el=>{el.value='21';el.dispatchEvent(new Event('change',{bubbles:true}));});
    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
    await page.locator('#retry-preload').filter({hasText:'Retry selected frame'}).waitFor({state:'visible'});
    assert.equal(await page.locator('.map-error:visible').count(),2);
@@ -405,10 +459,12 @@ try{
    await page.locator('#play-map').click();
    const loopPaused=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();await page.waitForTimeout(1000);
    assert.deepEqual(await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents(),loopPaused,'Pause still stops after wrapping');
-   // Adding initialization back in panel B must also reindex panel A's images.
+   // Instantaneous data keeps initialization available even when the other
+   // panel's interval field cannot supply that hour.
    await page.locator('#map-variable').selectOption('temperature_2m');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature'));
-   await selectTime(0);
+   firstHour=6;await selectTime(0);
+   assert.equal(await page.locator('#map-error-b').isVisible(),true,'Precipitation is explicitly unavailable at initialization');
    const initialTemperatureRequests=()=>page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&r.url.includes('/2026-10-10T0600.om?variable=temperature_2m&')).length);
    await page.locator('#map-variable-b').selectOption('temperature_2m');
    await page.waitForFunction(()=>document.getElementById('map-time').max==='54');
@@ -462,14 +518,17 @@ try{
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Freezing level')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'3');
    assert.equal(await page.locator('#map-forecast-interval').isDisabled(),false);
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'15','Default loads 16 three-hour steps instead of 48 hourly steps');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'16','Instantaneous companion retains initialization beside the 16 interval-field frames');
+   assert.equal(await page.locator('#legend-interval-a').textContent(),'Period unavailable','Initialization has no snowfall interval');
+   await page.locator('#map-start-time').selectOption('2026-10-10T03:00:00.000Z');
+   await bothAt('Sat 10 Oct, 03:00 UTC');
    assert.equal(await page.locator('#legend-interval-a').textContent(),'Mean rate over preceding 1 h','Viewing interval must not alter the snow averaging period');
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
-   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'32');
+   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'33');
    const defaultGFSHours=await page.evaluate(()=>window.fixtureRequests.filter(r=>r.url.startsWith('om://https://')&&/\/ncep_gfs0(13|25)\//.test(r.url)).map(r=>Number(r.url.match(/T(\d{2})00\.om/)?.[1])));
    assert.ok(defaultGFSHours.length>0);
    assert.ok(defaultGFSHours.every(hour=>Number.isInteger(hour)&&hour%3===0),'Hourly gaps are not downloaded in the background');
-   await page.locator('#map-time').evaluate(el=>{el.value='14';el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.locator('#map-time').evaluate(el=>{el.value='15';el.dispatchEvent(new Event('change',{bubbles:true}));});
    await bothAt('Sun 11 Oct, 21:00 UTC');
    await page.locator('#play-map').click();
    await bothAt('Mon 12 Oct, 00:00 UTC');
@@ -485,35 +544,37 @@ try{
    };
    await setInterval('6');
    assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'false');
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'7');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'8');
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
-   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'16');
+   assert.equal(await page.locator('#preload-status').getAttribute('data-loaded'),'17');
+   await page.locator('#map-start-time').selectOption('2026-10-10T06:00:00.000Z');
+   await bothAt('Sat 10 Oct, 06:00 UTC');
    assert.equal(await page.locator('#legend-interval-a').textContent(),'Mean rate over preceding 1 h');
    // Adding a regional panel preserves the explicitly selected shared interval.
    await page.locator('#map-model-b').selectOption(main);
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('UKV')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'6');
    assert.equal(await page.locator('#map-forecast-interval').isDisabled(),false);
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'7','Mixed comparison uses the chosen six-hour steps');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'9','Mixed comparison keeps six-hour steps through the longer UKV horizon');
    await page.locator('#map-model-b').selectOption('gfs_global');
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('GFS global')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'6');
    await page.locator('#map-variable-b').selectOption('freezing_level_height');
    await setInterval('native');
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'47');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'48');
    await page.locator('#map-a .maplibregl-ctrl-zoom-out').click();
    await page.locator('#map-b .maplibregl-ctrl-zoom-in').click();
    await page.evaluate(()=>window.fixtureDelay=180);
    await page.locator('#map-a canvas.maplibregl-canvas').press('ArrowRight');
    await page.locator('#map-time').evaluate(el=>{el.value='30';el.dispatchEvent(new Event('change',{bubbles:true}));});
-   await bothAt('Sun 11 Oct, 07:00 UTC');
+   await bothAt('Sun 11 Oct, 06:00 UTC');
    await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
    await page.evaluate(()=>window.fixtureDelay=80);
    assert.equal(await page.locator('.map-error:visible').count(),0);
    assert.notEqual(await page.locator('#zoom-a').textContent(),await page.locator('#zoom-b').textContent());
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
    const cachedGFSRequests=await page.evaluate(()=>window.fixtureRequests.length);
-   for(const [index,time]of [[0,'Sat 10 Oct, 01:00 UTC'],[47,'Mon 12 Oct, 00:00 UTC'],[16,'Sat 10 Oct, 17:00 UTC']]){
+   for(const [index,time]of [[1,'Sat 10 Oct, 01:00 UTC'],[48,'Mon 12 Oct, 00:00 UTC'],[17,'Sat 10 Oct, 17:00 UTC']]){
     await page.locator('#map-time').evaluate((el,index)=>{el.value=index;el.dispatchEvent(new Event('change',{bubbles:true}));},String(index));
     await bothAt(time);assert.equal(await page.locator('.map-error:visible').count(),0);
    }
@@ -684,12 +745,12 @@ try{
    await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('1200Z'));
    assert.match(await page.locator('#run-update-status').textContent(),/Updating/);
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'5');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'6');
    const selectedValid=await page.locator('#map-time-label').textContent();
    await page.evaluate(()=>{window.fixtureCache=window.fixturePanel.frameCache;window.fixtureCurrent=window.fixtureCache.current;});
    livePhase=2;
    await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
-   assert.equal(await page.locator('#map-time').getAttribute('max'),'11','New forecast hours arrive without a page reload');
+   assert.equal(await page.locator('#map-time').getAttribute('max'),'12','New forecast hours arrive without a page reload');
    assert.equal(await page.locator('#map-time-label').textContent(),selectedValid,'Refreshing retains the selected valid time');
    assert.equal(await page.evaluate(()=>window.fixturePanel.frameCache===window.fixtureCache&&window.fixturePanel.frameCache.current===window.fixtureCurrent),true,'Appending hours retains the same decoded current frame and cache');
    assert.equal(await page.locator('.map-error:visible').count(),0);

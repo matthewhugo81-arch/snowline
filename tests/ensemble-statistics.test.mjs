@@ -47,7 +47,9 @@ test('MSLP mean avoids duplicate isobars; spread retains actual mean-pressure ov
  assert.equal(overlayGroups({...options,field:ensembleField('pressure_msl_spread')}).length,2);
 });
 
-test('statistics comparison uses matching forecast hours without inventing or blending frames',()=>{
+test('statistics comparison retains every supplied hour without inventing or blending frames',()=>{
  const state={model:'gefs',modelB:'ec',field:variables[0],fieldB:variables[1],compare:true,metas:{gefs:fixture,ec:{...fixture,reference_time:time(12),valid_times:[12,18,24,30].map(time)}}};
- assert.deepEqual(panelForecastTimes(state),[12,18,24].map(time));
+ assert.deepEqual(panelForecastTimes(state),[0,3,6,12,18,24,30].map(time));
+ assert.equal(fieldDataURL(state.metas.gefs,variables[0],time(30)),null);
+ assert.equal(fieldDataURL(state.metas.ec,variables[1],time(3)),null);
 });

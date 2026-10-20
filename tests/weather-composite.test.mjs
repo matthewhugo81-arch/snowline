@@ -33,7 +33,7 @@ test('composite supports same-run companion grids but rejects a different-cycle 
  assert.equal(hasFieldTime(mixed,KEY,time(1)),false);
 });
 
-test('composite and comparison timelines intersect every field, excluding analysis and missing companion hours',()=>{
+test('composite requires all components while comparison preserves other panels and later composite hours',()=>{
  const surface=meta('ncep_gfs013',['cloud_cover','precipitation','temperature_2m']);
  const pressure=meta('ncep_gfs025',['pressure_msl'],[0,2,3]);
  const complete=combineSources(surface,[pressure]);
@@ -41,7 +41,7 @@ test('composite and comparison timelines intersect every field, excluding analys
  assert.equal(hasFieldTime(complete,KEY,time(1)),false);
  assert.equal(hasFieldTime(complete,KEY,time(2)),true);
  const state={model:'gfs',field:KEY,modelB:'ukv',fieldB:'temperature_2m',compare:true,metas:{gfs:complete,ukv:meta('ukmo_uk_deterministic_2km',['temperature_2m'],[1,2])}};
- assert.deepEqual(panelForecastTimes(state),[time(2)]);
+ assert.deepEqual(panelForecastTimes(state),[time(1),time(2),time(3)]);
  assert.match(fieldDataURL(complete,KEY,time(2)),/ncep_gfs013\/2026\/10\/12\/0000Z\/2026-10-12T0200\.om$/);
  assert.equal(fieldDataURL(complete,KEY,time(1)),null);
  assert.equal(fieldIntervalHours(complete,KEY,time(2)),1,'Pressure gaps do not lengthen precipitation accumulation');
