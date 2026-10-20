@@ -27,9 +27,9 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <label>Area<select id="briefing-area"></select></label>
  <label><span id="briefing-time-heading">Starting time</span><select id="briefing-time"></select></label>
  <label>Forecast interval<select id="briefing-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option><option value="12">12 hourly</option></select></label>
- <label>Layout<select id="briefing-count"><option value="6">6 panels</option><option value="9">9 panels</option></select></label></div>
+ <label>Layout<select id="briefing-count"><option value="6">6 panels</option><option value="9">9 panels</option></select></label>
  <div class="briefing-overlays" role="group" aria-label="Briefing chart overlays"><label class="briefing-background">Map background<select id="briefing-background">${backgroundOptions}</select></label><label class="check-row"><input id="briefing-contours" type="checkbox" autocomplete="off"> Contours</label><label class="check-row"><input id="briefing-grid-values" type="checkbox" autocomplete="off"> Grid values</label></div>
- <div id="briefing-legend" class="briefing-legend" role="group" aria-label="Chart colour scale"></div></div>
+ <div id="briefing-legend" class="briefing-legend" role="group" aria-label="Chart colour scale"></div></div></div>
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
  <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html?v=20261020-run-selector">Data and map credits</a>.</p>
