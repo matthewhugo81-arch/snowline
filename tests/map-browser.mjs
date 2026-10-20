@@ -594,6 +594,21 @@ try{
    assert.equal(await page.locator('.map-error:visible').count(),0);
    const compositeLabels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
    assert.equal(compositeLabels[0].split('Valid ')[1],compositeLabels[1].split('Valid ')[1]);
+   // UKV has instantaneous fields at initialization, but its first precipitation
+   // interval ends one hour later. Explain that gap without hiding the other panel.
+   await page.locator('#map-start-time').selectOption({index:0});
+   await page.waitForFunction(()=>!document.getElementById('map-error-b').hidden&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   const initialWarning=await page.locator('#map-error-b').textContent();
+   assert.match(initialWarning,/precipitation, which is not supplied at initialization/);
+   assert.match(initialWarning,/First available:.*07:00 UTC/);
+   assert.equal(initialWarning.includes('Latest available:'),false);
+   assert.equal(await page.evaluate(()=>window.fixturePanels.a.loaded),true);
+   assert.equal(await page.evaluate(()=>window.fixturePanels.b.loaded),false);
+   assert.equal(await page.locator('#map-error-a').isVisible(),false);
+   await page.locator('#map-start-time').selectOption({index:1});
+   await page.waitForFunction(()=>window.fixturePanels.b.loaded&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-error-b').isVisible(),false);
+   assert.match(await page.locator('#legend-interval-b').textContent(),/Mean rate over preceding 1 h/);
    const legendLayout=await page.evaluate(()=>{
     const bounds=id=>{const r=document.getElementById(id).getBoundingClientRect();return {height:r.height,bottom:r.bottom,top:r.top};};
     const legend=document.getElementById('legend-bands-b').closest('.layer-legend').getBoundingClientRect();

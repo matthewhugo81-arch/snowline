@@ -442,10 +442,14 @@ async function loadTime(outlineSignal){
     cache.hide();panel.sourceId=null;panel.url=null;panel.loaded=false;panel.weatherLayer=null;panel.imageInfo=null;panel.outlineWarning=false;
     if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';
     panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
-    const meta=state.metas[model],end=meta.valid_times.filter(t=>hasFieldTime(meta,field,t)).at(-1);
+    const meta=state.metas[model],available=meta.valid_times.filter(t=>hasFieldTime(meta,field,t)),first=available[0],end=available.at(-1);
+    const beforeFirst=first&&Date.parse(time)<Date.parse(first);
     const pending=meta.completed===false&&end&&Date.parse(time)>Date.parse(end);
+    const initialPrecipitation=field===WEATHER_COMPOSITE&&Date.parse(time)===Date.parse(meta.reference_time)&&
+     hasFieldTime(meta,'cloud_cover',time)&&hasFieldTime(meta,'pressure_msl',time)&&!hasFieldTime(meta,'precipitation',time);
     $('panel-label-'+key).textContent=forecastLabel(model,field,time)+' · unavailable';
-    $('map-error-'+key).textContent=(pending?'Not yet published for this run.':'No forecast for this layer at the selected time.')+(end?' Latest available: '+stamp(end)+' UTC.':'')+' Other panels continue where forecasts are available.';
+    $('map-error-'+key).textContent=(initialPrecipitation?'This combined chart needs precipitation, which is not supplied at initialization.':pending?'Not yet published for this run.':'No forecast for this layer at the selected time.')+
+     (beforeFirst?' First available: '+stamp(first)+' UTC.':end?' Latest available: '+stamp(end)+' UTC.':'')+' Other panels continue where forecasts are available.';
     $('map-error-'+key).hidden=false;
     continue;
    }
