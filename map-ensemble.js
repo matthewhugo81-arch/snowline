@@ -1,6 +1,6 @@
 import {JET_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
-import {extraEnsembleField} from './map-ensemble-extra.js?v=20261020-comparison-feeds';
-import {MOGREPS_GLOBAL_DOMAIN} from './map-mogreps-global.js?v=20261020-comparison-feeds';
+import {extraEnsembleField} from './map-ensemble-extra.js?v=20261020-native-levels';
+import {MOGREPS_GLOBAL_DOMAIN} from './map-mogreps-global.js?v=20261020-native-levels';
 // Same native global grids as the official GEFS/IFS mean and SD GRIB products.
 export const ENSEMBLE_DOMAINS = [
  {value:'snowline_gefs_ensemble',label:'GEFS mean & spread',grid:{type:'regular',nx:720,ny:361,latMin:-90,lonMin:-180,dx:.5,dy:.5,zoom:1},time_interval:'3_hourly',model_interval:'6_hourly'},

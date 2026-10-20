@@ -95,3 +95,24 @@ test('previous-run comparison requires this complete chart in each distinct init
  runs[1]={...runs[1],variables:runs[1].variables.filter(v=>v!=='vertical_velocity_700hPa')};
  assert.ok(!previousRunPresets(runs,3,fields).some(p=>p.field===VERTICAL_MOTION));
 });
+
+
+test('additional pressure levels use their own density and require paired same-source temperature',()=>{
+ const m={domain:'ncep_gfs025',variables:['vertical_velocity_500hPa','temperature_500hPa'],reference_time:reference,valid_times:[time]};
+ assert.equal(sourceVariable(m,'vertical_motion_500hPa'),'omega_500hPa_from_w');
+ const rule=verticalMotionRules.find(r=>r.pattern.test('omega_500hPa_from_w'));
+ assert.deepEqual(rule.getSourceVars(),m.variables);
+ const result=rule.process(new Float32Array([.1,NaN]),new Float32Array([0,0]));
+ assert.ok(Math.abs(result.values[0]-(-6.253451995860212))<1e-5);
+ assert.ok(Number.isNaN(result.values[1]));
+ assert.equal(sourceVariable({...m,variables:['vertical_velocity_500hPa']},'vertical_motion_500hPa'),null);
+ assert.equal(sourceVariable({...m,domain:'unknown'},'vertical_motion_500hPa'),null);
+ assert.equal(sourceVariable({...m,domain:'jma_gsm'},'vertical_motion_500hPa'),'omega_500hPa_from_pressure');
+ const fields=[],settings={colorScales:{}};extendCatalogue(fields,[m],OM,settings);
+ const field=availableFields(fields,[m]).find(f=>f.key==='vertical_motion_500hPa');
+ assert.equal(field.unit,'0.1 Pa/s');assert.equal(field.name,'500 hPa vertical motion');
+ assert.ok(!field.legendNote.includes('700'));
+ assert.ok(settings.colorScales.omega_500hPa_from_w);
+ const split=combineSources({...m,variables:['vertical_velocity_500hPa']},[{...m,variables:['temperature_500hPa']}]);
+ assert.equal(sourceVariable(split,'vertical_motion_500hPa'),null);
+});

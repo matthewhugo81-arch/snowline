@@ -1,14 +1,14 @@
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
-import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-comparison-feeds';
-import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261020-comparison-feeds';
+import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
+import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {isJetWind,JET_WIND_SCALE,is850Temperature,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261014-interaction-audit';
-import {VERTICAL_MOTION,verticalMotionVariable,verticalMotionField} from './map-vertical-motion.js?v=20261020-comparison-feeds';
+import {VERTICAL_MOTION,pressureMotionVariable,pressureMotionField} from './map-vertical-motion.js?v=20261020-native-levels';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
@@ -37,7 +37,7 @@ export function sourceVariable(meta,key){
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
- if(key===VERTICAL_MOTION)return verticalMotionVariable(meta);
+ if(/^vertical_motion_\d+hPa$/.test(key))return pressureMotionVariable(meta,key);
  if(key===NATIVE_PRECIPITATION_TYPE)return typeMethod(meta)==='native'?NATIVE_TYPE_SOURCE:null;
  if(key===PRECIPITATION_TYPE)return canDerivePrecipitationType(meta)?PRECIPITATION_TYPE_SOURCE:null;
  if(DIAGNOSTIC_KEYS.includes(key))return diagnosticVariable(meta,key);
@@ -55,12 +55,13 @@ export function sourceVariable(meta,key){
  return vars.includes(key)?key:null;
 }
 export function canonicalVariable(key){
+ if(/^vertical_velocity_\d+hPa$/.test(key))return key.replace('vertical_velocity_','vertical_motion_');
  if(/^wind_[uv]_component_/.test(key))return key.replace(/^wind_[uv]_component_/,'wind_speed_');
  if(key.startsWith('wind_direction_'))return key.replace('wind_direction_','wind_speed_');
  return key;
 }
 export function variableGroup(key){
- if(key===VERTICAL_MOTION)return 'Derived diagnostics';
+ if(/^vertical_motion_\d+hPa$/.test(key))return 'Derived diagnostics';
  if(isTypeField(key)||key===THETA_SYMBOLS||key==='snowfall_probability')return 'Winter Analysis';
  if(accumulationHours(key))return 'Accumulated precipitation';
  if(key===WEATHER_COMPOSITE)return 'Combined weather';
@@ -81,6 +82,8 @@ export function variableGroup(key){
 const hex=rgba=>'#'+rgba.slice(0,3).map(n=>Math.round(n).toString(16).padStart(2,'0')).join('')+Math.round((rgba[3]??1)*255).toString(16).padStart(2,'0');
 const plain=key=>key.replace(/_/g,' ').replace(/(\d)(cm|m)\b/g,'$1 $2').replace(/\bto\b/g,'–').replace(/^./,s=>s.toUpperCase());
 const extras={
+ latent_heat_flux:['Surface latent heat flux','latent_heat_flux','Native surface latent heat flux in W/m², over the model reporting interval.'],
+ sensible_heat_flux:['Surface sensible heat flux','sensible_heat_flux','Native surface sensible heat flux in W/m², over the model reporting interval.'],
  convective_cloud_base:['Convective cloud base','cloud_base','Native convective cloud-base height in metres.'],
  convective_cloud_top:['Convective cloud top','convective_cloud_top','Native convective cloud-top height in metres.'],
  sea_surface_temperature:['Sea-surface temperature','temperature','Native model sea-surface temperature, in °C.'],
@@ -109,7 +112,7 @@ const extras={
 };
 export function describeVariable(key,OM){
  if(/^cloud_cover_\d+(hPa|m)$/.test(key))return {key,name:key.match(/\d+/)[0]+(key.endsWith('hPa')?' hPa':' m')+' cloud cover',group:'Cloud & visibility',unit:'%',...CLOUD_COVER_SCALE,note:'Native model cloud fraction at the stated level; pressure surfaces can lie below terrain.'};
- if(key===VERTICAL_MOTION)return verticalMotionField();
+ if(/^vertical_motion_\d+hPa$/.test(key))return pressureMotionField(key);
  if(key==='snowfall_probability')return {
   key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
   stops:[0,10,25,50,75,90,100],colors:['#ffffff','#d9f0ff','#8fc8f5','#5879db','#7652bd','#a63498','#720c68'],

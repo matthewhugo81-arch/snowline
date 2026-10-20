@@ -1,7 +1,8 @@
 // Match the reference chart: pressure velocity in 0.1 Pa/s (microbar/s).
 // Negative = ascent (red); positive = descent (blue). JMA's spatial arrays
 // retain omega in Pa/s; the other five feeds store geometric w in m/s.
-import {verifiedDirectVertical,DIRECT_VERTICAL_DOMAINS} from './map-direct-vertical.js?v=20261020-comparison-feeds';
+import {verifiedDirectVertical,DIRECT_VERTICAL_DOMAINS} from './map-direct-vertical.js?v=20261020-native-levels';
+export const VERTICAL_LEVELS=[1000,975,950,925,900,875,850,825,800,775,750,725,700,675,650,625,600,575,550,525,500,475,450,425,400,375,350,325,300,275,250,225,200,175,150,125,100,70,50,40,30,20,15,10];
 export const VERTICAL_MOTION='vertical_motion_700hPa';
 export const VERTICAL_DOMAINS=Object.freeze(['ncep_gfs025','ecmwf_ifs025','ecmwf_aifs025_single','ncep_aigfs025','ukmo_global_deterministic_10km','jma_gsm']);
 export const HEIGHT_700='geopotential_height_700hPa';
@@ -17,6 +18,22 @@ export function verticalMotionVariable(meta){
  const inputs=verticalMotionInputs(meta?.domain);
  return inputs?.every(key=>meta.variables?.includes(key))?(meta.domain==='jma_gsm'?'omega_700hPa_from_pressure':'omega_700hPa_from_w'):null;
 }
+export function pressureMotionVariable(meta,key){
+ if(key===VERTICAL_MOTION)return verticalMotionVariable(meta);
+ const level=Number(key.match(/^vertical_motion_(\d+)hPa$/)?.[1]);
+ if(!VERTICAL_LEVELS.includes(level)||!VERTICAL_DOMAINS.includes(meta?.domain))return null;
+ return ['vertical_velocity_'+level+'hPa','temperature_'+level+'hPa'].every(v=>meta.variables?.includes(v))
+  ?'omega_'+level+'hPa_from_'+(meta.domain==='jma_gsm'?'pressure':'w'):null;
+}
+export function pressureMotionField(key){
+ const level=Number(key.match(/^vertical_motion_(\d+)hPa$/)?.[1]);
+ if(!VERTICAL_LEVELS.includes(level))return null;
+ if(level===700)return verticalMotionField();
+ return {...verticalMotionField(),key,name:level+' hPa vertical motion',
+  contourLabel:'Pressure vertical velocity at the colour thresholds',
+  legendNote:'Red / negative = ascent · blue / positive = descent · 1 unit = 0.1 Pa/s = 1 μbar/s.',
+  note:'Pressure vertical velocity at '+level+' hPa. Geometric velocity is converted using same-source, same-time temperature and hydrostatic dry-air density; JMA supplies pressure velocity directly. Negative means ascent. Missing inputs stay missing; this pressure surface may lie below terrain.'};
+}
 export function verticalMotionField(){return {
  key:VERTICAL_MOTION,name:'700 hPa vertical motion, height & wind',group:'Derived diagnostics',unit:'0.1 Pa/s',bands:true,
  stops:[-80,-40,-20,-10,-5,-2.5,-1,1,2.5,5,10,20,40,80],
@@ -26,23 +43,23 @@ export function verticalMotionField(){return {
  legendNote:'Black contours: 700 hPa height (dam), every 4 dam · blue wind barbs: knots. Red / negative = ascent · blue / positive = descent · white: −1 to +1 · 1 unit = 0.1 Pa/s = 1 μbar/s. End colours extend beyond ±80.',
  note:'700 hPa pressure vertical velocity (omega). Red/negative = rising air; blue/positive = sinking air. Black height contours every 4 dam (40 m); blue wind barbs in knots (half barb 5, full barb 10, pennant 50). All layers use the same model, run and valid time. Geometric velocity is converted with same-time 700 hPa temperature using hydrostatic dry-air density; JMA and the direct GEM/ICON Europe feeds already supply pressure velocity. Ascent can highlight active fronts, convection or terrain forcing; interpret with humidity and precipitation. This pressure surface can lie below high terrain.'
 };}
-export function omegaMicrobars(velocity,temperature,pressureNative=false){
+export function omegaMicrobars(velocity,temperature,pressureNative=false,level=700){
  if(!Number.isFinite(velocity)||!Number.isFinite(temperature)||temperature<=-273.15)return NaN;
  if(velocity===0)return 0;
  // Inverse of Open-Meteo Meteorology.verticalVelocityPressureToGeometric.
- return pressureNative?velocity*10:-70000*9.80665*velocity/(287.058*(temperature+273.15))*10;
+ return pressureNative?velocity*10:-level*100*9.80665*velocity/(287.058*(temperature+273.15))*10;
 }
-export const verticalMotionRules=[false,true].map(pressureNative=>({
- pattern:pressureNative?/^omega_700hPa_from_pressure$/:/^omega_700hPa_from_w$/,
+export const verticalMotionRules=[false,true].flatMap(pressureNative=>VERTICAL_LEVELS.map(level=>({
+ pattern:new RegExp('^omega_'+level+'hPa_from_'+(pressureNative?'pressure':'w')+'$'),
  provides:{directions:false,barbs:false},scaleFactor:100,
- getSourceVars:()=>['vertical_velocity_700hPa','temperature_700hPa'],
+ getSourceVars:()=>['vertical_velocity_'+level+'hPa','temperature_'+level+'hPa'],
  process(velocity,temperature){
   if(velocity.length!==temperature.length)throw Error('Vertical-motion input grids do not match.');
   const values=new Float32Array(new velocity.buffer.constructor(velocity.byteLength));
-  for(let i=0;i<values.length;i++)values[i]=omegaMicrobars(velocity[i],temperature[i],pressureNative);
+  for(let i=0;i<values.length;i++)values[i]=omegaMicrobars(velocity[i],temperature[i],pressureNative,level);
   return {values,directions:undefined};
  }
-}));
+})));
 export function installVerticalMotion(OM,settings){
  const reader=OM.getProtocolInstance(settings).omFileReader;
  for(const rule of verticalMotionRules)if(!reader.allDerivationRules?.some(item=>String(item.pattern)===String(rule.pattern)))

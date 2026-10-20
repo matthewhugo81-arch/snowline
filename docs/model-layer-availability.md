@@ -4,11 +4,18 @@ The comparison catalogue now follows the variables published for the selected
 model run. It no longer removes native temperature, wind, humidity and height
 fields using the former small pressure-level allowlist. Published temperature
 and wind heights through 10 km, plus cloud fractions at pressure and height
-levels, are described using the corresponding physical units.
+levels, are described using the corresponding physical units. Native latent and
+sensible surface heat fluxes use W/m².
 
 The same catalogue serves the main panels, forecast sequences and archived-run
 comparisons. Wind arrows require both components, or speed and direction, from
 one source. Companion sources must match the selected initialization.
+
+Additional pressure-level vertical motion is available on the six verified
+deterministic feeds wherever same-source velocity and temperature are supplied.
+The hydrostatic conversion uses that level’s pressure, not a fixed 700 hPa
+density. JMA’s native pressure velocity is converted directly to 0.1 Pa/s.
+The existing combined 700 hPa height/wind chart remains unchanged.
 
 ## Added native GEM comparison feed
 
@@ -24,7 +31,9 @@ These complement the existing native 700 hPa omega/height/wind feed. The public
 ECCC catalogue contains further parameters and levels; this importer covers the
 previous comparison menu's principal fields, not the entire GDPS archive.
 Metadata, GRIB parameter, pressure level, units, scan direction, grid,
-initialization and validity are checked before publication.
+initialization and validity are checked before publication. Upper-air frames are
+three-hourly through T+168, then six-hourly through T+240, matching the common
+availability of the high-level fields.
 
 ## Added MOGREPS-G fields
 
