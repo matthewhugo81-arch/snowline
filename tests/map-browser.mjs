@@ -64,7 +64,9 @@ try{
   await page.addInitScript(()=>localStorage.setItem('snowline-terrain','false'));
   await page.addInitScript(()=>{
    const original=window.setInterval;window.fixtureRefreshers=[];
-   window.setInterval=(callback,delay,...args)=>{if(delay===60000)window.fixtureRefreshers.push(callback);return original(callback,delay,...args);};
+   // Publication phases below explicitly drive minute checks; real wall-clock
+   // ticks can overlap those checks on slower CI renderers.
+   window.setInterval=(callback,delay,...args)=>{if(delay===60000){window.fixtureRefreshers.push(callback);return 0;}return original(callback,delay,...args);};
   });
   await page.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
   await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'maps.js'),'utf8'))+'\nwindow.fixturePanel=panels.a;window.fixturePanels=panels;window.fixtureImageryCache=imageryCache;'}));
