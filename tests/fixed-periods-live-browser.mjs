@@ -51,7 +51,7 @@ try{
  assert.deepEqual(cards.map(c=>new Date(c.run).getUTCHours()),[0,6,12]);assert.ok(cards.every(c=>Date.parse(c.time)===Date.parse('2026-10-14T12:00:00Z')));report.cards=cards;
  await page.screenshot({path:resolve(output,name+'-ifs-48h.png'),fullPage:true});
  const before=requests.length,t=performance.now();await page.locator('#previous-forward').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:180000});report.nextPeriod={ms:Math.round(performance.now()-t),requests:requests.length-before};
- assert.equal(await page.locator('#previous-time').inputValue(),'2026-10-14T12:00:00.000Z');
+ assert.equal(await page.locator('#previous-valid-time').inputValue(),'2026-10-14T12:00:00.000Z');
  assert.ok((await page.locator('#previous-grid .briefing-card').evaluateAll(cs=>cs.map(c=>c.dataset.time))).every(t=>Date.parse(t)===Date.parse('2026-10-16T12:00:00Z')));
  const backRequests=requests.length,backTime=performance.now();await page.locator('#previous-back').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);report.cachedReturn={ms:Math.round(performance.now()-backTime),requests:requests.length-backRequests};
  if(await page.locator('#previous-toggle-controls').count()){

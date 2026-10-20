@@ -4,7 +4,7 @@ import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261019-mogreps-uk';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasChart,previousRunPeriodNote,newerRunAvailable} from './map-previous-run-data.js?v=20261020-history-range2';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasChart,previousRunPeriodNote,newerRunAvailable} from './map-previous-run-data.js?v=20261020-history-range3';
 import {BRIEFING_AREAS,briefingTimes,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-mogreps-uk';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-coastline3';
 import {runLabel,runAvailability} from './map-runs.js?v=20261019-mogreps-uk';
@@ -22,7 +22,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <label>Forecast model<select id="previous-model"></select></label>
  <label>Chart<select id="previous-preset" disabled></select></label>
  <label>Area<select id="previous-area"></select></label>
- <label><span id="previous-time-heading">Shared valid time · UTC</span><select id="previous-time" disabled></select></label>
+ <label><span id="previous-time-heading">Shared valid time · UTC</span><select id="previous-valid-time" disabled></select></label>
  <label>Forecast interval<select id="previous-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option><option value="12">12 hourly</option></select></label>
  <button type="button" class="secondary" id="previous-refresh">Load latest three runs</button></div>
  <div class="briefing-overlays"><label class="briefing-background">Map background<select id="previous-background">${backgroundOptions}</select></label><label class="check-row"><input type="checkbox" id="previous-contours"> Contours</label><label class="check-row"><input type="checkbox" id="previous-grid-values"> Grid values</label><span class="small-note">Same area, chart, colour scale and valid time. Each panel retains its own initialization and lead time.</span></div>
@@ -53,8 +53,8 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  const area=()=>BRIEFING_AREAS.find(a=>a.id===$('area').value);
  const bounds=()=>area()?.bounds??currentBounds,size=()=>area()?.size??[960,660];
  function cancel(){generation++;controller?.abort();renderController?.abort();renderer?.cancel();}
- function disable(value){for(const id of ['preset','time','back','forward','refresh','background'])$(id).disabled=value;for(const c of cards)c.select.disabled=value;}
- function navigation(){const empty=!times.length;$('back').disabled=empty||index===0;$('forward').disabled=empty||index===times.length-1;$('time').disabled=empty;$('time').value=accumulationHours(preset()?.field)&&times[index]?periodStart(times[index],accumulationHours(preset().field)):String(index);}
+ function disable(value){for(const id of ['preset','valid-time','back','forward','refresh','background'])$(id).disabled=value;for(const c of cards)c.select.disabled=value;}
+ function navigation(){const empty=!times.length;$('back').disabled=empty||index===0;$('forward').disabled=empty||index===times.length-1;$('valid-time').disabled=empty;$('valid-time').value=accumulationHours(preset()?.field)&&times[index]?periodStart(times[index],accumulationHours(preset().field)):String(index);}
  function legend(){
   const p=preset(),field=fields.find(f=>f.key===p?.field);$('legend').replaceChildren();if(!p||!field)return;
   $('contours').disabled=!!field.categorical;if(field.categorical)$('contours').checked=false;
@@ -78,9 +78,9 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   if(hours){
    const periods=fixedAccumulationPeriods(native,hours,requestedStart??requestedTime);
    times=periods.times;index=periods.index;requestedStart=periods.start??requestedStart;
-   $('time').replaceChildren(...periods.starts.map(time=>option(time,timeLabel(new Date(Date.parse(time)+hours*3600000).toISOString(),time))));
+   $('valid-time').replaceChildren(...periods.starts.map(time=>option(time,timeLabel(new Date(Date.parse(time)+hours*3600000).toISOString(),time))));
   }else{
-   times=native;$('time').replaceChildren(...times.map((time,i)=>option(String(i),timeLabel(time))));
+   times=native;$('valid-time').replaceChildren(...times.map((time,i)=>option(String(i),timeLabel(time))));
    index=times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(times[best])-requestedTime)?i:best,0);
   }
   legend();navigation();render();
@@ -183,7 +183,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  $('model').addEventListener('change',loadLatest);$('refresh').addEventListener('click',loadLatest);
  $('preset').addEventListener('change',configureTimeline);$('interval').addEventListener('change',()=>{interval=$('interval').value;configureTimeline();});
  for(const name of ['area','contours','grid-values'])$(name).addEventListener('change',render);
- $('time').addEventListener('change',()=>{if(accumulationHours(preset()?.field)){requestedStart=$('time').value;configureTimeline();}else{index=Number($('time').value);render();}});
+ $('valid-time').addEventListener('change',()=>{if(accumulationHours(preset()?.field)){requestedStart=$('valid-time').value;configureTimeline();}else{index=Number($('valid-time').value);render();}});
  $('back').addEventListener('click',()=>{index=Math.max(0,index-1);render();});$('forward').addEventListener('click',()=>{index=Math.min(times.length-1,index+1);render();});$('retry').addEventListener('click',render);
  $('toggle-controls').addEventListener('click',()=>{
   const hidden=!$('control-section').hidden;$('control-section').hidden=hidden;

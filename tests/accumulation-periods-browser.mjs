@@ -126,7 +126,7 @@ try{
    await page.locator('#previous-enlarged-close').click();
    await page.screenshot({path:`review-output/nw-europe-history-${viewport.width}.png`,fullPage:true});
    assert.equal(await page.locator('#previous-preset').inputValue(),key(24));
-   assert.equal(await page.locator('#previous-run-view #previous-time').inputValue(),'2026-10-12T12:00:00.000Z');
+   assert.equal(await page.locator('#previous-run-view #previous-valid-time').inputValue(),'2026-10-12T12:00:00.000Z');
    assert.equal(await page.locator('#previous-time-heading').textContent(),'Shared period start · UTC');
    assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden])').evaluateAll(cs=>cs.map(c=>c.dataset.time)),Array(3).fill('2026-10-13T12:00:00.000Z'));
    await page.locator('#previous-forward').click();await readyHistory();

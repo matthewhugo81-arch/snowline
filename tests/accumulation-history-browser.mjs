@@ -109,15 +109,15 @@ try{
    const previousImage=await page.locator('#previous-grid img').first().getAttribute('src');
    await page.locator('#previous-background').selectOption('streets');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
    assert.notEqual(await page.locator('#previous-grid img').first().getAttribute('src'),previousImage,'Previous runs redraw for the chosen background');
-   const gfsTime=await page.locator('#previous-time').inputValue();
+   const gfsTime=await page.locator('#previous-valid-time').inputValue();
    await page.locator('#previous-model').selectOption(UKMO);
    await page.waitForFunction(()=>!document.querySelector('#previous-preset').disabled);
    await page.locator('#previous-preset').selectOption('weather');
    const readyCount=n=>page.waitForFunction(n=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===n,n,{timeout:60000});
    const chooseHistoryTime=async text=>{
-    const value=await page.locator('#previous-time option').evaluateAll((os,text)=>os.find(o=>o.textContent.replaceAll(',','').startsWith(text.replaceAll(',','')))?.value,text);
+    const value=await page.locator('#previous-valid-time option').evaluateAll((os,text)=>os.find(o=>o.textContent.replaceAll(',','').startsWith(text.replaceAll(',','')))?.value,text);
     assert.ok(value!==undefined,'Published valid time must remain selectable: '+text);
-    await page.locator('#previous-time').selectOption(value);
+    await page.locator('#previous-valid-time').selectOption(value);
    };
    await chooseHistoryTime('Wed 14 Oct, 12:00');await readyCount(3);
    assert.match(await page.locator('#previous-note').textContent(),/Reporting periods differ.*1 h \/ 3 h/);
@@ -137,7 +137,7 @@ try{
    assert.equal(await page.locator('#previous-grid .briefing-card[data-unavailable] img').count(),0,'Earlier images are cleared beyond each run’s horizon');
    assert.deepEqual(await page.locator('#previous-grid select').evaluateAll(ss=>ss.map(s=>s.value)),ukmoPinned,'Moving beyond a short run never substitutes another initialization');
    await page.locator('#previous-preset').selectOption(key(24));
-   await page.locator('#previous-time').selectOption('2026-10-18T12:00:00.000Z');await readyCount(1);
+   await page.locator('#previous-valid-time').selectOption('2026-10-18T12:00:00.000Z');await readyCount(1);
    assert.equal(await page.locator('#previous-grid .briefing-card[data-unavailable]').count(),2,'Full rainfall windows remain available in the longest run only');
    await page.locator('#previous-preset').selectOption('weather');
    await chooseHistoryTime('Wed 14 Oct, 12:00');await readyCount(3);
@@ -145,7 +145,7 @@ try{
    await page.locator('#previous-model').selectOption('gfs_global');
    await page.waitForFunction(()=>!document.querySelector('#previous-preset').disabled);
    await page.locator('#previous-preset').selectOption('cloud_cover');
-   await page.locator('#previous-time').selectOption(gfsTime);await readyCount(3);
+   await page.locator('#previous-valid-time').selectOption(gfsTime);await readyCount(3);
    await page.locator('#briefing-sequence-mode').click();await page.waitForFunction(()=>!document.querySelector('#briefing-preset').disabled);assert.equal(await page.locator('#previous-run-view').isVisible(),false);
    assert.equal(await page.locator('#briefing-background').inputValue(),'streets','Background follows between briefing modes');
    assert.equal(await page.locator('#briefing-preset').inputValue(),'cloud_cover','Standalone field follows from previous runs into forecast sequence');

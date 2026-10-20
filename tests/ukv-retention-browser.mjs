@@ -126,13 +126,15 @@ try{
    assert.match(await page.locator('#briefing-run').textContent(),/0300Z/);
    await page.locator('#briefing-history-mode').click();await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===2&&document.querySelectorAll('#previous-grid .briefing-card[data-unavailable="true"]').length===1,{},{timeout:40000});
    assert.equal(await page.locator('#previous-grid .briefing-card:visible').count(),3);
+   assert.equal(await page.locator('#previous-time').count(),1,'The map back button has a unique ID');
+   assert.equal(await page.locator('#previous-valid-time').count(),1,'History time control cannot collide with map navigation');
    const visible='#previous-grid .briefing-card:not([hidden])';
    assert.deepEqual(await page.locator(visible+' select').evaluateAll(ss=>ss.map(s=>new Date(s.value).getUTCHours())),[0,3,9]);
    for(const select of await page.locator(visible+' select').all())assert.equal(await select.locator('option').count(),3);
    const times=await page.locator(visible).evaluateAll(cs=>cs.map(c=>c.dataset.time));assert.equal(new Set(times).size,1);
    assert.equal(times[0],'2026-10-13T07:00:00.000Z','Opening history retains the requested time, even before the newest run begins');
-   const sharedTime=await page.locator('#previous-time option').evaluateAll(os=>os.find(o=>o.textContent.includes('13 Oct')&&o.textContent.includes('13:00'))?.value);
-   await page.locator('#previous-time').selectOption(sharedTime);await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
+   const sharedTime=await page.locator('#previous-valid-time option').evaluateAll(os=>os.find(o=>o.textContent.includes('13 Oct')&&o.textContent.includes('13:00'))?.value);
+   await page.locator('#previous-valid-time').selectOption(sharedTime);await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
    assert.equal(await page.locator('#previous-interval').inputValue(),'native');
    phase=4;await tick();
    await page.waitForFunction(()=>document.querySelector('#previous-run-0').value.startsWith('2026-10-13T03:00')&&document.querySelector('#previous-run-1').value.startsWith('2026-10-13T09:00')&&document.querySelector('#previous-run-2').value.startsWith('2026-10-13T12:00')&&document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3,{},{timeout:40000});
