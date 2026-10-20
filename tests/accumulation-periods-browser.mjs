@@ -73,7 +73,7 @@ try{
    assert.match(await page.locator('#briefing-grid h3').first().textContent(),/12 Oct.*12:00.*13 Oct.*12:00/);
    assert.equal(await page.locator('#briefing-next').isDisabled(),true);
    const expectedPeriod='VALID 12 Oct 12:00 to 13 Oct 12:00 UTC';
-   assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · latest · '+expectedPeriod);
+   assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · '+expectedPeriod);
    assert.equal(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),'T+024');
    const exported=JSON.parse(await page.locator('#briefing-grid img').first().getAttribute('data-fixture-export'));
    assert.ok(exported.title.endsWith(expectedPeriod));assert.equal(exported.subtitle,'T+024');
