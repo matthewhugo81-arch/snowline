@@ -5,6 +5,7 @@ import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPAN
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
+import {retainRunProgress,runSignature} from './map-runs.js?v=20261019-mogreps-uk';
 const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
  if(!Number.isInteger(lookbackHours)||lookbackHours<1||lookbackHours>48)throw Error('Archive search is limited to 48 hours.');
@@ -88,3 +89,10 @@ export function previousRunPeriodNote(runs,preset,time){
  return periods.length>1?'Reporting periods differ between runs ('+periods.map(h=>h+' h').join(' / ')+'). Each chart states its own period.':'';
 }
 export function newerRunAvailable(runs,incoming){return !!incoming&&runs.length>0&&Date.parse(incoming.reference_time)>Math.max(...runs.map(meta=>Date.parse(meta.reference_time)));}
+export function refreshPinnedRun(runs,incoming){
+ const index=runs.findIndex(meta=>Date.parse(meta.reference_time)===Date.parse(incoming?.reference_time));
+ if(index<0)return runs;
+ const next=retainRunProgress(runs[index],incoming);
+ if(runSignature(next)===runSignature(runs[index]))return runs;
+ return runs.map((meta,i)=>i===index?next:meta);
+}

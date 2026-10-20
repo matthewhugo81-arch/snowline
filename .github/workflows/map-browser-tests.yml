@@ -26,16 +26,16 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium
+      - name: Check accumulation windows and pinned previous-run panels
+        run: node tests/accumulation-history-browser.mjs
+      - name: Check fixed rainfall periods and North Atlantic framing
+        run: node tests/accumulation-periods-browser.mjs
       - name: Check UKV completed fallback, rollover and exact-cycle loading
         run: node tests/ukv-retention-browser.mjs
       - name: Check three-model comparison, twelve-hour steps and sidebar collapse
         run: MAP_THREE_PANELS_ONLY=1 node tests/map-browser.mjs
       - name: Check desktop and phone controls with delayed synthetic weather transport
         run: node tests/map-browser.mjs
-      - name: Check accumulation windows and pinned previous-run panels
-        run: node tests/accumulation-history-browser.mjs
-      - name: Check fixed rainfall periods and North Atlantic framing
-        run: node tests/accumulation-periods-browser.mjs
       - name: Check chart styles and image exports
         run: node tests/chart-image-browser.mjs
       - uses: actions/upload-artifact@v4

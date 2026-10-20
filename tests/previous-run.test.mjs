@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {runCandidates,discoverPreviousRuns,previousRunTimes,previousRunPresets,previousRunHasChart,previousRunPeriodNote,newerRunAvailable} from '../map-previous-run-data.js';
+import {runCandidates,discoverPreviousRuns,previousRunTimes,previousRunPresets,previousRunHasChart,previousRunPeriodNote,newerRunAvailable,refreshPinnedRun} from '../map-previous-run-data.js';
 import {loadSpatialRun,fieldDataURL} from '../map-sources.js';
 import {BRIEFING_PRESETS} from '../map-briefing-data.js';
 const main='ukmo_uk_deterministic_2km',nowcast=main+'_nowcast',ref='2026-10-12T12:00:00Z';
@@ -58,6 +58,19 @@ test('sparse per-variable publications retain other runs’ times without invent
  assert.ok(times.includes(end));assert.ok(times.includes(runs[0].valid_times[1]));
  assert.equal(previousRunHasChart(runs[2],p,runs[2].valid_times[1]),false);
  assert.equal(previousRunHasChart(runs[2],p,end),true);
+});
+
+test('pinned runs gain newly published hours and layers without changing cycles or regressing',()=>{
+ const runs=[meta(-12),meta(-6),{...meta(0,8),completed:false}],refs=runs.map(m=>m.reference_time);
+ const incoming={...meta(0,24),variables:[...meta().variables,'geopotential_height_500hPa']};
+ const grown=refreshPinnedRun(runs,incoming);
+ assert.deepEqual(grown.map(m=>m.reference_time),refs);assert.equal(grown[0],runs[0]);assert.equal(grown[1],runs[1]);
+ const p={id:'height',field:'geopotential_height_500hPa',required:['geopotential_height_500hPa']};
+ assert.equal(previousRunHasChart(grown[2],p,incoming.valid_times.at(-1)),true);
+ const retained=refreshPinnedRun(grown,runs[2]);
+ assert.equal(previousRunHasChart(retained[2],p,incoming.valid_times.at(-1)),true);
+ assert.equal(retained[2].completed,true);
+ assert.equal(refreshPinnedRun(grown,meta(6)),grown,'A new initialization only raises a notice; it never replaces pinned runs');
 });
 test('history omits unsupported fields and never changes pinned runs when a new cycle arrives',()=>{
  const runs=[meta(-6),meta(-3),meta()],refs=runs.map(m=>m.reference_time);assert.ok(previousRunPresets(runs).some(p=>p.id==='dew-point'));

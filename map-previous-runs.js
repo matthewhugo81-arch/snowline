@@ -4,7 +4,7 @@ import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261019-mogreps-uk';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasChart,previousRunPeriodNote,newerRunAvailable} from './map-previous-run-data.js?v=20261020-history-range3';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasChart,previousRunPeriodNote,newerRunAvailable,refreshPinnedRun} from './map-previous-run-data.js?v=20261020-history-range4';
 import {BRIEFING_AREAS,briefingTimes,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-mogreps-uk';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-coastline3';
 import {runLabel,runAvailability} from './map-runs.js?v=20261019-mogreps-uk';
@@ -200,7 +200,17 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    const signature=items=>JSON.stringify(items.map(m=>[m.reference_time,m.completed,m.valid_times]));
    if(ukvRefreshing||(runs.length===3&&!historyCheckFailed&&signature(runs.slice(0,2))===signature([incoming,...(retained?[retained]:[])])))return;
    ukvRefreshing=true;try{await loadLatest();}finally{ukvRefreshing=false;}
-  }else if(newerRunAvailable(selected(),event.detail.meta))$('new').hidden=false;
+  }else{
+   const incoming=event.detail.meta,next=refreshPinnedRun(runs,incoming);
+   if(next!==runs){
+    const shown=selected().some(meta=>Date.parse(meta.reference_time)===Date.parse(incoming.reference_time));
+    runs=next;
+    for(const card of cards)for(const el of card.select.options){const meta=runs.find(m=>m.reference_time===el.value);if(meta)el.textContent=runLabel(meta)+' · '+runAvailability(meta);}
+    // Pin initialization, not an incomplete snapshot of its arriving data.
+    if(shown){images.clear();configureTimeline();}
+   }
+   if(newerRunAvailable(selected(),incoming))$('new').hidden=false;
+  }
  };
  document.addEventListener('snowline-model-run-available',available);
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden){renderController?.abort();renderer?.cancel();}else if(runs.length>=runCount())render();});
