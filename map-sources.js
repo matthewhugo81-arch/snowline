@@ -25,9 +25,10 @@ for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
 export const COMPANION_BASE='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/';
 const generatedBase=domain=>domain===MOGREPS_GLOBAL?COMPANION_BASE:ownBase;
+const historyBases=new Map();
 export function ensembleHistoryURL(model){
  if(!ownEnsembles.has(model))throw Error('Unknown statistical ensemble model');
- return generatedBase(model)+model+'/history.json';
+ return (historyBases.get(model)??generatedBase(model))+model+'/history.json';
 }
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
@@ -111,18 +112,27 @@ async function mogrepsSnow(model,load,reference){
 export async function loadSpatialModel(model,load){
  const domain=domains[model===UKV_NOWCAST?UKV:model];
  if(!domain)throw new Error('Unknown spatial model');
- const baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;
- const base=baseURL+domain+'/';
+ let baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;
+ let base=baseURL+domain+'/';
  // in-progress.json advances after EACH uploaded forecast hour. latest.json
  // alone deliberately points to the last fully completed run.
  const results=await Promise.allSettled((ownEnsembles.has(domain)?['latest.json','../health.json']:['latest.json','in-progress.json']).map(path=>load(path==='../health.json'?ownBase+'health.json':base+path)));
  const published=results.filter(result=>result.status==='fulfilled').map(result=>result.value);
+ let companionFallback=false;
+ if(domain===MOGREPS_GLOBAL&&!published.some(publishedRun)){
+  const retained=await load(ownBase+domain+'/latest.json');
+  if(publishedRun(retained)){
+   published.push(retained);baseURL=ownBase;base=baseURL+domain+'/';companionFallback=true;
+  }
+ }
  if(!published.some(publishedRun))throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
  const latest=await chooseRun(...published);
  const family=ukvRunFamily(model);
  let primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(primary))throw Error('Unverified MOGREPS-G run metadata.');
+ if(domain===MOGREPS_GLOBAL)historyBases.set(domain,baseURL);
  const warnings=[...(primary.selectionWarnings??[])];
+ if(companionFallback)warnings.push('The companion publication is being prepared or is temporarily unavailable; showing the retained MOGREPS-G run with its original timestamp.');
  if(domain===MOGREPS_GLOBAL&&(primary.variable_valid_times?.geopotential_height_500hPa_anomaly_mean?.length??0)<primary.valid_times.length)warnings.push('Additional MOGREPS-G comparison layers are being prepared. Each layer shows only its published forecast hours.');
  if(domain==='ecmwf_ifs025')warnings.push('IFS 0.25° gusts are unavailable from T+93 to T+144 h in the source feed; those gust steps are omitted. Other fields retain their full timelines.');
  if(results.some(result=>result.status==='rejected'&&result.reason?.status!==404))warnings.push('A live run check failed; using verified published data and retrying automatically.');
@@ -178,8 +188,13 @@ export async function loadSpatialRun(model,referenceTime,load){
  const reference=Date.parse(referenceTime);if(!Number.isFinite(reference))throw Error('Invalid archive run time.');
  const family=ukvRunFamily(model);
  if(family&&((new Date(reference).getUTCHours()%3===0?'main':'nowcast')!==family))throw Error('Archived UKV run is in a different run family.');
- const baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;
- const base=baseURL+domain+'/',data=await load(base+runPath(referenceTime)+'meta.json');
+ let baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;
+ let data;
+ try{data=await load(baseURL+domain+'/'+runPath(referenceTime)+'meta.json');}
+ catch(error){
+  if(domain!==MOGREPS_GLOBAL)throw error;
+  baseURL=ownBase;data=await load(baseURL+domain+'/'+runPath(referenceTime)+'meta.json');
+ }
  if(model===UKV&&Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');

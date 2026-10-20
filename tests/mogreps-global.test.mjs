@@ -93,3 +93,16 @@ test('downloads state native periods, initialization and Met Office attribution'
  assert.match(datasetCSV(dataset),/native 3 h; period-average rate; run 2026-10-19T06:00:00.000Z; Met Office CC BY-SA 4.0/);
  assert.match(datasetCoverage(dataset),/preceding 3 h average/);
 });
+
+test('a missing companion publication retains a verified local run and retries the companion later',async()=>{
+ const fixture=metadata();
+ const fallback=await loadSpatialModel(MOGREPS_GLOBAL,async url=>{
+  if(url.startsWith('https://matthewhugo81-arch.github.io/snowline-ensembles/'))throw Error('Not published yet');
+  return url.endsWith('health.json')?{}:fixture;
+ });
+ assert.ok(fallback.sourceWarnings.some(w=>w.includes('retained MOGREPS-G')));
+ assert.ok(fieldDataURL(fallback,'temperature_850hPa_mean',time(3)).startsWith('file:'));
+ const recovered=await loadSpatialModel(MOGREPS_GLOBAL,async url=>url.endsWith('health.json')?{}:fixture);
+ assert.ok(fieldDataURL(recovered,'temperature_850hPa_mean',time(3)).startsWith('https://matthewhugo81-arch.github.io/snowline-ensembles/'));
+ assert.equal(recovered.reference_time,fixture.reference_time);
+});

@@ -96,6 +96,11 @@ jobs:
               cp -a "ensemble-data/$extra" _site/ensemble-data/
             fi
           done
+          # Retain the last local MOGREPS publication as a same-run fallback
+          # while companion publication is starting or temporarily unavailable.
+          if [ -f ensemble-data/snowline_mogreps_global/latest.json ]; then
+            cp -a ensemble-data/snowline_mogreps_global _site/ensemble-data/
+          fi
           if [ -f ensemble-data/health.json ]; then cp ensemble-data/health.json _site/ensemble-data/; fi
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           git rev-parse HEAD > _site/site-revision.txt
