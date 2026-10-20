@@ -28,8 +28,9 @@ const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  signal.addEventListener('abort',cancelled,{once:true});
 });
 export class ForecastTileCache{
- constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=64*1024*1024,diskEntries=2048,maxAge=3600000,cacheVersion='render-20261020-v3'}={}){
-  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge});
+ constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=64*1024*1024,diskEntries=2048,maxAge=3600000,cacheVersion='render-20261020-v3',concurrency=8,backgroundConcurrency=4}={}){
+  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge,concurrency,backgroundConcurrency});
+  this.renderQueue=[];this.rendering=new Set();this.foreground=null;
   this.diskStates=new WeakMap();
   this.contexts=new Map();this.contextSequence=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
@@ -126,7 +127,47 @@ export class ForecastTileCache{
     if(generation===this.generation&&!entry.durable&&this.memory.get(key)!==entry)this.limit();
    });
  }
- async resolve(params,controller,generation,disk){
+ setForeground(urls){
+  this.foreground=[...new Set(urls)];
+  for(const job of this.pending.values())job.background=!this.isForeground(job.url);
+  this.drain();
+ }
+ isForeground(url){return this.foreground.some(source=>url===source||url.startsWith(source+'/'));}
+ drain(){
+  // Bound native reads, worker renders and PNG encoding across all panels.
+  // Background frames cannot fill the foreground slots. Cached bytes bypass
+  // this queue altogether, and selecting a queued tile promotes its shared job.
+  while(this.rendering.size<this.concurrency){
+   let index=this.renderQueue.findIndex(entry=>!entry.job.background);
+   if(index<0){
+    if([...this.rendering].filter(entry=>entry.job.background).length>=this.backgroundConcurrency)return;
+    index=0;
+   }
+   const entry=this.renderQueue.splice(index,1)[0];if(!entry)return;
+   this.rendering.add(entry);entry.start();
+  }
+ }
+ render(params,job){
+  return new Promise((resolve,reject)=>{
+   const {controller}=job;
+   if(controller.signal.aborted){reject(abort());return;}
+   const cancel=()=>{
+    const index=this.renderQueue.indexOf(entry);
+    if(index<0)return; // An active renderer owns cancellation until it settles.
+    this.renderQueue.splice(index,1);controller.signal.removeEventListener('abort',cancel);reject(abort());
+   };
+   const entry={job,start:()=>{
+    let result;
+    try{result=this.load(params,controller);}catch(error){result=Promise.reject(error);}
+    Promise.resolve(result).then(cacheable).then(resolve,reject).finally(()=>{
+     controller.signal.removeEventListener('abort',cancel);this.rendering.delete(entry);this.drain();
+    });
+   }};
+   controller.signal.addEventListener('abort',cancel,{once:true});
+   this.renderQueue.push(entry);this.drain();
+  });
+ }
+ async resolve(params,controller,generation,disk,job){
   const key=JSON.stringify([params.type,params.url]),cached=this.memory.get(key);
   if(cached&&(!this.persistent||this.fresh(cached.created))){this.memory.delete(key);this.memory.set(key,cached);return cached.result;}
   if(cached){this.memory.delete(key);this.bytes-=cached.bytes;}
@@ -149,7 +190,7 @@ export class ForecastTileCache{
   for(let attempt=0;;attempt++){
    if(controller.signal.aborted||generation!==this.generation)throw abort();
    try{
-    result=await cacheable(await this.load(params,controller));break;
+    result=await this.render(params,job);break;
    }
    catch(error){
     if(controller.signal.aborted||generation!==this.generation)throw abort();
@@ -165,12 +206,17 @@ export class ForecastTileCache{
   if(persisting)this.persist(key,request,entry,store,generation,params.type);
   return saved;
  }
- protocol(params,consumer){
+ protocol(params,consumer,{background=false}={}){
   if(consumer.signal.aborted)return Promise.reject(abort());
+  // MapLibre also prepares nearby hidden frames. They must share the bounded
+  // speculative budget, rather than masquerading as selected-chart requests.
+  if(this.foreground)background=!this.isForeground(params.url);
   const key=JSON.stringify([params.type,params.url]);let job=this.pending.get(key);
   if(!job){
-   job={controller:new AbortController(),users:0};this.pending.set(key,job);
-   job.promise=this.resolve(params,job.controller,this.generation,this.disk).finally(()=>{clearTimeout(job.abortTimer);if(this.pending.get(key)===job)this.pending.delete(key);});
+   job={controller:new AbortController(),users:0,background,url:params.url};this.pending.set(key,job);
+   job.promise=this.resolve(params,job.controller,this.generation,this.disk,job).finally(()=>{clearTimeout(job.abortTimer);if(this.pending.get(key)===job)this.pending.delete(key);});
+  }else if(!background&&job.background){
+   job.background=false;this.drain();
   }
   clearTimeout(job.abortTimer);
   job.users++;
@@ -192,7 +238,7 @@ export class ForecastTileCache{
  async prefetch(params,controller){
   // Use the same de-duplicated path as a foreground map. Only complete bytes
   // count as prepared; cancellation or a partial overlay never counts as ready.
-  const result=await this.protocol(params,controller);
+  const result=await this.protocol(params,controller,{background:true});
   result.data?.close?.();
  }
 }

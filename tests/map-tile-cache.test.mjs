@@ -13,6 +13,61 @@ const storage=()=>{
 const read=(cache,url,type)=>cache.protocol(params(url,type),new AbortController());
 const saved=cache=>Promise.all([...cache.writes.values()].map(job=>job.promise));
 
+test('background tile fan-out leaves capacity for a selected chart and promotes shared queued tiles',async()=>{
+ const started=[],jobs=new Map();
+ const cache=new ForecastTileCache((p,c)=>new Promise((resolve,reject)=>{
+  started.push(p.url);jobs.set(p.url,resolve);
+  c.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+ }),{storage:null,concurrency:3,backgroundConcurrency:1});
+ cache.setContext('view');
+ const background=['slow','queued','target'].map(url=>cache.prefetch(params(url),new AbortController()));
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(started,['om://slow'],'A whole sequence cannot flood the renderer');
+ const selected=read(cache,'target');
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(started,['om://slow','om://target'],'The selected shared tile skips the background backlog');
+ const another=read(cache,'other');
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(started,['om://slow','om://target','om://other']);
+ const waiting=read(cache,'next');
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(started.length,3,'Foreground work also has a bounded fan-out');
+ jobs.get('om://target')(bytes());await selected;await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(started.at(-1),'om://next','Foreground goes before queued speculation');
+ jobs.get('om://other')(bytes());jobs.get('om://next')(bytes());await Promise.all([another,waiting]);
+ assert.equal(started.includes('om://queued'),false,'One slow background job cannot consume the reserved foreground slots');
+ assert.deepEqual(new Uint8Array((await read(cache,'target')).data),new Uint8Array([10,20,30,40]),'Saved bytes bypass the blocked native queue');
+ jobs.get('om://slow')(bytes());await new Promise(resolve=>setImmediate(resolve));
+ jobs.get('om://queued')(bytes());await Promise.all(background);
+ assert.equal(started.filter(url=>url==='om://target').length,1,'Promotion shares the original render');
+ cache.release();
+});
+
+test('changing viewport cancels queued tiles before they start rendering',async()=>{
+ const started=[];
+ const cache=new ForecastTileCache((p,c)=>new Promise((resolve,reject)=>{
+  started.push(p.url);c.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+ }),{storage:null,concurrency:2,backgroundConcurrency:1});
+ cache.setContext('old');
+ const jobs=['active','queued1','queued2'].map(url=>cache.prefetch(params(url),new AbortController()));
+ const done=Promise.all(jobs.map(job=>assert.rejects(job,{name:'AbortError'})));
+ await new Promise(resolve=>setImmediate(resolve));cache.setContext('new');await done;
+ assert.deepEqual(started,['om://active']);assert.equal(cache.renderQueue.length,0);cache.release();
+});
+
+test('hidden map sources use background slots and a changed selection promotes their existing tiles',async()=>{
+ const started=[],jobs=new Map();
+ const cache=new ForecastTileCache(p=>new Promise(resolve=>{started.push(p.url);jobs.set(p.url,resolve);}),{storage:null,concurrency:3,backgroundConcurrency:1});
+ cache.setContext('view');cache.setForeground(['om://current?rain']);
+ const work=['near?rain/4/7/5','next?rain/4/7/5','next?pressure/4/7/5'].map(url=>read(cache,url));
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(started,['om://near?rain/4/7/5'],'Hidden MapLibre sources do not take foreground capacity');
+ cache.setForeground(['om://next?rain','om://next?pressure']);
+ assert.equal(started.length,3,'Selected rain and its pressure overlay start while nearby work is still blocked');
+ for(const resolve of jobs.values())resolve(bytes());
+ await Promise.all(work);assert.equal(new Set(started).size,3);cache.release();
+});
+
 test('disk capacity stops full preloading without preventing selected frames from loading',async()=>{
  for(const budget of [{diskBytes:8},{diskEntries:2}]){
   let limited=0,calls=0;

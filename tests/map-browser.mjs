@@ -433,6 +433,20 @@ try{
    await rapidClicks([-1,-1,-1]);await checkTime(12);
    await rapidClicks([1,1,1]);await checkTime(15);
    assert.equal(await selectedRequestCount(),cachedRequests,'Revisiting a prepared frame reuses its cached imagery');
+   // Slider input used to stop() every frame cache, aborting useful downloads
+   // on every movement of the thumb. A slow comparison must retain that work.
+   await holdColdNavigation();
+   for(const index of [20,30,16]){
+    await page.locator('#map-time').evaluate((el,index)=>{el.value=String(index);el.dispatchEvent(new Event('input',{bubbles:true}));},index);
+    await page.waitForTimeout(30);
+   }
+   assert.equal(await page.evaluate(()=>window.fixtureNavigationJobs.every(({job})=>!job.controller.signal.aborted)),true,'Scrubbing preserves in-flight chart downloads');
+   assert.equal(await page.evaluate(()=>Object.values(window.fixturePanels).every(panel=>panel.frameCache.preloaded.size>=1)),true,'Scrubbing preserves completed-chart progress');
+   await page.locator('#map-time').dispatchEvent('change');
+   await releaseTransport();await checkTime(16);
+   await page.waitForFunction(()=>window.fixtureNavigationJobs.every(({key,url})=>window.fixturePanels[key].frameCache.preloaded.has(url)));
+   assert.equal(await page.evaluate(()=>window.fixtureNavigationJobs.every(({url})=>window.fixtureRequests.slice(window.fixtureRequestStart).filter(request=>request.type==='json'&&request.url===url).length===1)),true,'Slider release reuses downloads already in progress');
+   await selectTime(15);
    await rapidClicks([1,1,-1]);await checkTime(16);
    assert.equal((await panelState()).b.loaded,false,'A rapid reversal retains the explicit gap at an unsupported IFS hour');
    // Controls follow the requested index while data is pending, so reversing

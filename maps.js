@@ -20,8 +20,8 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purp
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261020-layout-playback';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261020-rapid-navigation';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rolling-cache';
-import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261020-selection-priority';
+import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
 import {createViewRefresh,layoutForecastBounds} from './map-view-refresh.js?v=20261020-layout-playback';
@@ -374,6 +374,12 @@ async function prepareSelection(index,valid=()=>true){
  if(!time)return null;
  await Promise.all(choices.map(({key})=>panels[key].ready));
  if(!valid()||metas!==state.metas||choices.some(({key,model,field})=>panels[key].restyling||model!==panelSelection(state,key).model||field!==panelSelection(state,key).field))return null;
+ // Reserve native rendering capacity for every selected panel and its overlays.
+ // Nearby hidden MapLibre sources use the same background budget as disk preloads.
+ imageryCache.setForeground(choices.flatMap(({key,model,field})=>{
+  const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
+  return url?[url,...cache.decorate(url).map(group=>group.source.url)]:[];
+ }));
  const prepared=await Promise.all(choices.map(async({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
   if(!url)return state.compare?{panel,cache,frame:null,key,model,field,time}:null;
@@ -768,10 +774,17 @@ $('map-start-time')?.addEventListener('change',e=>{
  pauseAnimation();state.index=index;e.target.value=state.times[index];setTime();
 });
 $('reload-maps').addEventListener('click',refreshLiveRuns);$('map-time').addEventListener('change',e=>{pauseAnimation();state.index=Number(e.target.value);setTime();});$('map-time').addEventListener('input',e=>{
- const preview=Number(e.target.value);pauseAnimation();++timeGeneration;viewportRefresh.cancel();
+ const preview=Number(e.target.value),from=state.index;pauseAnimation();++timeGeneration;viewportRefresh.cancel();
+ if(preview!==from)navigationDirection=preview>from?1:-1;
  // Dragging supersedes the pending selection immediately, not only on release.
  // Its late success/failure must not reset the thumb or show a stale warning.
- for(const {key}of panelSelections(state)){panels[key].frameCache?.stop();$('map-error-'+key).hidden=true;}
+ // Keep useful tile downloads and saved frames when the thumb passes them.
+ // Only pause new speculation; release will reuse/promote the selected work.
+ for(const {key}of panelSelections(state)){
+  const panel=panels[key];
+  panel.frameCache?.focus(panel.frameURLs?.[preview],frameWindow(panel.frameURLs??[],preview,frameBudget()).keep);
+  $('map-error-'+key).hidden=true;
+ }
  failedSelection=null;state.index=preview;e.target.value=String(preview);syncArrowButtons(preview);
  if(state.times.length)$('animation-status').textContent='Preview '+stamp(state.times[preview])+' UTC · release to load';
 });
