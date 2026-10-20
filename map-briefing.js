@@ -13,7 +13,7 @@ import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-
 import {chartScales} from './map-image-export.js?v=20261020-ifs-coverage';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261020-compact-controls';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261020-auto-complete';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
@@ -173,7 +173,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   $('grid').replaceChildren();$('legend').replaceChildren();$('run').textContent='Checking model run…';$('status').textContent='Checking available chart fields…';$('retry').hidden=true;
   try{
    const selected=await mapRunCatalogue.select(runKey??model.id,url=>loadJSON(url,{force}));if(token!==generation||!active)return;
-   meta=selected.meta;runKey=selected.key;renderRunSelector($('run-select'),model.id,selected,meta);
+   meta=selected.meta;if(runKey)runKey=selected.key;renderRunSelector($('run-select'),model.id,selected,meta,{followLatest:!runKey});
    onMetadata(meta);
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:model.id,meta}}));
    const available=presets=briefingPresets(meta,fields),previous=requestedChart??$('preset').value;
@@ -188,13 +188,13 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  async function refreshRun(){
   if(!active||document.hidden||refreshing)return;
   if(!meta)return configure(true);
-  refreshing=true;const selected=model.id,previous=meta;
+  refreshing=true;const selected=model.id,previous=meta,selectionKey=runKey;
   try{
-   const result=await mapRunCatalogue.select(runKey,url=>loadJSON(url,{force:true})),incoming=result.meta;
-   if(!active||model.id!==selected||meta!==previous)return;
+   const result=await mapRunCatalogue.select(runKey??model.id,url=>loadJSON(url,{force:true})),incoming=result.meta;
+   if(!active||document.hidden||model.id!==selected||meta!==previous||runKey!==selectionKey)return;
    const next=retainRunProgress(previous,incoming);
    onMetadata(next);
-   renderRunSelector($('run-select'),model.id,result,next);
+   renderRunSelector($('run-select'),model.id,result,next,{followLatest:!runKey});
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:selected,meta:next}}));
    if(runSignature(next)!==runSignature(previous)){
     rememberTime();meta=next;
@@ -205,14 +205,14 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
     controlsDisabled(false);timeline();renderPage();
    }
    $('run').textContent=model.name+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
-  }catch{if(active&&model.id===selected)$('run').textContent=model.name+' · initialized '+runLabel(meta)+' · Live check unavailable; retrying in one minute.';}
+  }catch{if(active&&model.id===selected&&meta===previous&&runKey===selectionKey)$('run').textContent=model.name+' · initialized '+runLabel(meta)+' · Live check unavailable; retrying in one minute.';}
   finally{refreshing=false;}
  }
  let refreshTimer=setInterval(refreshRun,60000);
  window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(refreshTimer);refreshTimer=setInterval(refreshRun,60000);refreshRun();}});
  $('background').addEventListener('change',()=>{onBackgroundChange($('background').value);renderPage();});
  $('model').addEventListener('change',()=>{rememberTime();runKey=null;configure();});
- $('run-select').addEventListener('change',()=>{rememberTime();runKey=$('run-select').value;configure();});
+ $('run-select').addEventListener('change',()=>{rememberTime();runKey=$('run-select').value.includes('@')?$('run-select').value:null;configure();});
  for(const id of ['preset','interval'])$(id).addEventListener('change',()=>{
   if(!meta)return;rememberTime();
   if(id==='interval')interval=$('interval').value;
@@ -258,7 +258,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   history?.close();$('sequence').hidden=false;$('sequence-mode').setAttribute('aria-pressed','true');$('history-mode').setAttribute('aria-pressed','false');
   active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=accumulationHours(selection.field)&&selection.time?periodStart(selection.time,accumulationHours(selection.field)):null;requestedChart=selection.field??selection.preset??null;
   $('model').value=choices.some(item=>item.id===sourceModel(selection.model))?sourceModel(selection.model):choices[0].id;
-  runKey=selection.model.includes('@')?selection.model:null;
+  runKey=selection.followLatest===true?null:selection.model.includes('@')?selection.model:null;
   $('area').value=selection.area??'uk';$('close').focus({preventScroll:true});configure();
  },close};
 }

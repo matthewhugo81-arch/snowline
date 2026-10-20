@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRunCatalogue,completedModelRun,selectedRunKey,sourceModel} from '../map-run-selection.js';
+import {createRunCatalogue,completedModelRun,selectedRunKey,sourceModel,renderRunSelector} from '../map-run-selection.js';
 import {fieldDataURL} from '../map-sources.js';
 const ref=h=>new Date(Date.UTC(2026,9,20,h)).toISOString();
 const run=(h,completed=true,count=55)=>({domain:'ecmwf_ifs',reference_time:ref(h),completed,variables:['temperature_2m','precipitation'],valid_times:Array.from({length:count},(_,i)=>ref(h+i))});
@@ -56,6 +56,58 @@ test('an open complete or incoming run remains pinned across completion and late
  r=await f.catalogue.select(first.key,async()=>({}));assert.equal(r.meta.reference_time,ref(0));assert.equal(r.previous.reference_time,ref(6));
  const incoming=await f.catalogue.select(selectedRunKey('ecmwf_ifs',run(12)),async()=>({}));
  f.setLatest(run(12,false,20));r=await f.catalogue.select(incoming.key,async()=>({}));assert.equal(r.meta.valid_times.length,20);
+});
+test('automatic selection advances only after completion and catches completed intervening cycles',async()=>{
+ const f=fixture(),select=()=>f.catalogue.select('ecmwf_ifs',async()=>({}));
+ let r=await select();assert.equal(r.meta.reference_time,ref(0));
+ f.setLatest(run(6,false,30));r=await select();
+ assert.equal(r.meta.reference_time,ref(0),'Partial new hours do not replace the complete run');
+ f.setLatest(run(6));r=await select();assert.equal(r.meta.reference_time,ref(6));
+ f.data.set(ref(6),run(6));f.setLatest(run(12,false,3));r=await select();
+ assert.equal(r.meta.reference_time,ref(6),'The promoted run becomes the next complete fallback');
+ f.data.set(ref(12),run(12));f.setLatest(run(18,false,2));r=await select();
+ assert.equal(r.meta.reference_time,ref(12),'A completed intervening cycle is found when the page next checks');
+ f.setLatest(run(18));r=await select();assert.equal(r.meta.reference_time,ref(18));
+});
+test('automatic GFS selection waits for its matching complete companion source',async()=>{
+ const core=h=>({...run(h),domain:'ncep_gfs013'}),upper=h=>({...run(h),domain:'ncep_gfs025'});
+ const complete=h=>({...core(h),sources:[core(h),upper(h)]});
+ let incoming={...core(6),sources:[core(6),{...upper(6),completed:false}]};
+ const catalogue=createRunCatalogue({loadModel:async()=>incoming,loadRun:async(model,reference)=>{
+  if(reference===ref(0))return complete(0);throw missing();
+ }});
+ let r=await catalogue.select('gfs_global',async()=>({}));assert.equal(r.meta.reference_time,ref(0));
+ incoming=complete(6);r=await catalogue.select('gfs_global',async()=>({}));assert.equal(r.meta.reference_time,ref(6));
+});
+test('completed automatic selection survives stale metadata and retries after a failed check',async()=>{
+ let incoming=run(6),fail=false;
+ const catalogue=createRunCatalogue({loadModel:async()=>{if(fail)throw Error('Network unavailable');return incoming;},loadRun:async()=>run(0)});
+ const select=()=>catalogue.select('ecmwf_ifs',async()=>({}));
+ assert.equal((await select()).meta.reference_time,ref(6));
+ incoming=run(0);assert.equal((await select()).meta.reference_time,ref(6));
+ incoming=run(6,false,2);assert.equal((await select()).meta.completed,true);
+ fail=true;await assert.rejects(select(),/Network unavailable/);
+ fail=false;incoming=run(12,false,2);
+ assert.equal((await select()).meta.reference_time,ref(6),'The failed refresh does not erase the retained complete run');
+ incoming=run(12);assert.equal((await select()).meta.reference_time,ref(12));
+});
+test('run selector distinguishes automatic following from deliberate dated selections',t=>{
+ const original=globalThis.document;globalThis.document={createElement:()=>({value:'',textContent:''})};
+ t.after(()=>{if(original===undefined)delete globalThis.document;else globalThis.document=original;});
+ const select={options:[],replaceChildren(){this.options=[];},append(option){this.options.push(option);}};
+ const model='ecmwf_ifs',previous=run(0),pair={latest:run(6,false,2),previous};
+ renderRunSelector(select,model,pair,previous,{followLatest:true});
+ assert.equal(select.value,model);assert.equal(select.disabled,false);
+ assert.deepEqual(select.options.map(option=>option.value),[model,selectedRunKey(model,pair.latest),selectedRunKey(model,previous)]);
+ assert.match(select.options[0].textContent,/20 Oct · 00Z · Complete · Auto \(latest\)/);
+ assert.match(select.title,/Automatically advances to the latest complete run/);
+ pair.latest=run(6);renderRunSelector(select,model,pair,pair.latest,{followLatest:true});
+ assert.match(select.options[0].textContent,/06Z · Complete · Auto/);
+ renderRunSelector(select,model,pair,previous);
+ assert.equal(select.value,selectedRunKey(model,previous));assert.match(select.title,/selected run stays pinned/);
+ assert.equal(select.options[0].value,model,'The user can resume automatic following without changing models');
+ renderRunSelector(select,model,{latest:run(12,false,2),previous:null},run(12,false,2),{followLatest:true});
+ assert.match(select.options[0].textContent,/12Z · Updating · Auto/);assert.match(select.title,/No completed run could be verified yet/);
 });
 test('failed intermediate cycles and stale responses never displace the last complete run',async()=>{
  const f=fixture();await f.catalogue.select('ecmwf_ifs',async()=>({}));

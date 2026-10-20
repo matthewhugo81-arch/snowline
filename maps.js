@@ -38,7 +38,7 @@ import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261020-run-selector';
-import {mapRunCatalogue,sourceModel,renderRunSelector} from './map-run-selection.js?v=20261020-compact-controls';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261020-auto-complete';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261020-run-selector';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
@@ -155,6 +155,10 @@ $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(params.get('model')==='ukmo_uk_deterministic_2km_nowcast')params.set('model','ukmo_uk_deterministic_2km');
 if(params.get('model')&&MODELS.some(m=>m.id===sourceModel(params.get('model'))))state.model=params.get('model');
+// Resolved metadata has a dated identity; following the latest complete run is
+// a separate user choice. Only a deliberate dated selection is pinned.
+const followLatest={a:!state.model.includes('@')&&!state.model.endsWith('_previous'),b:true,c:true};
+const requestedRun=({key,model})=>followLatest[key]?sourceModel(model):model;
 $('compare-maps').checked=state.compare;$('map-comparison-count').value=String(state.comparisonCount);$('comparison-count-control').hidden=!state.compare;
 for(const key of ['b','c']){$('panel-'+key).hidden=!panelVisible(key);$('layer-notes-'+key).hidden=!panelVisible(key);}
 const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
@@ -338,7 +342,9 @@ function orderForecastBasemap(panel){
 function panelCache(panel,model,field){
  const meta=state.metas[model],overlay=state.overlays[panel.key],composite=field===WEATHER_COMPOSITE;
  // Changing the other panel's field can change the shared timeline too.
- const signature=JSON.stringify([model,meta.reference_time,field,overlay.contours,overlay.isobars]);
+ // Dated URLs isolate runs. Keep the displayed complete frame during an
+ // automatic cycle handover; retain() retires it only when its replacement shows.
+ const signature=JSON.stringify([sourceModel(model),field,overlay.contours,overlay.isobars]);
  const reusable=panel.frameCache&&panel.cacheKey===signature;
  if(reusable&&panel.cacheTimes===state.times&&panel.cacheMeta===meta)return panel.frameCache;
  if(!reusable){panel.frameCache?.clear();orderForecastBasemap(panel);}
@@ -626,7 +632,7 @@ function metadataLoader(force){
 function updateRunMenus(results){
  for(const {key,model} of panelSelections(state)){
   const result=results.find(item=>sourceModel(item.key)===sourceModel(model));
-  if(result&&state.metas[model])renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(model),result,state.metas[model]);
+  if(result&&state.metas[model])renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(model),result,state.metas[model],{followLatest:followLatest[key]});
  }
 }
 function showRunUpdates(message=''){
@@ -639,27 +645,34 @@ async function refreshLiveRuns(){
  if(document.hidden||briefingActive||checkingLiveRuns||$('reload-maps').disabled)return;
  if(!state.times.length)return configure(true);
  checkingLiveRuns=true;
- const generation=state.generation,ids=panelModelIds(state);
+ const generation=state.generation,selected=panelSelections(state);
  try{
   const load=metadataLoader(true);
-  const results=await Promise.allSettled(ids.map(id=>mapRunCatalogue.select(id,load)));
+  // Panels can share a model and initialization while having different intent:
+  // one may follow the latest complete cycle and another deliberately pin it.
+  const results=await Promise.allSettled(selected.map(item=>mapRunCatalogue.select(requestedRun(item),load)));
   if(generation!==state.generation||briefingActive||document.hidden)return;
-  const next={...state.metas};let changed=false,failed=false;
+  const next={};let changed=false,failed=false;
   results.forEach((result,index)=>{
-   if(result.status==='rejected'){failed=true;return;}
-   const id=ids[index],meta=retainRunProgress(state.metas[id],result.value.meta);
-   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(id),meta:result.value.latest}}));
-   if(runSignature(meta)!==runSignature(state.metas[id])){next[id]=meta;changed=true;}
+   const {key,model}=selected[index],previous=state.metas[model];
+   if(result.status==='rejected'){failed=true;next[model]=previous;return;}
+   const meta=retainRunProgress(previous,result.value.meta),id=selectedRunKey(model,meta);
+   next[id]=meta;
+   state['model'+(key==='a'?'':key.toUpperCase())]=id;
+   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(model),meta:result.value.latest}}));
+   if(id!==model||runSignature(meta)!==runSignature(previous))changed=true;
   });
-  if(changed){
+  const retryPromotion=failedSelection&&selected.some(({key})=>followLatest[key]&&panels[key].displayedModel!==panelSelection(state,key).model);
+  if(changed||retryPromotion){
    const resume=playing;pauseAnimation();++timeGeneration;
    requestedTime=Date.parse(state.times[state.index]);state.metas=next;
    extendCatalogue(fields,Object.values(next),OM,settings);populateVariables();refreshTimeline();
    await setTime();if(resume&&generation===state.generation&&!failedSelection&&!briefingActive)playback.start();
   }
+  if(generation!==state.generation||briefingActive||document.hidden)return;
   updateRunMenus(results.filter(r=>r.status==='fulfilled').map(r=>r.value));
   showRunUpdates(failed?'Live check temporarily unavailable. Keeping the displayed run; retrying in one minute.':'');
- }catch(error){showRunUpdates('Live update could not finish: '+error.message+' Retrying in one minute.');}
+ }catch(error){if(generation===state.generation)showRunUpdates('Live update could not finish: '+error.message+' Retrying in one minute.');}
  finally{checkingLiveRuns=false;}
 }
 
@@ -682,7 +695,7 @@ async function configure(force=false){
  try{
   const load=metadataLoader(force);
   const selected=panelSelections(state);
-  const results=await Promise.all(selected.map(async item=>({...item,...await mapRunCatalogue.select(item.model,load)})));if(generation!==state.generation)return;
+  const results=await Promise.all(selected.map(async item=>({...item,...await mapRunCatalogue.select(requestedRun(item),load)})));if(generation!==state.generation)return;
   const pairs=results.map(result=>[result.key,result.meta]);
   for(let i=0;i<selected.length;i++){
    const panelKey=selected[i].key,suffix=panelKey==='a'?'':panelKey.toUpperCase();
@@ -700,12 +713,14 @@ async function configure(force=false){
  }catch(error){if(generation===state.generation){state.times=[];refreshStartingTime('Forecast unavailable');for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
  finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;$('map-variable-c').disabled=!state.fieldC;}}
 }
-$('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
-$('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
-$('map-model-c').addEventListener('change',e=>{state.modelC=e.target.value;configure();});
-for(const [id,property]of [['map-run','model'],['map-run-b','modelB'],['map-run-c','modelC']])$(id).addEventListener('change',e=>{
- requestedTime=Date.parse(state.times[state.index])||requestedTime;state[property]=e.target.value;configure();
-});
+for(const [key,property]of [['a','model'],['b','modelB'],['c','modelC']]){
+ const suffix=key==='a'?'':'-'+key;
+ $('map-model'+suffix).addEventListener('change',e=>{state[property]=e.target.value;followLatest[key]=true;configure();});
+ $('map-run'+suffix).addEventListener('change',e=>{
+  requestedTime=Date.parse(state.times[state.index])||requestedTime;
+  state[property]=e.target.value;followLatest[key]=!e.target.value.includes('@');configure();
+ });
+}
 for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
  pauseAnimation();failedSelection=null;state[property]=e.target.value;
  try{refreshTimeline();setTime();}
@@ -740,7 +755,7 @@ async function changeComparison(){
  for(const key of ['b','c']){
   const visible=panelVisible(key);
   if(visible&&!comparisonInitialized.has(key)){
-   const suffix=key.toUpperCase();state['model'+suffix]=state.model;if(key==='c')state['field'+suffix]=state.field;
+   const suffix=key.toUpperCase();state['model'+suffix]=state.model;followLatest[key]=followLatest.a;if(key==='c')state['field'+suffix]=state.field;
    $('map-model-'+key).value=sourceModel(state['model'+suffix]);comparisonInitialized.add(key);
   }
   $('panel-'+key).hidden=!visible;$('layer-notes-'+key).hidden=!visible;
@@ -820,7 +835,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261020-ens-loading').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261020-auto-complete').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;
@@ -828,13 +843,14 @@ function closeBriefing(){
  document.body.classList.remove('briefing-open');
  for(const panel of Object.values(panels)){panel.map.resize();panel.frameCache?.invalidateView();}
  viewportBounds();if(!restyleMaps())void restoreMapFrame();
+ void refreshLiveRuns();
  window.scrollTo(0,briefingScroll);
  (matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});
 }
 async function openBriefing(){
  if(briefingActive)return;
  // Carry explicit area presets; retain the UK briefing default after free panning.
- const bounds=a.map.getBounds(),selection={model:state.model,field:state.field,time:state.times[state.index],interval:$('map-forecast-interval').value,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
+ const bounds=a.map.getBounds(),selection={model:state.model,followLatest:followLatest.a,field:state.field,time:state.times[state.index],interval:$('map-forecast-interval').value,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
  briefingScroll=window.scrollY;briefingActive=true;pauseAnimation();++timeGeneration;viewportRefresh.cancel();
  const opening=++briefingOpening;
  if($('expanded-map').open)$('expanded-map').close();

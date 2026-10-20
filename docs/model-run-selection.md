@@ -5,12 +5,25 @@ lists the newest published initialization and its most recent verified complete
 predecessor. New selections prefer a complete run; if none can be verified, the
 incoming run remains available with an explicit notice.
 
-Each panel pins its selected initialization. Minute checks append hours and
-fields to that same run, and update the choices, without replacing the viewed
-run. Different panels may select the same model at different initializations.
-Their timeline is the union of supplied valid times, with unavailable panels
-blanked rather than filled from another run. An older pinned run remains in its
-selector while being viewed, subject to the provider's archive availability.
+Maps and Forecast Briefing default to **Auto (latest)**. Minute checks keep the
+previous complete initialization visible while a newer run is updating, then
+advance automatically once the newer run is verified complete. Checks also run
+when a hidden page becomes visible again. The selected weather layer and valid
+time are retained where the new run supplies them; otherwise the existing
+field/time availability rules apply. Frames and their UTC labels change together
+when the new frame is ready.
+
+Selecting a specific dated run deliberately pins that panel. Minute checks still
+append hours and fields to that same run and update the other choices. Select
+**Auto (latest)** again to resume automatic promotion. Choosing another forecast
+model starts in automatic mode. A dated model key in a shared URL remains an
+explicit pin. Opening Forecast Briefing carries the first panel's automatic or
+pinned choice; returning to Maps rechecks the panel runs.
+
+Panels track this choice independently, including two panels showing the same
+model. Their timeline is the union of supplied valid times, with unavailable
+panels blanked rather than filled from another run. An older pinned run remains
+in its selector while being viewed, subject to the provider's archive availability.
 
 Completion requires explicit completed metadata for all attached sources.
 GFS also requires its exact-cycle 0.25-degree companion. A missing optional
@@ -51,6 +64,7 @@ expiry remain genuine availability limits and are not hidden by mixed runs.
 
 Validation: Node unit suite, generated-feed Python tests, and
 `tests/run-selector-browser.mjs` cover independent selections, default complete
-runs, partial arrivals, pinned rollover, reload, source failure, UTC labels,
-Briefing and desktop/mobile layouts. Synthetic browser tests verify application
+runs, automatic completion promotion, partial arrivals, deliberate pins,
+hidden-page catch-up, reload, source failure, UTC labels, Briefing and
+desktop/mobile layouts. Synthetic browser tests verify application
 behaviour rather than upstream throughput.

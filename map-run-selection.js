@@ -13,10 +13,11 @@ export function completedModelRun(model,meta){
  if(!sources.every(s=>s.completed===true&&Date.parse(s.reference_time)===reference))return false;
  return model!=='gfs_global'||sources.some(s=>s.domain==='ncep_gfs025');
 }
+export const preferredCompleteRun=(model,pair)=>completedModelRun(sourceModel(model),pair.latest)?pair.latest:pair.previous??pair.latest;
 const withoutHistory=meta=>{const {previousCompletedRun,...run}=meta;return run;};
 
 // Keep only metadata. Native grids remain at their immutable provider URLs.
-// Each selected panel pins an initialization; only that initialization can grow.
+// An undated key follows the latest complete run. Dated keys stay pinned.
 export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpatialRun}={}){
  const records=new Map(),checks=new WeakMap();
  async function check(model,load){
@@ -69,7 +70,7 @@ export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpati
    const model=sourceModel(key),reference=selectedReference(key),pair=await catalogue(model,load);
    const choices=[pair.latest,pair.previous].filter(Boolean);
    let meta=reference?choices.find(m=>Date.parse(m.reference_time)===Date.parse(reference)):
-    key.endsWith('_previous')?pair.previous:completedModelRun(model,pair.latest)?pair.latest:pair.previous??pair.latest;
+    key.endsWith('_previous')?pair.previous:preferredCompleteRun(model,pair);
    if(!meta&&!reference)throw Error('No previous complete run could be verified. Check latest runs to retry.');
    if(!meta)meta=await loadRun(model,reference,load);
    if(reference&&Date.parse(meta.reference_time)!==Date.parse(reference))throw Error('Selected run identity changed.');
@@ -82,10 +83,15 @@ export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpati
 }
 export const mapRunCatalogue=createRunCatalogue();
 
-export function renderRunSelector(select,model,pair,selected){
+export function renderRunSelector(select,model,pair,selected,{followLatest=false}={}){
  const runs=[pair.latest,pair.previous,selected].filter(Boolean);
  const unique=[...new Map(runs.map(m=>[new Date(m.reference_time).toISOString(),m])).values()].sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time));
  select.replaceChildren();
+ const automatic=preferredCompleteRun(model,pair),complete=completedModelRun(sourceModel(model),automatic);
+ const autoOption=document.createElement('option');
+ autoOption.value=sourceModel(model);
+ autoOption.textContent=formatModelRun(automatic)+' · '+(complete?'Complete · Auto (latest)':'Updating · Auto (awaiting complete run)');
+ select.append(autoOption);
  for(const meta of unique){
   const option=document.createElement('option');
   option.value=selectedRunKey(model,meta);
@@ -94,7 +100,9 @@ export function renderRunSelector(select,model,pair,selected){
   if(meta.reference_time===pair.latest.reference_time)option.textContent+=' · newest';
   select.append(option);
  }
- select.value=selectedRunKey(model,selected);select.disabled=false;
- select.title=pair.warning??(!completedModelRun(sourceModel(model),pair.latest)&&!pair.previous?
-  'No completed run could be verified yet. Showing the available incoming run.':'Initialization in UTC. This selection stays pinned while new runs arrive.');
+ select.value=followLatest?sourceModel(model):selectedRunKey(model,selected);select.disabled=false;
+ select.title=[pair.warning,followLatest?
+  'Initialization in UTC. Automatically advances to the latest complete run, retaining the previous complete run while the next updates.':
+  'Initialization in UTC. This selected run stays pinned. Choose Auto (latest) to resume automatic updates.',
+  !complete?'No completed run could be verified yet. Auto follows the available incoming run until one completes.':null].filter(Boolean).join(' ');
 }
