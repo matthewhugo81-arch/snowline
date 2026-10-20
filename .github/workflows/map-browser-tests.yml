@@ -6,8 +6,13 @@ on:
   pull_request:
     branches: [main]
     paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', '.github/workflows/map-browser-tests.yml']
+  workflow_dispatch:
 permissions:
   contents: read
+# Only supersede older runs of these tests on the same ref, never feed or publish jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   browser:
     runs-on: ubuntu-latest
