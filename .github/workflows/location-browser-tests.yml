@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
     paths: ['app.js', 'index.html', 'styles.css', 'data.js', 'cache.js', 'point-*.js', 'mogreps-*.js', 'average.js', 'chart-*', 'export.js', 'dataset-dialog.js', 'tests/chart-zoom-browser.py', 'tests/meteogram-image-browser.mjs', 'tests/event-analysis-browser.py', 'event-analysis.js', '.github/workflows/location-browser-tests.yml']
+  workflow_call:
+    inputs:
+      revision:
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -14,6 +19,8 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

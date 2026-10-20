@@ -1,5 +1,5 @@
 import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261019-mogreps-uk';
-import {loadPointForecasts} from './point-forecasts.js?v=20261019-mogreps-uk';
+import {loadPointForecasts} from './point-forecasts.js?v=20261020-reliable-points';
 import {averageSeries,cumulativePrecipitation,circularAverageSeries,directionLabel} from './average.js?v=20261019-cumulative-precipitation';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261018-context-menu-fix';
@@ -8,7 +8,7 @@ import {setupChartPanels} from './chart-panels.js?v=20261018-panel-width';
 import {createDatasetDialog} from './dataset-dialog.js?v=20261019-mogreps-uk';
 import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261019-mogreps-uk';
 
-import {nativeSeriesPath,mogrepsLabel} from './mogreps-point.js?v=20261019-mogreps-uk';
+import {nativeSeriesPath,mogrepsLabel} from './mogreps-point.js?v=20261020-reliable-points';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
@@ -56,12 +56,12 @@ function populate(){
 async function loadLocation(location,force=false){
  datasetDialog.close();chartZoom.cancel();state.zoom=null;
  state.controller?.abort();state.controller=new AbortController();const signal=state.controller.signal;const generation=++state.generation;
- state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;state.limit=null;
+ state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;state.limit=null;state.loadNotice='';
  $('place').textContent=location.name;$('coordinates').textContent=`${Math.abs(location.latitude).toFixed(4)}° ${location.latitude<0?'S':'N'} · ${Math.abs(location.longitude).toFixed(4)}° ${location.longitude<0?'W':'E'}`;
  let altitude=location.elevation;
  const showAltitude=()=>{$('altitude').textContent=finite(altitude)?'Altitude: approximately '+Math.round(altitude).toLocaleString('en-GB')+' m above sea level':'Altitude: loading…';};
  showAltitude();
- $('refresh').disabled=true;$('refresh').textContent='Loading…';
+ $('refresh').disabled=true;$('refresh').textContent='Loading…';$('stop-loading').hidden=false;
  let start=Math.floor(Date.now()/3600000)*3600000;state.timeNote='';
  const today=Date.parse(new Date().toISOString().slice(0,10)+'T00:00:00Z');
  if(Number.isFinite(requestedTime)&&requestedTime>=today&&requestedTime<start)start=requestedTime;
@@ -69,8 +69,8 @@ async function loadLocation(location,force=false){
  if(Number.isFinite(requestedTime)){const idx=state.times.findIndex(t=>Date.parse(t)===requestedTime);if(idx>=0)state.index=idx;else state.timeNote='The selected map time is outside this point-forecast window. ';requestedTime=NaN;}
  setStatus('Loading forecasts for this location…');render();
  try{await loadPointForecasts(location,{signal,force,withWindDirection:true,withPressure:true,withTemperature500:true,
-  onModel:model=>{if(generation!==state.generation)return;state.models.set(model.id,model);if(!finite(altitude)&&finite(model.elevation)){altitude=model.elevation;showAltitude();}if(model.retryAt)state.limit={retryAt:model.retryAt};},
-  onError:(model,error)=>{if(generation!==state.generation)return;state.errors.set(model.id,error.name==='TimeoutError'?'Request timed out. Try Refresh.':error.message);if(error.status===429)state.limit=error;},
+  onModel:model=>{if(generation!==state.generation)return;state.models.set(model.id,model);if(!finite(altitude)&&finite(model.elevation)){altitude=model.elevation;showAltitude();}if(model.api!=='mogreps'&&model.retryAt)state.limit={retryAt:model.retryAt};},
+  onError:(model,error)=>{if(generation!==state.generation)return;state.errors.set(model.id,error.name==='TimeoutError'?'Request timed out. Try Refresh.':error.message);if(model.api!=='mogreps'&&error.status===429)state.limit=error;},
   onProgress:done=>{if(generation===state.generation){setStatus(`Loading forecasts · ${done} of ${MODELS.length} models checked`);scheduleRender();}}
  });}catch(error){if(signal.aborted||generation!==state.generation)return;setStatus(error.message,true);}
  if(generation!==state.generation)return;
@@ -84,11 +84,23 @@ async function loadLocation(location,force=false){
  finishStatus();render();
 }
 function finishStatus(){
- $('refresh').disabled=false;$('refresh').textContent='Refresh';
+ $('refresh').disabled=false;$('refresh').textContent='Refresh';$('stop-loading').hidden=true;
  const suffix=state.errors.size?` · ${state.errors.size} unavailable (see data availability)`:'';
  const models=[...state.models.values()],stale=models.some(m=>m.stale),shared=models.some(m=>m.source==='shared cache');
+ const mogreps=models.find(m=>m.api==='mogreps'),partial=mogreps&&!mogreps.complete;
+ const nativeNotice=partial?' MOGREPS-G is incomplete'+(mogreps.missingVariables?.includes('pressure_msl')?' (MSLP unavailable at some forecast times)':'')+'. '+(mogreps.loadError??'Use Refresh to retry.'):'';
  const retry=state.limit?.retryAt?` Open-Meteo's request limit was reached; live API requests resume after ${date.format(state.limit.retryAt)} UTC.`:'';
- setStatus(state.models.size?`${state.timeNote??''}${stale?'Cached forecasts — live refresh unavailable':shared?'Shared forecasts':'Latest available forecasts'} · retrieved ${date.format(state.fetched)} UTC${suffix}${retry}`:state.limit?`Forecasts temporarily unavailable: Open-Meteo's request limit was reached. No usable cached forecast exists for this location. Try Refresh after ${date.format(state.limit.retryAt)} UTC.`:'Unable to load forecasts. Try Refresh. Details are in data availability.',!state.models.size||stale);
+ setStatus(state.models.size?`${state.timeNote??''}${stale?'Cached forecasts — live refresh unavailable':shared?'Shared forecasts':'Latest available forecasts'} · retrieved ${date.format(state.fetched)} UTC${suffix}${retry}`:state.limit?`Forecasts temporarily unavailable: Open-Meteo's request limit was reached. No usable cached forecast exists for this location. Try Refresh after ${date.format(state.limit.retryAt)} UTC.`:'Unable to load forecasts. Try Refresh. Details are in data availability.',!state.models.size||stale||!!partial);
+ if(nativeNotice)$('status').textContent+=nativeNotice;
+ if(state.loadNotice)$('status').textContent+=' '+state.loadNotice;
+}
+function stopLoading(){
+ if(!state.loading)return;
+ state.controller?.abort();state.generation++;state.loading=false;
+ state.loadNotice='Loading stopped. Received forecasts are retained; use Refresh to retry.';
+ if($('altitude').textContent==='Altitude: loading…')$('altitude').textContent='Altitude unavailable';
+ state.fetched=state.models.size?Math.min(...[...state.models.values()].map(m=>m.fetchedAt)):null;
+ finishStatus();render();
 }
 function pathFrom(values,x,y){let drawing=false,d='';for(let i=0;i<values.length;i++){if(!finite(values[i])){drawing=false;continue;}d+=`${drawing?'L':'M'}${x(i).toFixed(1)},${y(values[i]).toFixed(1)} `;drawing=true;}return d;}
 function plot(container,series,config,times){
@@ -175,7 +187,7 @@ function render(){
  plot($('plot-'+v.key),lines,v,times);
  $('frost-'+v.key).innerHTML=series.some(s=>s.values.some(value=>finite(value)&&(v.unit==='°C'?value<0:v.key==='precipitation'&&value>0)))?variableLegend(v):'';
  }
- const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);let validTimes=data?coverageCache.get(data):null;if(!validTimes){validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];if(data)coverageCache.set(data,validTimes);}let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data?.detail)text+='; '+data.detail;if(data?.run)text+=`; run ${date.format(new Date(data.run))} UTC · 18 members · ${data.complete?'complete':'partial; '+data.missingSteps.length+' missing steps'} · ${data.periodNote}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
+ const coverage=new Map(MODELS.filter(m=>state.selected.has(m.id)).map(m=>{const data=state.models.get(m.id);let validTimes=data?coverageCache.get(data):null;if(!validTimes){validTimes=data?data.time.filter(t=>VARIABLES.some(v=>finite(valueAt(data,v.key,t)))):[];if(data)coverageCache.set(data,validTimes);}let text=state.errors.get(m.id)??(state.loading?'Loading…':'No data');if(validTimes.length)text=`Ends ${date.format(new Date(validTimes.at(-1)))} UTC; grid ${finite(data.elevation)?Math.round(data.elevation)+' m':'elevation unavailable'}`;if(data?.detail)text+='; '+data.detail;if(data?.run)text+=`; run ${date.format(new Date(data.run))} UTC · 18 members · ${data.complete?'complete':`partial; ${data.completed??0} of ${data.total??83} forecast times received${data.missingVariables?.includes('pressure_msl')?'; MSLP unavailable at some times':''}${data.loadError?'; '+data.loadError:''}`} · ${data.periodNote}`;if(data)text+=`; retrieved ${date.format(data.fetchedAt)} UTC${data.source?' · '+data.source:''}${data.stale?' · cached; '+(data.refreshError??'live refresh unavailable'):''}`;return [m.id,text];}));
  inspection={models,times,start,end,votes,averages,coverage};
  renderInspection();
  datasetDialog.render();
@@ -239,6 +251,7 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('click',e=>{if(!e.target.closest('#search-form'))closeSearch();});
 $('refresh').addEventListener('click',()=>loadLocation(state.location,true));
+$('stop-loading').addEventListener('click',stopLoading);
 $('horizon').addEventListener('change',e=>{chartZoom.cancel();state.zoom=null;state.hours=Number(e.target.value);scheduleRender();});
 $('time-slider').addEventListener('input',e=>{state.index=Number(e.target.value);scheduleRender(true);});
 for(const [id,filter] of [['select-all',()=>true],['select-global',m=>!m.regional],['select-none',()=>false]])$(id).addEventListener('click',()=>{state.selected=new Set(MODELS.filter(filter).map(m=>m.id));document.querySelectorAll('.model-chip input').forEach(input=>input.checked=state.selected.has(input.value));scheduleRender();});

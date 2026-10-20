@@ -1,14 +1,18 @@
 // Metadata and tiny byte-range checks only: no image generation or point API calls.
-// Run with node scripts/check_map_feeds.mjs [output.json].
-import {writeFile,mkdir,appendFile} from 'node:fs/promises';
+// Run with node scripts/check_map_feeds.mjs [output.json] [--state state.json].
+import {writeFile,readFile,mkdir,appendFile,rename} from 'node:fs/promises';
 import {dirname} from 'node:path';
+import {parseArgs} from 'node:util';
 import {MAP_MODELS} from '../map-models.js';
 import {loadSpatialModel,loadSpatialRun,fieldDataURL} from '../map-sources.js';
 import {UKV} from '../ukv-run-selection.js';
 import {ACCUMULATION_HOURS,accumulationKey,accumulationSource} from '../map-accumulation.js';
 import {ENSEMBLE_DOMAINS} from '../map-ensemble.js';
 import {discoverPreviousRuns} from '../map-previous-run-data.js';
-const timings=[],cache=new Map(),output=process.argv[2]??'map-feed-health.json';
+import {feedPolicy,classifyFeed,parseIncidentState,updateFeedIncidents,healthSummary} from './map_feed_status.mjs';
+const {positionals,values}=parseArgs({allowPositionals:true,options:{state:{type:'string',default:'.health-state/map-feed-state.json'}}});
+if(positionals.length>1)throw Error('Expected one output path and optional --state path');
+const timings=[],cache=new Map(),output=positionals[0]??'map-feed-health.json',statePath=values.state;
 const deployed=url=>url.startsWith('file:')&&url.includes('/ensemble-data/')?'https://matthewhugo81-arch.github.io/snowline/ensemble-data/'+url.split('/ensemble-data/')[1]:url;
 async function get(url){
  url=deployed(url);
@@ -50,7 +54,7 @@ async function worker(){while(index<models.length){
   const record={model:model.id,name:model.name,reference_time:meta.reference_time,completed:meta.completed!==false,horizonHours:horizon,ageHours:Number(ageHours.toFixed(2)),metadataMs:elapsed,warnings:[...(meta.sourceWarnings??[])],accumulations:ACCUMULATION_HOURS.filter(h=>accumulationSource(meta,accumulationKey(h)))};
   if(ageHours<-.1)record.warnings.push('Initialization is in the future.');
   // Conservative review thresholds, not promises of upstream publication times.
-  const threshold=model.id===UKV||model.id===UKV+'_nowcast'?6:model.regional?12:24;
+  const threshold=feedPolicy(model).reviewHours;
   if(ageHours>threshold)record.warnings.push('Initialization age exceeds the '+threshold+' h review threshold.');
   if(elapsed>10000)record.warnings.push('Metadata check took over 10 seconds.');
   if(['precipitation','pressure_msl_mean','temperature_850hPa_mean','precipitation_probability'].some(key=>meta.variables.includes(key))){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
@@ -69,15 +73,23 @@ async function worker(){while(index<models.length){
  }catch(e){results.push({model:model.id,name:model.name,error:e.message});}
 }}
 await Promise.all([worker(),worker(),worker()]);
-const report={checkedAt:new Date().toISOString(),scope:'Published metadata and a 64-byte forecast sample; not a full image latency guarantee.',results,timings};
+for(const record of results)record.health=classifyFeed(models.find(model=>model.id===record.model),record);
+let restored;
+try{restored=parseIncidentState(await readFile(statePath,'utf8'));}
+catch(error){restored=parseIncidentState();if(error.code!=='ENOENT'){restored.status='unavailable';restored.note='Incident state could not be restored: '+error.message+'. Current degraded data remains visible; notification history could not be restored.';}}
+const now=Date.now(),{state,monitoring}=updateFeedIncidents(results,restored,{now});
+const report={checkedAt:new Date(now).toISOString(),scope:'Published metadata and 64-byte current/archive forecast samples; not a full image latency guarantee.',results,timings,monitoring};
 await mkdir(dirname(output),{recursive:true});await writeFile(output,JSON.stringify(report,null,2));
-const lines=['## Snowline map feed health',report.checkedAt,'',report.scope,'','| Model | Initialization UTC | Horizon | Metadata | Review |','|---|---|---:|---:|---|'];
-for(const result of results){const problems=result.error??result.warnings?.join(' ')??'';lines.push(`| ${result.name} | ${result.reference_time??'unverified'} | ${result.horizonHours??'—'} h | ${result.metadataMs??'—'} ms | ${problems||'OK'} |`);if(problems)console.warn('::warning title=Map feed review::'+result.name+': '+problems);}
-if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');
-console.log(lines.join('\n'));
-// Source publication age and expected missing hours remain review warnings.
-// Only fail this transport job on unverified model metadata, impossible
-// initialization timestamps, or a genuinely unreadable forecast byte range.
-// Official ensemble run/horizon freshness is checked separately in Python.
-const isCritical=r=>r.error||r.warnings?.some(w=>w==='Initialization is in the future.'||w.startsWith('Forecast byte-range check failed:'));
-if(results.some(isCritical))process.exitCode=1;
+await mkdir(dirname(statePath),{recursive:true});await writeFile(statePath+'.tmp',JSON.stringify(state,null,2));await rename(statePath+'.tmp',statePath);
+const summary=healthSummary(report);
+if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,summary);
+console.log(summary);
+const annotation=value=>String(value).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
+if(monitoring.stateStatus!=='restored')console.log('::notice title=Map feed monitoring state::'+annotation(monitoring.stateNote));
+for(const incident of monitoring.alerts)console.error('::error title=New map feed incident::'+annotation(incident.model+': '+incident.reason));
+for(const recovered of monitoring.recoveries)console.log('::notice title=Map feed recovered::'+annotation(recovered.model+': '+recovered.previousStatus+' → '+recovered.status));
+// Unreadable data and invalid timestamps fail immediately on first observation.
+// Old but readable native data fails after 15 minutes of repeated observations.
+// Ongoing incidents stay explicit in the report without failing every dispatch.
+// Generated ensemble run/horizon freshness still belongs to the Python check.
+if(monitoring.alerts.length)process.exitCode=1;

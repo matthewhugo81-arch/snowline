@@ -1,5 +1,5 @@
 import {VARIABLES} from './data.js?v=20261019-mogreps-uk';
-import {fetchMogreps, MOGREPS_VARIABLES} from './mogreps-client.js?v=20261019-mogreps-uk';
+import {fetchMogreps, MOGREPS_VARIABLES} from './mogreps-client.js?v=20261020-reliable-points';
 
 export const MOGREPS_POINT='mogreps_global_ensemble_mean';
 const hour=3600000;
@@ -21,7 +21,9 @@ export function mogrepsMean(raw, model, now=Date.now()){
  return {...model,time,values,index:new Map(time.map((t,i)=>[t,i])),latitude:raw.latitude,longitude:raw.longitude,
   fetchedAt:now,source:'Met Office · CC BY-SA 4.0',sourceUrl:raw.sourceUrl,run:new Date(raw.run*1000).toISOString(),
   intervalHours:3,memberCount:18,missingSteps:raw.missingSteps??[],complete:raw.complete,
-  periodNote:'Temperatures at 3 h steps. Rain/snow show the preceding 3 h average rate; no hourly detail. Snowfall uses a 7:1 snow-to-water equivalent.'};
+  completed:raw.completed,total:raw.total,missingVariables:raw.missingVariables??[],
+  missingVariableSteps:raw.missingVariableSteps??{},loadError:raw.loadError,retryAt:raw.retryAt,
+  periodNote:'Temperatures and mean sea level pressure at 3 h steps. Rain/snow show the preceding 3 h average rate; no hourly detail. Snowfall uses a 7:1 snow-to-water equivalent.'};
 }
 export async function fetchMogrepsPoint(location,model,signal,onProgress=()=>{}){
  const raw=await fetchMogreps({lat:location.latitude,lon:location.longitude},signal,

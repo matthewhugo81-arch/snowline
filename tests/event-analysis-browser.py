@@ -42,7 +42,11 @@ with sync_playwright() as p:
         page.wait_for_function("!document.querySelector('#calculate-event').disabled")
     calculate()
     assert page.locator('#event-results tr').count()==18
-    assert 'temporarily unavailable' in page.locator('#event-results tr').filter(has_text='MOGREPS-G').inner_text()
+    native_row=page.locator('#event-results tr').filter(has_text='MOGREPS-G')
+    native_status=native_row.locator('td').nth(1)
+    assert native_row.locator('td').count()==2 and native_status.get_attribute('colspan')=='7', 'Unavailable native data must show an error, never numeric forecast totals'
+    native_message=native_status.inner_text()
+    assert '503' in native_message and 'retry' in native_message.lower(), f'Native outage should explain the service status and recovery: {native_message}'
     assert page.evaluate('fixtureRequests.length')==1, 'Known location uses the shared snapshot'
     gfs=page.locator('#event-results tr').filter(has_text='GFS global')
     assert gfs.locator('td').nth(1).inner_text()=='—', 'A missing hour cannot become a complete snow total'

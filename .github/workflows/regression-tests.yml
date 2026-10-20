@@ -20,6 +20,8 @@ jobs:
         run: python tests/worker-runtime/check.py
       - name: Verify all generated model availability checks
         run: python -m unittest discover -s tests -p 'test_generated*.py'
+      - name: Check Pages retention, size accounting and publication gates
+        run: python -m unittest discover -s tests -p 'test_pages*.py'
       - name: Check scheduler Durable Object RPC and persistent dispatch lease
         run: python tests/worker-runtime/check.py tests/scheduler-runtime/wrangler.toml
       - name: Validate external scheduler packaging

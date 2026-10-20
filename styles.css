@@ -132,3 +132,6 @@
 footer .footer-identity{display:grid;gap:6px;min-width:0}
 footer .footer-credit{margin:0;color:var(--muted);font-size:12px;line-height:1.6;letter-spacing:normal}
 footer .footer-credit a{text-underline-offset:3px}
+
+/* Keep cancellation available beside Refresh on narrow screens. */
+.location-actions{flex-wrap:wrap}

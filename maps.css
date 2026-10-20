@@ -275,3 +275,5 @@
 .map-canvases:has(#panel-b:not([hidden])) .panel-heading .panel-number{margin-bottom:0}
 .panel-controls:has(.panel-selectors[hidden]) .panel-heading{margin-bottom:0}
 @media(max-width:650px){.panel-menu-toggle{width:40px;height:40px}.panel-controls:has(.panel-selectors[hidden]){padding-bottom:7px}}
+.map-startup-error{padding:1rem;margin:1rem;border:1px solid #b45309;border-left:4px solid #b45309;border-radius:8px;background:var(--surface,#fff);color:var(--ink,#0e2034)}
+.map-startup-error h2{margin:0 0 .5rem;font-size:1.1rem}.map-startup-error p{margin:.5rem 0 1rem}.map-startup-error a{margin-left:1rem}
