@@ -164,7 +164,22 @@ try{
    assert.equal(await page.locator('#briefing-background').inputValue(),'streets','Background follows between briefing modes');
    assert.equal(await page.locator('#briefing-preset').inputValue(),'cloud_cover','Standalone field follows from previous runs into forecast sequence');
    await page.locator('#briefing-close').click();assert.equal(await page.locator('#map-a').isVisible(),true);
-   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:90000});assert.equal(await page.locator('#map-error-a').isVisible(),false,'Map restoration must not leave a forecast-frame error');
+   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready')&&document.querySelector('#panel-label-a').textContent.includes('1500Z'),{},{timeout:90000});
+   // The completed 15Z run arrived while Briefing was open. Automatic following
+   // preserves the valid time, so its T+21 slot has no complete 24-hour window.
+   // This is an explicit availability gap, not a map-restoration transport error.
+   assert.equal(await page.locator('#map-run').inputValue(),UKV,'Returning to maps retains automatic latest-complete following');
+   assert.match(await page.locator('#panel-label-a').textContent(),/1500Z.*24 h precipitation total.*unavailable/);
+   assert.match(await page.locator('#panel-label-b').textContent(),/1500Z.*13 Oct.*12:00/);
+   assert.equal(await page.locator('#map-start-time').inputValue(),'2026-10-13T12:00:00.000Z','Run promotion preserves the requested valid time');
+   assert.equal(await page.locator('#map-error-a').isVisible(),true);
+   assert.match(await page.locator('#map-error-a').textContent(),/No forecast for this layer at the selected time.*First available:.*13 Oct.*15:00/);
+   assert.equal(await page.locator('#map-error-b').isVisible(),false,'The temperature panel still has a valid forecast');
+   await page.locator('#map-start-time').selectOption('2026-10-13T15:00:00.000Z');
+   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready')&&['a','b'].every(key=>/13 Oct,? 15:00/.test(document.querySelector('#panel-label-'+key).textContent)),{},{timeout:90000});
+   assert.equal(await page.locator('#map-error-a').isVisible(),false,'The first complete 24-hour window restores the accumulation chart');
+   assert.equal(await page.locator('#map-error-b').isVisible(),false,'Both panels restore without forecast-frame errors');
+   assert.match(await page.locator('#legend-interval-a').textContent(),/12 Oct.*15:00.*13 Oct.*15:00.*UTC/);
    assert.equal(await page.locator('#map-background').inputValue(),'streets','Background follows back to interactive maps');
    await page.locator('#map-model').selectOption('gfs_global');await page.waitForFunction(()=>!document.querySelector('#map-variable').disabled);
    assert.equal(await page.locator('#map-variable option[value="precipitation_total_120h"]').isDisabled(),false);
