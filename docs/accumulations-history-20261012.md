@@ -55,8 +55,11 @@ where the provider retains matching runs.
 
 All panels share chart, area, colour scale and forecast valid time. Each labels
 its actual initialization and lead time. Accumulations additionally require the
-same start/end window. The weather composite compares equal precipitation
-interval lengths. Runs without required fields or common hours are not replaced.
+same start/end window in each displayed panel. As of 20 October, the timeline
+and chart menu retain all selected runs' available data. A shorter run or missing
+layer no longer restricts other panels. Weather composites show native mean rain
+rates and label differing reporting periods instead of hiding those times.
+Runs without required fields or hours are marked individually and are not replaced.
 An unavailable archive file is shown as unavailable, not as an empty dry chart.
 
 Selected cycles stay pinned. The existing shared metadata checker supplies a
