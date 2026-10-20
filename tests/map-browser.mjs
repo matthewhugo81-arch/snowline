@@ -17,7 +17,9 @@ const fakeOM=`
  export const getRanges=()=>[{start:0,end:181},{start:0,end:360}];
  window.fixtureGridReads=[];
  export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{},readVariable:async(url,variable,ranges,signal)=>{signal?.throwIfAborted();window.fixtureGridReads.push({url,variable,purpose:new Error().stack.includes('briefingValueLabels')?'label':'native'});return {values:new Float32Array(360*181).fill(10)};}}});
- export const updateCurrentBounds=()=>{};
+ import {forecastReadBounds} from './forecast-read-bounds.mjs';
+ export let currentBounds;
+ export const updateCurrentBounds=bounds=>{currentBounds=forecastReadBounds(bounds);};
  export const getValueFromLatLong=async()=>({value:10});
  export const getColorScale=key=>defaultOmProtocolSettings.colorScales[key]??fixtureScale(key.startsWith('geopotential_height_')?'m':'m/s');
  window.fixtureRequests=[];window.fixturePalettes=[];
@@ -96,6 +98,79 @@ try{
   });
   await page.goto(origin+'/maps.html'+(process.env.MAP_THREE_PANELS_ONLY?'?time=2026-10-10T00:00:00Z':''));
   try{
+   if(process.env.MAP_LAYOUT_ONLY||process.env.MAP_THREE_PANELS_ONLY){
+    const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+    await ready();
+    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
+    await page.locator('#map-model').selectOption('gfs_global');await ready();
+    await page.locator('#map-forecast-interval').selectOption('12');await ready();
+    await page.locator('#compare-maps').check();await ready();
+    for(const count of [2,3]){
+     await page.locator('#map-comparison-count').selectOption(String(count));await ready();
+     const keys=['a','b','c'].slice(0,count);
+     if(viewport.width<=650)await page.locator('#mobile-return-map').click();
+     await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
+     await page.evaluate(()=>{
+      window.fixtureLayoutInvalidations=0;window.fixtureLayoutPauses=0;
+      for(const panel of Object.values(window.fixturePanels)){
+       const cache=panel.frameCache,original=cache.invalidateView.bind(cache);
+       cache.invalidateView=()=>{window.fixtureLayoutInvalidations++;return original();};
+      }
+      new MutationObserver(records=>{
+       for(const record of records)if(record.oldValue==='true'&&record.target.getAttribute('aria-pressed')==='false')window.fixtureLayoutPauses++;
+      }).observe(document.getElementById('play-map'),{attributes:true,attributeFilter:['aria-pressed'],attributeOldValue:true});
+     });
+     const inspect=()=>page.evaluate(()=>({
+      sources:Object.values(window.fixturePanels).filter(p=>!document.getElementById('panel-'+p.key).hidden).map(p=>p.sourceId),
+      context:window.fixtureImageryCache.context,generation:window.fixtureImageryCache.generation,
+      invalidations:window.fixtureLayoutInvalidations,pauses:window.fixtureLayoutPauses,
+      time:document.getElementById('map-start-time').value,
+      requests:window.fixtureRequests.map(r=>r.type+' '+r.url)
+     }));
+     const resizeSettled=()=>page.waitForFunction(()=>Object.values(window.fixturePanels).every(p=>{
+      if(document.getElementById('panel-'+p.key).hidden)return true;
+      const map=p.map,box=map.getContainer(),canvas=map.getCanvas();
+      return box.clientWidth===canvas.clientWidth&&box.clientHeight===canvas.clientHeight&&(p.url?p.frameCache.isReady(p.url):!p.loaded);
+     }));
+     const before=await inspect();
+     for(const key of keys){await page.locator('#toggle-panel-menu-'+key).click();await resizeSettled();}
+     if(viewport.width>650){await page.locator('#toggle-map-sidebar').click();await resizeSettled();}
+     // Allow the settled-move debounce to expose accidental source rebuilding.
+     await page.waitForTimeout(250);
+     const collapsed=await inspect();
+     assert.deepEqual(collapsed.sources,before.sources,'Minimising keeps the same displayed sources');
+     assert.equal(collapsed.context,before.context,'Layout uses the same clipping coverage');
+     assert.equal(collapsed.generation,before.generation,'Layout does not reset downloaded imagery');
+     assert.equal(collapsed.invalidations,0,'Layout never invalidates prepared frames');
+     assert.equal(collapsed.time,before.time);
+     for(const request of new Set(before.requests))assert.equal(collapsed.requests.filter(r=>r===request).length,before.requests.filter(r=>r===request).length,'Previously loaded tiles are not rendered/downloaded again');
+     for(const key of keys){await page.locator('#toggle-panel-menu-'+key).click();await resizeSettled();}
+     if(viewport.width>650){await page.locator('#toggle-map-sidebar').click();await resizeSettled();}
+     await page.locator('#play-map').click();
+     await page.waitForFunction(time=>document.getElementById('map-start-time').value!==time,before.time,{timeout:30000});
+     const playing=await inspect();
+     for(const key of keys){
+      await page.locator('#toggle-panel-menu-'+key).click();await resizeSettled();
+      await page.locator('#toggle-panel-menu-'+key).click();await resizeSettled();
+     }
+     if(viewport.width>650){
+      await page.locator('#toggle-map-sidebar').click();await resizeSettled();
+      await page.locator('#toggle-map-sidebar').click();await resizeSettled();
+     }
+     await page.waitForFunction(time=>document.getElementById('map-start-time').value!==time,playing.time,{timeout:30000});
+     assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'true','Animation continues after minimising and expanding');
+     const after=await inspect();
+     assert.equal(after.pauses,0,'Layout does not momentarily stop playback');
+     assert.equal(after.invalidations,0);
+     assert.equal(after.generation,before.generation);
+     await page.locator('#play-map').click();
+     if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
+    }
+    assert.deepEqual(errors,[]);
+    console.log(JSON.stringify({viewport,layoutKeepsPlaybackAndImagery:true}));
+    if(process.env.MAP_LAYOUT_ONLY)continue;
+    await page.goto(origin+'/maps.html?time=2026-10-10T00:00:00Z');
+   }
    if(process.env.MAP_THREE_PANELS_ONLY){
    const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    const checkPanelMenus=async count=>{

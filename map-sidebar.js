@@ -1,5 +1,5 @@
 // Collapse only the desktop sidebar; the phone's Map settings drawer stays independent.
-export function setupMapSidebar(){
+export function setupMapSidebar({onLayoutChange=()=>{}}={}){
  const workspace=document.querySelector('.map-workspace'),button=document.getElementById('toggle-map-sidebar'),content=document.getElementById('map-settings-content');
  if(!workspace||!button||!content)return;
  const desktop=matchMedia('(min-width:651px)');
@@ -18,6 +18,7 @@ export function setupMapSidebar(){
   collapsed=!collapsed;
   try{localStorage.setItem('snowline-map-sidebar-collapsed',String(collapsed));}catch{}
   update();
+  onLayoutChange();
  });
  desktop.addEventListener('change',update);
  update();

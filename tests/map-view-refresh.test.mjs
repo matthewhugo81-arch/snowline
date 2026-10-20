@@ -1,8 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createViewRefresh} from '../map-view-refresh.js';
+import {createViewRefresh,layoutForecastBounds} from '../map-view-refresh.js';
 import {ForecastFrames} from '../map-frames.js';
 import {FakeMap} from './frame-fake.mjs';
+
+test('menu layout bounds cover both sizes without changing the clipping context',()=>{
+ const box={clientWidth:400,clientHeight:500};
+ let longitude=-3;
+ const map={getContainer:()=>box,unproject:([x,y])=>({lng:longitude+(x-box.clientWidth/2)/10,lat:55-(y-box.clientHeight/2)/10})};
+ const available={width:620,height:700},before=layoutForecastBounds(map,available);
+ box.clientWidth=580;box.clientHeight=650;
+ assert.deepEqual(layoutForecastBounds(map,available),before);
+ assert.ok(before[0]<=map.unproject([0,650]).lng&&before[2]>=map.unproject([580,0]).lng);
+ assert.ok(before[1]<=map.unproject([0,650]).lat&&before[3]>=map.unproject([580,0]).lat);
+ longitude+=20;
+ assert.notDeepEqual(layoutForecastBounds(map,available),before,'A real pan gets a new clipping context');
+ box.clientWidth=800;
+ assert.equal(layoutForecastBounds(map,available)[2]-layoutForecastBounds(map,available)[0],80,'Never clip a canvas larger than the reserved layout');
+});
 
 test('rapid zoom sequences render only the final stationary view',t=>{
  t.mock.timers.enable({apis:['setTimeout']});let moving=false,renders=0;

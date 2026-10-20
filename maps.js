@@ -18,13 +18,13 @@ import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-cov
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {setupMapSidebar} from './map-sidebar.js?v=20261016-navigation';
+import {setupMapSidebar} from './map-sidebar.js?v=20261020-layout-playback';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261020-rapid-navigation';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rolling-cache';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
-import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
+import {createViewRefresh,layoutForecastBounds} from './map-view-refresh.js?v=20261020-layout-playback';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-run-selector';
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
@@ -50,7 +50,7 @@ import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from '.
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
-setupMapSidebar();
+setupMapSidebar({onLayoutChange:resizeMapLayout});
 const UK=[-11,49,2.7,61.6];
 for(const area of MAP_AREAS){const option=document.createElement('option');option.value=area.id;option.textContent=area.name;$('map-area').append(option);}
 const currentArea=document.createElement('option');currentArea.value='current';currentArea.textContent='Current map area';$('map-area').append(currentArea);
@@ -129,10 +129,19 @@ const panelVisible=key=>panelSelections(state).some(item=>item.key===key);
 const mapsMoving=()=>Object.entries(panels).some(([key,panel])=>panelVisible(key)&&panel.map.isMoving());
 const viewportRefresh=createViewRefresh(()=>{if(!briefingActive&&state.times.length&&!playing)setTime();},mapsMoving);
 function queueViewportRefresh(){viewportRefresh.schedule();}
+function resizeMapLayout(){
+ for(const {key}of panelSelections(state))panels[key]?.resize({layoutOnly:true});
+}
 function viewportBounds(){
  if(briefingActive)return;
- const visible=Object.entries(panels).filter(([key])=>panelVisible(key)).map(([,p])=>p.map.getBounds());if(!visible.length)return;
- const bounds=[Math.min(...visible.map(b=>b.getWest())),Math.min(...visible.map(b=>b.getSouth())),Math.max(...visible.map(b=>b.getEast())),Math.max(...visible.map(b=>b.getNorth()))];
+ const visible=Object.entries(panels).filter(([key])=>panelVisible(key));if(!visible.length)return;
+ const sideBySide=matchMedia('(min-width:1051px)').matches;
+ const width=document.querySelector('.map-workspace').clientWidth/(sideBySide?visible.length:1);
+ const boundsByPanel=visible.map(([key,p])=>layoutForecastBounds(p.map,{
+  width,
+  height:sideBySide||!state.compare&&matchMedia('(min-width:651px)').matches?$('panel-'+key).clientHeight:p.map.getContainer().clientHeight
+ }));
+ const bounds=[Math.min(...boundsByPanel.map(b=>b[0])),Math.min(...boundsByPanel.map(b=>b[1])),Math.max(...boundsByPanel.map(b=>b[2])),Math.max(...boundsByPanel.map(b=>b[3]))];
  OM.updateCurrentBounds(bounds);
  // Renderer clipping depends on the view as well as the URL/zoom. Never reuse a
  // partially clipped tile in a different view, even if its tile coordinates match.
@@ -172,12 +181,12 @@ function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false});
  map.touchZoomRotate.disableRotation();
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');fitArea(map);
- const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',()=>{if(briefingActive)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});
+ const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',event=>{if(briefingActive||event.snowlineLayoutResize)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive||event.snowlineLayoutResize)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});
  // Geography starts with the map, independently of model metadata or frames.
  panel.coastline=coastlineController(map,{onState:()=>queueMicrotask(()=>updateOutlineStatus(panel))});
  // One resize owner avoids duplicate movement events invalidating the buffer.
  let pixelRatio=map.getPixelRatio();
- panel.resize=()=>{if(briefingActive)return;const container=map.getContainer(),canvas=map.getCanvas(),ratio=map.getPixelRatio();if(container.clientWidth!==canvas.clientWidth||container.clientHeight!==canvas.clientHeight||pixelRatio!==ratio){pixelRatio=ratio;map.resize();}};
+ panel.resize=({layoutOnly=false}={})=>{if(briefingActive)return;const container=map.getContainer(),canvas=map.getCanvas(),ratio=map.getPixelRatio();if(container.clientWidth!==canvas.clientWidth||container.clientHeight!==canvas.clientHeight||pixelRatio!==ratio){pixelRatio=ratio;map.resize(layoutOnly?{snowlineLayoutResize:true}:undefined);if(layoutOnly)scheduleGridValues(panel);}};
  new ResizeObserver(panel.resize).observe($('map-'+key));window.addEventListener('resize',panel.resize);
  map.on('style.load',()=>{panel.styleOrdered=false;applyMapAppearance(map,{roads,terrain});if(panel.restyling){panel.restyling=false;panel.sourceId=null;if(panelVisible(key)&&panelSelections(state).every(({key})=>!panels[key]?.restyling))void restoreMapFrame();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
@@ -707,6 +716,7 @@ function setPanelMenuExpanded(key,expanded){
 for(const key of ['a','b','c'])$('toggle-panel-menu-'+key).addEventListener('click',()=>{
  const expanded=$('toggle-panel-menu-'+key).getAttribute('aria-expanded')==='true';
  setPanelMenuExpanded(key,!expanded);
+ resizeMapLayout();
 });
 async function changeComparison(){
  pauseAnimation();requestedTime=Date.parse(state.times[state.index])||requestedTime;
