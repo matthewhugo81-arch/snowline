@@ -1,7 +1,7 @@
 import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261019-mogreps-uk';
 import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261019-mogreps-uk';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
-import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261020-native-levels';
+import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261020-native-levels';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
@@ -34,10 +34,19 @@ export async function discoverPreviousRuns({model,latest,load,signal,lookbackHou
  const runs=[latest],unavailable=[],errors=[];let index=0;
  if(ensemble){
   try{
-   const archive=await load(ensembleHistoryURL(model));signal?.throwIfAborted();
-   if(archive?.format_version!==1||!Array.isArray(archive.runs)||archive.runs.some(t=>typeof t!=='string'||!Number.isFinite(Date.parse(t))))throw Error('Invalid ensemble archive index');
+   // MOGREPS-G's retained runs can live on the original site while new
+   // publications arrive on the companion. Both indexes describe real runs.
+   const urls=[...new Set([ensembleHistoryURL(model),...(model==='snowline_mogreps_global'?[new URL('./ensemble-data/'+model+'/history.json',import.meta.url).href,COMPANION_BASE+model+'/history.json']:[])])];
+   const indexes=await Promise.allSettled(urls.map(async url=>{
+    const archive=await load(url);
+    if(archive?.format_version!==1||!Array.isArray(archive.runs)||archive.runs.some(t=>typeof t!=='string'||!Number.isFinite(Date.parse(t))))throw Error('Invalid ensemble archive index');
+    return archive;
+   }));signal?.throwIfAborted();
+   const archives=indexes.filter(r=>r.status==='fulfilled').map(r=>r.value);
+   if(!archives.length)throw indexes.find(r=>r.status==='rejected').reason;
+   for(const result of indexes)if(result.status==='rejected'&&result.reason?.status!==404)errors.push({message:result.reason.message});
    const reference=Date.parse(latest.reference_time),cadence=model==='snowline_ecmwf_ensemble'?12:6;
-   candidates=[...new Set(archive.runs.map(Date.parse))].filter(t=>t<reference&&reference-t<=lookbackHours*HOUR&&t%(cadence*HOUR)===0).sort((a,b)=>b-a).map(t=>new Date(t).toISOString());
+   candidates=[...new Set(archives.flatMap(archive=>archive.runs.map(Date.parse)))].filter(t=>t<reference&&reference-t<=lookbackHours*HOUR&&t%(cadence*HOUR)===0).sort((a,b)=>b-a).map(t=>new Date(t).toISOString());
   }catch(error){
    if(signal?.aborted)throw error;
    return {runs,unavailable,errors:[{message:error.message}],notice:'Ensemble archive index could not be checked. Retry Load latest three runs; no substitute runs are used.'};

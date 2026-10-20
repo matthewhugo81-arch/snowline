@@ -115,7 +115,7 @@ try{
    await page.locator('#previous-preset').selectOption('weather');
    const readyCount=n=>page.waitForFunction(n=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===n,n,{timeout:60000});
    const chooseHistoryTime=async text=>{
-    const value=await page.locator('#previous-time option').evaluateAll((os,text)=>os.find(o=>o.textContent.startsWith(text))?.value,text);
+    const value=await page.locator('#previous-time option').evaluateAll((os,text)=>os.find(o=>o.textContent.replaceAll(',','').startsWith(text.replaceAll(',','')))?.value,text);
     assert.ok(value!==undefined,'Published valid time must remain selectable: '+text);
     await page.locator('#previous-time').selectOption(value);
    };

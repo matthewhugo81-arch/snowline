@@ -744,7 +744,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261020-history-range').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261020-history-range2').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

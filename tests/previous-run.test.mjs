@@ -91,3 +91,17 @@ test('an unavailable ensemble archive never falls back to latest or another mode
  const result=await discoverPreviousRuns({model:latest.domain,latest,load:async()=>{throw Error('network unavailable');},loadRun:async()=>{calls++;return latest;}});
  assert.deepEqual(result.runs,[latest]);assert.equal(calls,0);assert.equal(result.errors.length,1);assert.match(result.notice,/could not be checked/);
 });
+
+test('MOGREPS-G discovers retained archive cycles across both publication sites',async()=>{
+ const domain='snowline_mogreps_global',runs=[0,-6,-12].map(h=>({...meta(h),domain})),calls=[];
+ for(const unavailableSite of [null,'companion','original']){
+  const result=await discoverPreviousRuns({model:domain,latest:runs[0],load:async url=>{
+   const companion=url.includes('snowline-ensembles');
+   if(unavailableSite===(companion?'companion':'original'))throw Object.assign(Error('No index'),{status:404});
+   return {format_version:1,runs:companion?[runs[0].reference_time]:runs.map(m=>m.reference_time)};
+  },loadRun:async(model,time)=>{calls.push(time);assert.equal(model,domain);const run=runs.find(m=>Date.parse(m.reference_time)===Date.parse(time));assert.ok(run);return run;}});
+  assert.equal(result.runs.length,unavailableSite==='original'?1:3);
+  assert.equal(result.errors.length,0);
+ }
+ assert.equal(calls.length,4,'Listed older runs are verified once each; no latest-run substitution');
+});
