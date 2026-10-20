@@ -44,7 +44,9 @@ def expected_hours(model, run, native):
     if model == 'mogreps':
         return sorted({int((datetime.fromisoformat(t.replace('Z', '+00:00')) - run).total_seconds() / 3600)
                        for t in native['valid_times'] if datetime.fromisoformat(t.replace('Z', '+00:00')) > run})
-    if model in ('gem', 'gem-upper'):
+    if model == 'gem-upper':
+        return list(range(0, 169, 3)) + list(range(174, 241, 6))
+    if model == 'gem':
         return list(range(0, 241, 3))
     return list(range(79)) + list(range(81, 121, 3)) if run.hour % 6 == 0 else list(range(31)) + [36, 42, 48]
 
