@@ -19,7 +19,7 @@ const fakeOM=`
  export const getProtocolInstance=()=>({omFileReader:{withReader:async()=>{},readVariable:async(url,variable,ranges,signal)=>{signal?.throwIfAborted();window.fixtureGridReads.push({url,variable,purpose:new Error().stack.includes('briefingValueLabels')?'label':'native'});return {values:new Float32Array(360*181).fill(10)};}}});
  import {forecastReadBounds} from './forecast-read-bounds.mjs';
  export let currentBounds;
- export const updateCurrentBounds=bounds=>{currentBounds=forecastReadBounds(bounds);};
+ export const updateCurrentBounds=bounds=>{window.fixtureBounds=[...bounds];currentBounds=forecastReadBounds(bounds);};
  export const getValueFromLatLong=async()=>({value:10});
  export const getColorScale=key=>defaultOmProtocolSettings.colorScales[key]??fixtureScale(key.startsWith('geopotential_height_')?'m':'m/s');
  window.fixtureRequests=[];window.fixturePalettes=[];
@@ -98,6 +98,75 @@ try{
   });
   await page.goto(origin+'/maps.html'+(process.env.MAP_THREE_PANELS_ONLY?'?time=2026-10-10T00:00:00Z':''));
   try{
+   if(!process.env.MAP_THREE_PANELS_ONLY&&!process.env.MAP_LAYOUT_ONLY){
+    const atIndex=index=>page.waitForFunction(index=>{
+     const slider=document.getElementById('map-time'),time=document.getElementById('map-start-time').options[index]?.value;
+     return slider.value===String(index)&&time&&Object.values(window.fixturePanels??{}).filter(panel=>!document.getElementById('panel-'+panel.key).hidden).every(panel=>panel.displayedTime===time)&&document.getElementById('animation-status').textContent.startsWith('Ready');
+    },index);
+    const selectIndex=async index=>{
+     await page.locator('#map-time').evaluate((el,index)=>{el.value=String(index);el.dispatchEvent(new Event('change',{bubbles:true}));},index);
+     await atIndex(index);
+    };
+    const focusPage=()=>page.evaluate(()=>document.activeElement?.blur());
+    await page.waitForFunction(()=>window.fixturePanels?.a.displayedTime&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+    await selectIndex(0);await focusPage();
+    await page.keyboard.press('ArrowRight');await atIndex(1);
+    const center=await page.evaluate(()=>window.fixturePanels.a.map.getCenter().toArray());
+    await page.locator('#map-a canvas').press('ArrowRight');await atIndex(2);
+    assert.deepEqual(await page.evaluate(()=>window.fixturePanels.a.map.getCenter().toArray()),center,'Forecast arrows do not pan the focused map');
+    await page.locator('#map-time').press('ArrowLeft');await atIndex(1);
+    // Repeated physical keydown events retain every step, including reversals.
+    await focusPage();
+    for(let i=0;i<3;i++)await page.keyboard.down('ArrowRight');
+    await page.keyboard.up('ArrowRight');
+    await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowLeft');await atIndex(2);
+    await selectIndex(0);await focusPage();await page.keyboard.press('ArrowLeft');await atIndex(0);
+    const last=Number(await page.locator('#map-time').getAttribute('max'));
+    await selectIndex(last);await focusPage();await page.keyboard.press('ArrowRight');await atIndex(last);
+    await page.keyboard.press('ArrowLeft');await atIndex(last-1);
+    await page.keyboard.press('Shift+ArrowRight');await atIndex(last-1);
+    // Text editing and other native controls keep their own arrow behaviour.
+    await page.evaluate(()=>{
+     const input=document.createElement('input');input.id='fixture-keyboard-input';input.value='Forecast';document.body.append(input);input.focus();input.setSelectionRange(3,3);
+    });
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.locator('#fixture-keyboard-input').evaluate(el=>el.selectionStart),2);
+    await atIndex(last-1);await page.locator('#fixture-keyboard-input').evaluate(el=>el.remove());
+    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
+    await page.locator('#map-opacity').evaluate(el=>el.closest('details').open=true);
+    const opacity=Number(await page.locator('#map-opacity').inputValue());
+    await page.locator('#map-opacity').press('ArrowLeft');
+    assert.equal(Number(await page.locator('#map-opacity').inputValue()),opacity-1);await atIndex(last-1);
+    await page.locator('#map-playback-speed').press('ArrowLeft');await atIndex(last-1);
+    await page.locator('#map-playback-speed').selectOption('1200');
+    await page.locator('#compare-maps').check();
+    await page.waitForFunction(()=>window.fixturePanels?.b.displayedTime&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+    await page.locator('#map-forecast-interval').selectOption('3');
+    await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
+    for(const count of ['2','3']){
+     await page.locator('#map-comparison-count').selectOption(count);
+     await page.waitForFunction(count=>Object.keys(window.fixturePanels).filter(key=>!document.getElementById('panel-'+key).hidden).length===Number(count)&&document.getElementById('animation-status').textContent.startsWith('Ready'),count);
+     await selectIndex(0);await focusPage();await page.keyboard.press('ArrowRight');await atIndex(1);
+     const stepHours=await page.locator('#map-start-time').evaluate(el=>(Date.parse(el.options[1].value)-Date.parse(el.options[0].value))/3600000);
+     assert.equal(stepHours,3,'Keyboard follows the selected forecast interval in each comparison');
+     await page.keyboard.press('ArrowLeft');await atIndex(0);
+    }
+    if(viewport.width<=650)await page.locator('#mobile-return-map').click();
+    await page.locator('#play-map').click();
+    await page.waitForFunction(()=>document.getElementById('map-time').value==='1');
+    await page.keyboard.press('ArrowLeft');await atIndex(0);
+    assert.equal(await page.locator('#play-map').getAttribute('aria-pressed'),'false','Manual keyboard stepping pauses playback');
+    // Briefing must never change the hidden interactive map's time.
+    await page.locator(viewport.width<=650?'#mobile-briefing':'#open-briefing').click();
+    await page.locator('#briefing-loading').waitFor({state:'visible'});
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('#map-time').inputValue(),'0');
+    await page.locator('#briefing-loading-close').click();
+    assert.deepEqual(errors,[]);
+    console.log(JSON.stringify({viewport,keyboardNavigationPassed:true}));
+    if(process.env.MAP_KEYBOARD_ONLY)continue;
+    await page.goto(origin+'/maps.html');briefingRequests=0;
+   }
    if(process.env.MAP_LAYOUT_ONLY||process.env.MAP_THREE_PANELS_ONLY){
     const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
     await ready();

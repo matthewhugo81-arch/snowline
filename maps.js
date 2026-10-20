@@ -772,6 +772,17 @@ $('reload-maps').addEventListener('click',refreshLiveRuns);$('map-time').addEven
  if(state.times.length)$('animation-status').textContent='Preview '+stamp(state.times[preview])+' UTC · release to load';
 });
 $('previous-time').addEventListener('click',()=>stepTime(-1));$('next-time').addEventListener('click',()=>stepTime(1));
+document.addEventListener('keydown',event=>{
+ if(briefingActive||!state.times.length||event.defaultPrevented||event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
+ const direction=event.key==='ArrowLeft'?-1:event.key==='ArrowRight'?1:0,target=event.target;
+ if(!direction||!(target instanceof Element))return;
+ if(target.isContentEditable||target.closest('select,textarea,[role="menu"],[role="listbox"],[role="combobox"]'))return;
+ if(target.closest('input')&&target!==$('map-time'))return;
+ if(target.closest('dialog:not(#expanded-map),[role="dialog"]'))return;
+ // Capture before MapLibre's canvas handler or the range's native key action,
+ // so a press selects one forecast step without also panning or stepping twice.
+ event.preventDefault();event.stopPropagation();stepTime(direction);
+},true);
 $('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.weatherLayer&&p.map.getLayer(p.weatherLayer)){p.map.setPaintProperty(p.weatherLayer,'raster-opacity',state.opacity);for(const id of p.frameCache?.current?.underlays??[])p.map.setPaintProperty(id,'raster-opacity',state.opacity);}});
 $('map-area').addEventListener('change',()=>{for(const p of Object.values(panels))fitArea(p.map,400);});
 $('reset-map').addEventListener('click',()=>{$('map-area').value='uk';for(const p of Object.values(panels))fitArea(p.map,400);});
