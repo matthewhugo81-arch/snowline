@@ -169,10 +169,11 @@ test('retry preserves coastline position beneath existing forecast labels and re
 });
 
 test('a hidden tab does not exhaust the source watchdog or a waiting briefing timeout',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
  let active=false,settled=false;
  const map=new MapFixture(),coast=coastlineController(map,{loadData:async()=>coastline,renderTimeout:15,isActive:()=>active});t.after(()=>coast.destroy());
  const ready=coast.wait({timeout:15});ready.then(()=>{settled=true;},()=>{settled=true;});
- await new Promise(resolve=>setTimeout(resolve,40));
+ await flush();t.mock.timers.tick(40);
  assert.equal(settled,false);assert.equal(coast.state.status,'loading');
  active=true;map.getSource('coastline').complete();await flush();map.render();await ready;
  assert.equal(coast.isReady(),true);

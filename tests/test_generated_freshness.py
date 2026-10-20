@@ -101,5 +101,19 @@ class GeneratedFeedTests(unittest.TestCase):
         self.assertEqual(next(row for row in result['models'] if row['model'] == 'snowline_gem_700')['status'], 'check-failed')
 
 
+class GlobalIndexFreshnessTests(unittest.TestCase):
+    def test_equal_map_and_index_do_not_hide_a_newer_official_cycle(self):
+        reference = datetime(2026, 10, 20, tzinfo=timezone.utc)
+        stamp = f.ensemble.iso(reference)
+        fields = ['temperature_850hPa_mean', 'temperature_850hPa_spread', 'temperature_500hPa_mean', 'temperature_500hPa_spread']
+        manifest = dict(schema=1, intervalHours=3, members=list(range(18)), run=int(reference.timestamp()), leads=[0])
+        published = dict(reference_time=stamp, format_version=2, variable_valid_times={key:[stamp] for key in fields})
+        with patch.object(f.ensemble, 'get', side_effect=[json.dumps(manifest).encode(), json.dumps(published).encode()]), patch.object(f, 'newest_complete_after', return_value=reference+timedelta(hours=6)):
+            result = f.check_global('https://site.test', reference+timedelta(hours=10))
+        self.assertEqual(result['status'], 'index-pending')
+        self.assertTrue(result['index_refresh_needed'])
+        self.assertFalse(result['refresh_needed'], 'Rebuilding maps from the unchanged index cannot repair the index')
+
+
 if __name__ == '__main__':
     unittest.main()

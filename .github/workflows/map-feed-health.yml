@@ -82,6 +82,8 @@ jobs:
                   print(f"::notice::{model['model']}: three-run archive repair requested")
               if status == 'check-failed':
                   problems.append(f"{model['model']}: official-source health check failed ({model.get('error', 'unknown error')})")
+              elif status == 'index-pending':
+                  problems.append(f"{model['model']}: ensemble index trails complete official cycle {model['official_source_reference']}; refresh snowline-ensembles")
               elif status == 'newer-source-run':
                   # Allow the new source cycle to arrive progressively. A real
                   # outage is measured against the *published* cycle, rather

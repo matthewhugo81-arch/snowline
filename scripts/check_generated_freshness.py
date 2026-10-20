@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 import xml.etree.ElementTree as ET
 
 import check_ensemble_freshness as ensemble
+from mogreps_source import newest_complete_after
 
 DIRECT = {
     'mogreps': ('snowline_mogreps_uk', 'ukmo_uk_ensemble_2km'),
@@ -131,6 +132,9 @@ def check_global(site, now, local_root=None):
         raise ValueError('Invalid global ensemble index')
     if (now-datetime.fromtimestamp(manifest['run'], timezone.utc)).total_seconds() > 72*3600:
         raise ValueError('Global source index expired')
+    indexed = datetime.fromtimestamp(manifest['run'], timezone.utc)
+    official = newest_complete_after(indexed, now, ensemble.get)
+    index_pending = official > indexed
     path = local_root/domain/'latest.json' if local_root else None
     try:
         published = json.loads(path.read_text()) if path else json.loads(ensemble.get(site+'/ensemble-data/'+domain+'/latest.json'))
@@ -143,8 +147,9 @@ def check_global(site, now, local_root=None):
         ensemble.iso(datetime.fromtimestamp(manifest['run']+h*3600, timezone.utc)) not in published.get('variable_valid_times', {}).get(key, [])
         for key in (fields if h else fields[:4]))]
     behind = published.get('reference_time', '') > reference
-    return dict(model=domain, status='upstream-behind' if behind else 'current' if not missing else 'hours-pending' if same else 'newer-source-run',
+    return dict(model=domain, status='index-pending' if index_pending else 'upstream-behind' if behind else 'current' if not missing else 'hours-pending' if same else 'newer-source-run',
                 refresh_needed=bool(missing) and not behind, source_reference=reference, source_hours=manifest['leads'],
+                official_source_reference=ensemble.iso(official), index_refresh_needed=index_pending,
                 published_reference=published.get('reference_time'), missing_source_hours=[] if behind else missing, checked_at=ensemble.iso(now))
 
 
@@ -161,7 +166,7 @@ def report(site, now, local_root=None):
     with ThreadPoolExecutor(max_workers=5) as pool:
         rows = list(pool.map(check, models))
     overdue = False if local_root else ensemble.publication_check_overdue(site, now)
-    return dict(checked_at=ensemble.iso(now), scope='Generated map feeds: source availability, same-run hours and statistical archives; MOGREPS-G uses the complete shared source index.',
+    return dict(checked_at=ensemble.iso(now), scope='Generated map feeds: source availability, same-run hours and archives; MOGREPS-G index independently checked against the official inventory.',
                 publication_check_overdue=overdue, refresh_needed=overdue or any(row['refresh_needed'] for row in rows), models=rows)
 
 
@@ -181,7 +186,7 @@ def main():
         print(row['model'] + ': ' + row['status'] + ' | published ' + str(row.get('published_reference')) +
               ' | source ' + str(row.get('source_reference')) + ' | missing ' + str(len(row.get('missing_source_hours', []))) +
               (' | ' + row['error'] if row.get('error') else ''))
-    if result['refresh_needed'] or any(row['status'] == 'check-failed' or row.get('archive_status') == 'check-failed' for row in result['models']):
+    if result['refresh_needed'] or any(row['status'] in ('check-failed', 'index-pending') or row.get('archive_status') == 'check-failed' for row in result['models']):
         raise SystemExit(1)
 
 

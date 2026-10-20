@@ -43,3 +43,9 @@ test('an overdue source check does not assert a newer run exists; recovery clear
  const caughtUp={...meta,valid_times:[...meta.valid_times,'2026-10-13T03:00:00Z']};
  assert.equal(ensemblePublicationStatus(caughtUp,{...more,checked_at:'2026-10-13T08:59:00Z'},now),null);
 });
+
+ test('complete official MOGREPS cycle is flagged even while maps match their stale index',()=>{
+ const reference='2026-10-20T00:00:00Z';
+ const result=ensemblePublicationStatus({domain:'snowline_mogreps_global',reference_time:reference,valid_times:[]},{checked_at:'2026-10-20T10:00:00Z',models:[{model:'snowline_mogreps_global',source_reference:reference,official_source_reference:'2026-10-20T06:00:00Z',index_refresh_needed:true}]},Date.parse('2026-10-20T10:00:00Z'));
+ assert.equal(result.code,'index-pending');
+ });

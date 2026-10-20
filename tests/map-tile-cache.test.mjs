@@ -160,3 +160,14 @@ test('a context change cancels in-flight work and prevents late writes into the 
  cache.setContext('second');finish(bytes());await rejected;
  assert.equal(cache.memory.size,0);cache.release();
 });
+
+test('rolling lifetime reuses tiles across the hour without extending their expiry',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.UTC(2026,9,20,12,59)});
+ const disk=storage();let calls=0;
+ const create=(version='test-v1')=>new ForecastTileCache(async()=>{calls++;return bytes();},{storage:disk,persistent:true,cacheVersion:version});
+ const first=create();first.setContext('view');await read(first,'run/field');await saved(first);first.release();
+ t.mock.timers.tick(120000);
+ const second=create();second.setContext('view');await read(second,'run/field');assert.equal(calls,1,'13:01 reuses 12:59 pixels');
+ t.mock.timers.tick(3480000);await read(second,'run/field');assert.equal(calls,2,'restoring a tile did not extend its original lifetime');await saved(second);second.release();
+ const revised=create('test-v2');revised.setContext('view');await read(revised,'run/field');assert.equal(calls,3,'renderer revisions invalidate incompatible pixels');await saved(revised);revised.release();
+});

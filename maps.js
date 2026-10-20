@@ -9,7 +9,7 @@ import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSourc
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
 import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
-import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261019-mogreps-uk';
+import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-source-health';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261019-ensemble-extra4';
@@ -19,7 +19,7 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purp
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261016-navigation';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261020-rapid-navigation';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rapid-navigation';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rolling-cache';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';

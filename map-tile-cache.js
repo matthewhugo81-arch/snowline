@@ -28,16 +28,19 @@ const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  signal.addEventListener('abort',cancelled,{once:true});
 });
 export class ForecastTileCache{
- constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=64*1024*1024,diskEntries=2048}={}){
-  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries});
+ constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=64*1024*1024,diskEntries=2048,maxAge=3600000,cacheVersion='render-20261020-v3'}={}){
+  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge});
   this.diskStates=new WeakMap();
   this.contexts=new Map();this.contextSequence=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
-  // Version + one-hour bucket prevents stale rendering after a release or
-  // source correction, while allowing a reload to reuse completed tiles.
-  this.session=persistent?Math.floor(Date.now()/3600000)*3600000+'-rates-v2':Date.now()+'-'+Math.random().toString(36).slice(2);
+  // Run/field/style URLs and the viewport isolate pixels. A renderer revision
+  // invalidates releases; a rolling per-entry lifetime bounds source corrections
+  // without throwing away a freshly prepared tile at the next clock hour.
+  this.session=persistent?'persistent-'+encodeURIComponent(cacheVersion):Date.now()+'-'+Math.random().toString(36).slice(2);
   // Only remove this feature's abandoned caches, never other site data.
-  storage?.keys().then(names=>Promise.all(names.filter(name=>name.startsWith(PREFIX)&&Number(name.slice(PREFIX.length).split('-')[0])<Date.now()-(persistent?3600000:172800000)).map(name=>storage.delete(name)))).catch(()=>{});
+  storage?.keys().then(names=>Promise.all(names.filter(name=>name.startsWith(PREFIX)&&
+   (name.startsWith(PREFIX+'persistent-')?persistent&&!name.startsWith(PREFIX+this.session+'-'):
+    Number(name.slice(PREFIX.length).split('-')[0])<Date.now()-172800000)).map(name=>storage.delete(name)))).catch(()=>{});
  }
  setContext(context){
   if(context===this.context)return false;
@@ -100,10 +103,11 @@ export class ForecastTileCache{
   });
   state.queue=write.catch(()=>{});return write;
  }
- remember(key,result,durable,persisting=false){
+ fresh(created){return Number.isFinite(created)&&created>0&&Date.now()>=created&&Date.now()-created<this.maxAge;}
+ remember(key,result,durable,persisting=false,created=Date.now()){
   const bytes=result.data instanceof ArrayBuffer?result.data.byteLength:new TextEncoder().encode(JSON.stringify(result.data)).length;
   const old=this.memory.get(key);if(old)this.bytes-=old.bytes;
-  const entry={result,bytes,durable,persisting};
+  const entry={result,bytes,durable,persisting,created};
   this.memory.delete(key);this.memory.set(key,entry);this.bytes+=bytes;
   while(this.bytes>this.memoryBytes&&this.memory.size){
    const [first,item]=this.memory.entries().next().value;this.memory.delete(first);this.bytes-=item.bytes;
@@ -114,7 +118,7 @@ export class ForecastTileCache{
  persist(key,request,entry,store,generation,type){
   // Display now; save separately. Keep pending writes bounded if storage stalls.
   const job={};this.writes.set(key,job);
-  job.promise=Promise.resolve().then(()=>this.put(store,request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes','x-snowline-bytes':String(entry.bytes)}}),entry.bytes,generation))
+  job.promise=Promise.resolve().then(()=>this.put(store,request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes','x-snowline-bytes':String(entry.bytes),'x-snowline-created':String(entry.created)}}),entry.bytes,generation))
    .then(()=>{entry.durable=true;},()=>{/* Storage denial must not stop a map. */})
    .finally(()=>{
     entry.persisting=false;
@@ -124,7 +128,8 @@ export class ForecastTileCache{
  }
  async resolve(params,controller,generation,disk){
   const key=JSON.stringify([params.type,params.url]),cached=this.memory.get(key);
-  if(cached){this.memory.delete(key);this.memory.set(key,cached);return cached.result;}
+  if(cached&&(!this.persistent||this.fresh(cached.created))){this.memory.delete(key);this.memory.set(key,cached);return cached.result;}
+  if(cached){this.memory.delete(key);this.bytes-=cached.bytes;}
   // CacheStorage keys are local lookup keys. No request is sent to this URL.
   const request='https://snowline-cache.invalid/tile?key='+encodeURIComponent(key);
   let store=await disk;
@@ -133,10 +138,11 @@ export class ForecastTileCache{
    // A just-evicted tile may still be being saved. Do not render it twice.
    await this.writes.get(key)?.promise;
    const response=await store?.match(request);
-   if(response){
+   const created=Number(response?.headers.get('x-snowline-created'));
+   if(response&&(!this.persistent||this.fresh(created))){
     const result={data:response.headers.get('x-snowline-type')==='json'?await response.json():await response.arrayBuffer()};
     if(controller.signal.aborted||generation!==this.generation)throw abort();
-    this.remember(key,result,true);return result;
+    this.remember(key,result,true,false,created);return result;
    }
   }catch(error){if(error.name==='AbortError')throw error;store=null;}
   let result;

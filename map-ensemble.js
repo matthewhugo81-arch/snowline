@@ -30,6 +30,7 @@ export function ensembleField(key){
 export function ensemblePublicationStatus(meta,health,now=Date.now()){
  const checked=Date.parse(health?.checked_at),row=health?.models?.find(r=>r.model===meta?.domain);
  const status=(code,label,message)=>({code,label,message,checked_at:health?.checked_at??null});
+ if(row?.index_refresh_needed&&Date.parse(row?.official_source_reference)>Date.parse(meta?.reference_time))return status('index-pending','new run awaiting indexing','A complete newer Met Office run awaits indexing; showing the last verified forecast');
  if(row?.source_reference&&Date.parse(row.source_reference)>Date.parse(meta?.reference_time))return status('newer-run','new run pending','Newer official ensemble run awaits publication');
  const published=new Set((meta?.valid_times??[]).map(Date.parse));
  if(Date.parse(row?.source_reference)===Date.parse(meta?.reference_time)&&row?.source_hours?.some(h=>!published.has(Date.parse(meta.reference_time)+h*3600000)))return status('hours-pending','more hours pending','Additional official forecast hours await publication');

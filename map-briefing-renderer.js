@@ -4,7 +4,7 @@ import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-au
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {ForecastFrames} from './map-frames.js?v=20261019-mogreps-uk';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261018-rates';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rolling-cache';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261019-mogreps-uk';
 import {installDewPoint} from './map-dew-point.js';
