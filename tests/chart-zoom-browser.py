@@ -31,13 +31,31 @@ def run():
         page.add_style_tag(content=css)
         sources={name:(ROOT/name).read_text(encoding='utf-8') for name in ['app.js','data.js','average.js','cache.js','point-forecasts.js','mogreps-point.js','mogreps-client.js','mogreps-transport.js','forecast-service.js','point-snapshots.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js','chart-panels.js','chart-image-export.js']}
         sources['app.js'] += '\nwindow.__inspectionMilliseconds=[];const measuredInspection=renderInspection;renderInspection=function(){const start=performance.now();try{return measuredInspection();}finally{window.__inspectionMilliseconds.push(performance.now()-start);}};'
-        page.evaluate(r'''async (sources)=>{
+        print('Starting the application with the native feed held for the Stop test', flush=True)
+        page.evaluate(r'''(sources)=>{
           Date.now=()=>Date.UTC(2026,9,12,19);
           window.__forecastRequests=[];
-          let holdNative=true;window.__releaseNative=null;
-          window.fetch=async url=>{
+          let holdNative=true;window.__releaseNative=null;window.__nativeRequestAborted=false;
+          window.fetch=async (url,{signal}={})=>{
+            signal?.throwIfAborted();
             // Native-source outage is intentional in this shared-cache regression fixture.
-            if(url.includes('/mogreps/latest.json')) {if(holdNative)await new Promise(resolve=>window.__releaseNative=()=>{holdNative=false;resolve();});return new Response('{}',{status:503});}
+            if(url.includes('/mogreps/latest.json')) {
+              if(holdNative)await new Promise((resolve,reject)=>{
+                const abort=()=>{
+                  window.__nativeRequestAborted=true;
+                  signal?.removeEventListener('abort',abort);
+                  reject(signal.reason);
+                };
+                window.__releaseNative=()=>{
+                  holdNative=false;
+                  signal?.removeEventListener('abort',abort);
+                  resolve();
+                };
+                signal?.addEventListener('abort',abort,{once:true});
+                if(signal?.aborted)abort();
+              });
+              return new Response('{}',{status:503});
+            }
             if(url.includes('/v1/elevation?')) return new Response(JSON.stringify({elevation:[200]}));
             if(!url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?')) throw Error('Unexpected external request: '+url);
             window.__forecastRequests.push(url);
@@ -59,16 +77,24 @@ def run():
             const url=URL.createObjectURL(new Blob([source],{type:'text/javascript'}));
             urls.set(spec,url);return url;
           }
-          await import(moduleURL('app.js'));
+          // app.js awaits its initial load; return now so Python can cancel the held request.
+          window.__appImportDone=false;window.__appImportError=null;
+          window.__appImport=import(moduleURL('app.js'));
+          window.__appImport.then(()=>{window.__appImportDone=true;},error=>{window.__appImportError=String(error.stack||error);});
         }''',sources)
-        page.wait_for_function("document.querySelectorAll('.plot svg').length === 15 && typeof window.__releaseNative === 'function'")
+        page.wait_for_function("window.__appImportError !== null || (window.__forecastRequests.length === 17 && document.querySelectorAll('.plot svg').length === 15 && typeof window.__releaseNative === 'function')", timeout=30000)
+        check('Application module starts without an import error',page.evaluate('window.__appImportError') is None)
         check('Stop loading stays available while the native feed is pending',page.locator('#stop-loading').is_visible() and page.locator('#refresh').is_disabled())
         page.locator('#stop-loading').click()
         check('Stopping preserves received charts and restores Refresh',page.locator('.plot svg').count()==15 and page.locator('#refresh').is_enabled() and 'Loading stopped' in page.locator('#status').inner_text())
+        check('Stopping aborts the held native request',page.evaluate('window.__nativeRequestAborted'))
         page.evaluate('window.__releaseNative()')
+        page.wait_for_function('window.__appImportDone || window.__appImportError !== null', timeout=30000)
+        check('Application startup settles after cancellation',page.evaluate('window.__appImportDone && window.__appImportError === null'))
         page.locator('#refresh').click()
-        page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 15")
+        page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 15", timeout=30000)
         check('Refresh recovers after cancellation without repeating cached forecasts','Loading stopped' not in page.locator('#status').inner_text() and page.locator('#stop-loading').is_hidden())
+        print('Startup cancellation and refresh checks passed', flush=True)
         check('All fourteen variable charts and agreement chart load', page.locator('.plot svg').count()==15)
         check('Direction plots hourly dots without connecting paths',page.locator('#plot-wind_direction_10m .direction-dot').count()>100 and page.locator('#plot-wind_direction_10m path').count()==0)
         check('Direction compass runs north clockwise to north',page.locator('#plot-wind_direction_10m text').all_text_contents()[:9]==['N','NE','E','SE','S','SW','W','NW','N'])

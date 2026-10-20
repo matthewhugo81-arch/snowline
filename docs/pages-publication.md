@@ -1,5 +1,10 @@
 # Pages publication and release checks
 
+The first real preflight found an oversized package. See
+[the measured capacity review](pages-capacity-review.md) before merging or
+deploying these controls. The guard deliberately preserves the last deployment
+until a publication fits the budget without removing advertised forecasts.
+
 The publisher assembles source from its exact triggering commit. It retains all
 advertised forecast runs, native hours and verified frames. Conversion-only
 sidecars, incomplete backfills not listed in an archive index, temporary files,
