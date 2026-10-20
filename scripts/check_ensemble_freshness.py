@@ -55,8 +55,8 @@ def probe(model,run):
     hours.extend(ecmwf_hours(get(url).decode()));break
    except (URLError,TimeoutError) as e:
     code=getattr(e,'code',None)
-    if code==404:break
-    if i==len(ECMWF_BASES)-1 or code is not None and code not in (429,500,502,503,504):raise
+    if code==404 and i==len(ECMWF_BASES)-1:break
+    if i==len(ECMWF_BASES)-1 or code is not None and code not in (404,429,500,502,503,504):raise
  return sorted(set(hours))
 
 def gefs_hours(date,cycle):

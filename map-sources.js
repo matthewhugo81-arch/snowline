@@ -170,18 +170,17 @@ export async function loadSpatialModel(model,load){
  const mogreps=MOGREPS_MODELS.find(item=>item.id===model);
  if(mogreps){
   try{
-   const snow=await mogrepsSnow(mogreps,load);
-   // Both fields always describe one initialization. While snow processing
-   // catches up, obtain precipitation from that precise archived cycle.
-   if(Date.parse(snow.reference_time)!==Date.parse(primary.reference_time)){
-    const matching=await load(SPATIAL_BASE+domain+'/'+runPath(snow.reference_time)+'meta.json');
-    if(!publishedRun(matching)||Date.parse(matching.reference_time)!==Date.parse(snow.reference_time))throw Error('Matching precipitation run unavailable');
-    if(Date.parse(primary.reference_time)>Date.parse(snow.reference_time))warnings.push('A newer MOGREPS run is being prepared for snowfall; both charts show the stated verified run.');
-    primary={...matching,domain,baseURL:SPATIAL_BASE};
-   }
+   // Publish new precipitation immediately. Snow is looked up for precisely
+   // that initialization; an older snow index must never rewind the native run.
+   const snow=await mogrepsSnow(mogreps,load,primary.reference_time);
    other.push(snow);
    if(Date.now()-Date.parse(snow.reference_time)>8*3600000)warnings.push('MOGREPS snowfall publication is overdue; check the displayed initialization time.');
-  }catch{warnings.push('Member snowfall probabilities are currently unavailable; precipitation probability remains available.');}
+  }catch{
+   // Keep the complete previous rain/snow run as the default until both fields
+   // of this initialization are ready, but expose the incoming rain in Run.
+   primary={...primary,completed:false};
+   warnings.push('Member snowfall probabilities are being prepared for this initialization; incoming precipitation probability is available.');
+  }
  }
  const completedReferenceTime=published.filter(m=>publishedRun(m)&&m.completed===true).sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0]?.reference_time;
  return {...combineSources(primary,other.filter(Boolean)),completedReferenceTime,ensembleNote:domain===MOGREPS_GLOBAL?MOGREPS_GLOBAL_NOTE:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning,publicationStatus};
@@ -206,7 +205,7 @@ export async function loadSpatialRun(model,referenceTime,load){
   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(data))throw Error('Unverified MOGREPS-G archive.');
- const primary={...data,domain,baseURL,runFamily:family},warnings=[];
+ let primary={...data,domain,baseURL,runFamily:family};const warnings=[];
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
   catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}
@@ -224,6 +223,6 @@ export async function loadSpatialRun(model,referenceTime,load){
   catch{warnings.push('Direct 700 hPa charts are not yet available for this run; other fields remain available. Check latest runs to retry.');}
  }
  const mogreps=MOGREPS_MODELS.find(item=>item.id===model);
- if(mogreps){try{other.push(await mogrepsSnow(mogreps,load,referenceTime));}catch{warnings.push('Member snowfall probabilities are unavailable for this archived run.');}}
+ if(mogreps){try{other.push(await mogrepsSnow(mogreps,load,referenceTime));}catch{primary={...primary,completed:false};warnings.push('Member snowfall probabilities are unavailable for this archived run.');}}
  return {...combineSources(primary,other.filter(Boolean)),ensembleNote:domain===MOGREPS_GLOBAL?MOGREPS_GLOBAL_NOTE:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings};
 }

@@ -7,6 +7,17 @@ from urllib.error import HTTPError
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 import check_ensemble_freshness as f
 class FreshnessTests(unittest.TestCase):
+ def test_not_yet_published_primary_checks_same_run_on_mirror(self):
+  run=datetime(2026,10,20,12,tzinfo=timezone.utc)
+  rows=[dict(type=s,step='3',param=p,levtype=l,levelist=k) for s in ['em','es'] for p,l,k in f.REQUIRED]
+  calls=[]
+  def get(url):
+   calls.append(url)
+   if url.startswith(f.ECMWF_BASES[0]) or '360h' in url:raise HTTPError(url,404,'not yet published',{},None)
+   return '\n'.join(map(json.dumps,rows)).encode()
+  with patch.object(f,'get',side_effect=get):
+   self.assertEqual(f.probe('ecmwf',run),[3])
+   self.assertEqual(len(calls),4)
  def test_ecmwf_rate_limit_checks_same_cycle_on_official_mirror(self):
   run=datetime(2026,10,15,tzinfo=timezone.utc)
   rows=[dict(type=s,step='3',param=p,levtype=l,levelist=k) for s in ['em','es'] for p,l,k in f.REQUIRED]

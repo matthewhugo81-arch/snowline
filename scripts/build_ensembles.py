@@ -117,10 +117,10 @@ class Source:
                         break
                     except requests.RequestException as error:
                         status = getattr(error.response, 'status_code', None)
-                        if status == 404:
+                        if status == 404 and i == len(ECMWF_BASES) - 1:
                             self.indexes[block] = []
                             break
-                        if i == len(ECMWF_BASES) - 1 or status is not None and status not in (429, 500, 502, 503, 504):
+                        if i == len(ECMWF_BASES) - 1 or status is not None and status not in (404, 429, 500, 502, 503, 504):
                             raise
                         print(f'ecmwf: source unavailable for {self.run.isoformat()} block {block}; trying official mirror')
 

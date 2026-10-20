@@ -132,6 +132,22 @@ class EnsembleDataTests(unittest.TestCase):
                 b.Source('ecmwf',datetime(2026,10,11,12,tzinfo=timezone.utc))
             self.assertEqual(fetch.call_count,2)
 
+    def test_ecmwf_checks_mirror_when_primary_has_not_published_yet(self):
+        rows=[dict(type=stat,step='0',param=v[2],levtype=v[3],levelist=v[4],_offset=i*100,_length=100)
+              for stat in ('em','es') for i,v in enumerate(b.FIELDS.values())]
+        calls=[]
+        def fetch(url):
+            calls.append(url)
+            if url.startswith(b.ECMWF_BASES[0]) or '360h' in url:
+                response=b.requests.Response();response.status_code=404
+                raise b.requests.HTTPError(response=response)
+            return '\n'.join(json.dumps(row) for row in rows).encode()
+        with patch.object(b,'fetch',side_effect=fetch):
+            source=b.Source('ecmwf',datetime(2026,10,20,12,tzinfo=timezone.utc))
+            self.assertEqual(source.available_hours(),[0])
+            self.assertTrue(source.url(0,'mean').startswith(b.ECMWF_BASES[1]))
+            self.assertEqual(len(calls),4)
+
     def test_gefs_availability_requires_mean_and_spread_but_not_full_run(self):
         source=b.Source('gefs',datetime(2026,10,11,12,tzinfo=timezone.utc))
         def fetch(url):
