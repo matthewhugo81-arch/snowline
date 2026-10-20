@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createFramePrefetch,forecastTileRequests,tileIntersectsBounds} from '../map-prefetch.js';
-import {ForecastFrames} from '../map-frames.js';
+import {ForecastFrames,frameWindow} from '../map-frames.js';
+import {ForecastTileCache} from '../map-tile-cache.js';
 import {FakeMap,loaded} from './frame-fake.mjs';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -61,7 +62,7 @@ test('a prepared hour includes all enabled overlays and uses the same shared til
  completePressure();await work;assert.equal(done,true);
 });
 
-test('distant hours prepare concurrently without hidden map sources; selection cancels them',async t=>{
+test('a cold foreground selection starts immediately while existing distant hours finish once',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});
  const map=new FakeMap(),started=[],jobs=new Map();
  const cache=new ForecastFrames(map,'a',{preloadConcurrency:2,prefetch:(url,controller)=>{started.push(url);return new Promise((resolve,reject)=>{jobs.set(url,{resolve,controller});controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));});}});
@@ -70,9 +71,120 @@ test('distant hours prepare concurrently without hidden map sources; selection c
  assert.deepEqual(started,['t1','t2']);assert.equal(map.sourceAdds,1);
  jobs.get('t2').resolve();await flush();assert.deepEqual(started,['t1','t2','t3']);assert.equal(cache.preloaded.has('t2'),true);
  const selected=cache.acquire('t4');await flush();
- assert.equal(jobs.get('t1').controller.signal.aborted,true);assert.equal(jobs.get('t3').controller.signal.aborted,true);
+ assert.equal(jobs.get('t1').controller.signal.aborted,false);assert.equal(jobs.get('t3').controller.signal.aborted,false);
+ assert.ok(cache.frames.get('t4')?.pending,'The selected image starts without waiting for distant work');
  map.load(cache.frames.get('t4'));assert.equal((await selected).url,'t4');
- assert.equal(cache.failures.size,0);assert.equal(cache.current.url,'t0');cache.clear();
+ jobs.get('t1').resolve();jobs.get('t3').resolve();await flush();
+ assert.deepEqual(started,['t1','t2','t3'],'A cold selection pauses new distant dispatch');
+ assert.equal(cache.preloaded.size,5);assert.equal(cache.failures.size,0);assert.equal(cache.current.url,'t0');cache.clear();
+});
+
+test('rapid cold selections retain download progress and discard superseded display frames',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),started=[],jobs=new Map();
+ const cache=new ForecastFrames(map,'a',{preloadConcurrency:2,prefetch:(url,controller)=>new Promise((resolve,reject)=>{
+  started.push(url);jobs.set(url,{resolve,controller});controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+ })});
+ cache.show(await loaded(cache,map,'now'),.8,'linear');await loaded(cache,map,'cached');
+ cache.warm({keep:new Set(['now','cached']),upcoming:[],all:['far1','far2','later'],delay:0});t.mock.timers.tick(0);await flush();
+ assert.deepEqual(started,['far1','far2']);const selections=[];let latest;
+ for(const url of ['next1','next2','next3']){
+  latest=url;cache.focus(url,new Set(['now',url]));selections.push(cache.acquire(url,()=>latest===url));
+  assert.ok(cache.frames.get(url)?.pending);assert.equal(cache.current.url,'now');
+  assert.ok(cache.frames.size<=2,'Only the displayed frame and final selection need map sources');
+ }
+ assert.equal(cache.preloaded.has('cached'),true,'Leaving the decoded window does not erase cached progress');
+ for(const job of jobs.values())assert.equal(job.controller.signal.aborted,false);
+ jobs.get('far1').resolve();await flush();assert.equal(cache.preloaded.has('far1'),true);
+ assert.deepEqual(started,['far1','far2'],'Superseded warm generations cannot launch more work');
+ map.load(cache.frames.get('next3'));const results=await Promise.all(selections);
+ assert.deepEqual(results.map(frame=>frame?.url??null),[null,null,'next3']);assert.equal(cache.failures.size,0);
+ cache.show(results[2],.8,'linear');
+ cache.warm({keep:new Set(['next3']),upcoming:[],all:['far1','far2','later'],delay:0});t.mock.timers.tick(0);await flush();
+ assert.deepEqual(started,['far1','far2','later']);jobs.get('far2').resolve();jobs.get('later').resolve();await flush();cache.clear();
+});
+
+test('a foreground target shares its in-flight tile without a new render or cancelled prefetch',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),jobs=new Map(),calls=[];
+ const tiles=new ForecastTileCache((params,controller)=>new Promise((resolve,reject)=>{
+  calls.push(params.url);jobs.set(params.url,{resolve,controller});controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+ }),{storage:null});tiles.setContext('view');
+ const cache=new ForecastFrames(map,'a',{preloadConcurrency:1,prefetch:(url,controller)=>tiles.prefetch({url,type:'image'},controller)});
+ cache.show(await loaded(cache,map,'now'),.8,'linear');
+ cache.warm({keep:new Set(['now']),upcoming:[],all:['target','later'],delay:0});t.mock.timers.tick(0);await flush();
+ const addSource=map.addSource.bind(map),consumers=new Map();
+ map.addSource=(id,source)=>{
+  addSource(id,source);const controller=new AbortController();consumers.set(id,controller);
+  void tiles.protocol({url:source.url,type:'image'},controller).then(()=>{
+   if(map.getSource(id)){map.getSource(id).loaded=true;map.emit('sourcedata',{sourceId:id});}
+  },()=>{});
+ };
+ cache.focus('target',new Set(['now','target']));const selected=cache.acquire('target');await flush();
+ assert.deepEqual(calls,['target']);assert.equal(jobs.get('target').controller.signal.aborted,false);
+ jobs.get('target').resolve({data:new Uint8Array([1,2,3]).buffer});
+ assert.equal((await selected).url,'target');assert.deepEqual(calls,['target']);assert.equal(cache.preloaded.has('target'),true);
+ cache.clear();for(const controller of consumers.values())controller.abort();tiles.release();
+});
+
+test('prefetch slots remain bounded when active background frames move into the display window',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),jobs=new Map(),started=[];let active=0,peak=0;
+ const cache=new ForecastFrames(map,'a',{preloadConcurrency:2,prefetch:(url,controller)=>new Promise((resolve,reject)=>{
+  active++;peak=Math.max(peak,active);started.push(url);
+  const cancel=()=>{active--;reject(new DOMException('Aborted','AbortError'));};
+  jobs.set(url,{finish:()=>{controller.signal.removeEventListener('abort',cancel);active--;resolve();},controller});
+  controller.signal.addEventListener('abort',cancel,{once:true});
+ })});
+ cache.show(await loaded(cache,map,'now'),.8,'linear');
+ const all=['first','second','third','fourth'];
+ cache.warm({keep:new Set(['now']),upcoming:[],all,delay:0});t.mock.timers.tick(0);await flush();
+ cache.focus('first',new Set(['now','first']));const selected=cache.acquire('first');map.load(cache.frames.get('first'));
+ cache.show(await selected,.8,'linear');
+ for(let i=0;i<3;i++){
+  cache.warm({keep:new Set(['first']),upcoming:[],all,delay:0});t.mock.timers.tick(0);await flush();
+  assert.deepEqual(started,['first','second'],'The still-active displayed prefetch owns its original slot');
+ }
+ jobs.get('second').finish();await flush();assert.deepEqual(started,['first','second','third']);
+ jobs.get('first').finish();await flush();assert.deepEqual(started,['first','second','third','fourth']);
+ assert.equal(peak,2);jobs.get('third').finish();jobs.get('fourth').finish();await flush();cache.clear();
+});
+
+test('changing the viewport still cancels jobs retained through rapid navigation',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),jobs=[];
+ const cache=new ForecastFrames(map,'a',{prefetch:(url,controller)=>new Promise((resolve,reject)=>{
+  jobs.push(controller);controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+ })});
+ cache.show(await loaded(cache,map,'now'),.8,'linear');
+ cache.warm({keep:new Set(['now']),upcoming:[],all:['far1','far2'],delay:0});t.mock.timers.tick(0);await flush();
+ cache.focus('next',new Set(['now','next']));assert.equal(jobs.some(controller=>controller.signal.aborted),false);
+ cache.invalidateView();await flush();assert.equal(jobs.every(controller=>controller.signal.aborted),true);
+ assert.equal(cache.prefetches.size,0);assert.equal(cache.preloaded.size,0);assert.equal(cache.failures.size,0);cache.clear();
+});
+
+test('a retired URL cannot start after waiting for a surviving prefetch slot',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),started=[],jobs=new Map();
+ const cache=new ForecastFrames(map,'a',{preloadConcurrency:1,prefetch:(url,controller)=>new Promise((resolve,reject)=>{
+  started.push(url);jobs.set(url,resolve);controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+ })});
+ cache.show(await loaded(cache,map,'now'),.8,'linear');
+ cache.warm({keep:new Set(['now']),upcoming:[],all:['active','retired','valid'],delay:0});t.mock.timers.tick(0);await flush();
+ cache.focus('active',new Set(['active']));const selected=cache.acquire('active');map.load(cache.frames.get('active'));cache.show(await selected,.8,'linear');
+ cache.warm({keep:new Set(['active']),upcoming:[],all:['active','retired','valid'],delay:0});t.mock.timers.tick(0);await flush();
+ cache.retain(new Set(['active','valid']));jobs.get('active')();await flush();
+ assert.deepEqual(started,['active','valid']);jobs.get('valid')();await flush();cache.clear();
+});
+
+test('backward warming follows travel direction within the same bounded frame budget',()=>{
+ const urls=['0','1','2','3','4','5','6','7'];
+ const forward=frameWindow(urls,3,{ahead:2,behind:1}),backward=frameWindow(urls,3,{ahead:2,behind:1,direction:-1});
+ assert.deepEqual(backward.keep,new Set(['1','2','3','4']));assert.deepEqual(backward.upcoming,['2','1']);
+ assert.equal(backward.keep.size,forward.keep.size);
+ assert.deepEqual(frameWindow(urls,0,{ahead:2,behind:1,direction:-1}),{keep:new Set(['0','1']),upcoming:[]});
+ assert.deepEqual(frameWindow(urls,1,{ahead:3,behind:1,direction:-1}),{keep:new Set(['0','1','2']),upcoming:['0']});
+ assert.deepEqual(frameWindow(urls,0,{ahead:2,behind:1,direction:-1,loop:true}),{keep:new Set(['6','7','0','1']),upcoming:['7','6']});
 });
 
 test('background tile failure does not interrupt display and retries remain bounded',async t=>{

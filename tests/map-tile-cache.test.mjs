@@ -13,6 +13,36 @@ const storage=()=>{
 const read=(cache,url,type)=>cache.protocol(params(url,type),new AbortController());
 const saved=cache=>Promise.all([...cache.writes.values()].map(job=>job.promise));
 
+test('disk capacity stops full preloading without preventing selected frames from loading',async()=>{
+ for(const budget of [{diskBytes:8},{diskEntries:2}]){
+  let limited=0,calls=0;
+  const cache=new ForecastTileCache(async()=>{calls++;return bytes();},{storage:storage(),persistent:true,memoryBytes:4,...budget,onLimit:()=>limited++});
+  cache.setContext('view');
+  for(const url of ['one','two']){await read(cache,url);await saved(cache);}
+  assert.equal(cache.limited,false,'The retained sequence fits before eviction');
+  await read(cache,'three');await saved(cache);
+  assert.equal(cache.limited,true);assert.equal(limited,1,'Capacity is reported when a previously retained tile is evicted');
+  await read(cache,'three');assert.equal(calls,3,'The selected retained tile remains reusable');
+  await read(cache,'one');await saved(cache);assert.equal(calls,4,'An evicted selection can still load normally');
+  assert.equal(limited,1,'Capacity reporting does not restart on each selection');
+  cache.setContext('another view');assert.equal(cache.limited,false);cache.release();
+ }
+});
+
+test('late capacity eviction for an old viewport cannot limit the new viewport',async()=>{
+ const base=storage();let releaseEviction,evictionStarted;
+ const started=new Promise(resolve=>evictionStarted=resolve);
+ const disk={...base,open:async name=>{
+  const store=await base.open(name);
+  return {...store,delete:async key=>{evictionStarted();await new Promise(resolve=>releaseEviction=resolve);return store.delete(key);}};
+ }};
+ const cache=new ForecastTileCache(async()=>bytes(),{storage:disk,persistent:true,diskBytes:4});
+ cache.setContext('old view');await read(cache,'one');await saved(cache);
+ await read(cache,'two');const saving=saved(cache);await started;
+ cache.setContext('new view');releaseEviction();await saving;
+ assert.equal(cache.limited,false);cache.release();
+});
+
 test('persistent tiles survive reload with independent bytes, bounded storage and expiry',async t=>{
  t.mock.timers.enable({apis:['Date'],now:Date.UTC(2026,9,18,12,10)});
  const disk=storage();let calls=0;

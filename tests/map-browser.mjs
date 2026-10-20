@@ -25,6 +25,9 @@ const fakeOM=`
  export async function omProtocol(params,controller,settings){
   if(params.type==='json')window.fixturePalettes.push({url:params.url,cloud:settings?.colorScales?.cloud_cover?.colors?.[0],rain:settings?.colorScales?.precipitation?.colors?.[0]});
   window.fixtureRequests.push({url:params.url,type:params.type});
+  // A deterministic network hold lets separate click events overlap real
+  // foreground/background work without relying on the machine's render speed.
+  if(window.fixtureTransportGate)await window.fixtureTransportGate;
   await new Promise(r=>setTimeout(r,window.fixtureDelay??80));
   if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
   if(!params.url.startsWith('om://fixture/'))return {data:{tilejson:'2.2.0',minzoom:0,maxzoom:10,tiles:['om://fixture/'+encodeURIComponent(params.url)+'/{z}/{x}/{y}']}};
@@ -64,7 +67,7 @@ try{
    window.setInterval=(callback,delay,...args)=>{if(delay===60000)window.fixtureRefreshers.push(callback);return original(callback,delay,...args);};
   });
   await page.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
-  await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'maps.js'),'utf8'))+'\nwindow.fixturePanel=panels.a;window.fixturePanels=panels;'}));
+  await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'maps.js'),'utf8'))+'\nwindow.fixturePanel=panels.a;window.fixturePanels=panels;window.fixtureImageryCache=imageryCache;'}));
   await page.route('**/map-tile-cache.js*',async route=>{
    const code=await readFile(resolve(root,'map-tile-cache.js'),'utf8');
    // Exercise restoration from disk, not only the hot memory cache.
@@ -186,6 +189,86 @@ try{
    shown=await panelState();assert.equal(shown.a.loaded,true);assert.equal(shown.c.loaded,true);assert.equal(shown.b.loaded,false);
    assert.equal(shown.b.url,null,'A coarse model never borrows or interpolates a neighbouring hour');
    await selectTime(12);
+   // Physical double/triple clicks arrive in separate tasks. Hold fresh native
+   // reads while retaining the displayed map, then start known distant jobs.
+   // The old navigation path cancelled every one of these jobs on a cold click.
+   const holdColdNavigation=async()=>{
+    await page.evaluate(async()=>{
+     const cache=window.fixtureImageryCache;
+     for(const panel of Object.values(window.fixturePanels))panel.frameCache.pause();
+     cache.resetPending();
+     const store=await cache.disk;
+     if(store)await Promise.all((await store.keys()).map(key=>store.delete(key)));
+     window.fixtureRequestStart=window.fixtureRequests.length;
+     window.fixtureTransportGate=new Promise(resolve=>window.fixtureReleaseTransport=resolve);
+     window.fixtureNavigationJobs=[];
+     for(const panel of Object.values(window.fixturePanels)){
+      const frames=panel.frameCache,current=frames.current;
+      for(const frame of [...frames.frames.values()])if(frame!==current)frames.discard(frame);
+      frames.preloaded.clear();frames.retryFailures();
+      if(current)frames.preloaded.add(current.url);
+      const index=panel.cacheTimes.indexOf(panel.displayedTime);
+      const distant=panel.frameURLs.map((url,i)=>({url,distance:Math.abs(i-index)})).filter(({url})=>url&&url!==current?.url).sort((a,b)=>b.distance-a.distance).slice(0,frames.preloadConcurrency).map(({url})=>url);
+      frames.warm({keep:new Set(current?[current.url]:[]),upcoming:[],all:distant,delay:0});
+      frames.onProgress();
+     }
+    });
+    await page.waitForFunction(()=>Object.values(window.fixturePanels).every(panel=>panel.frameCache.prefetches.size===panel.frameCache.preloadConcurrency));
+    return page.evaluate(()=>{
+     window.fixtureNavigationJobs=Object.values(window.fixturePanels).flatMap(panel=>[...panel.frameCache.prefetches].map(([url,job])=>({key:panel.key,url,job})));
+     return Object.fromEntries(Object.entries(window.fixturePanels).map(([key,panel])=>[key,{time:panel.displayedTime,url:panel.url,loaded:panel.frameCache.preloaded.size}]));
+    });
+   };
+   const releaseTransport=()=>page.evaluate(()=>{window.fixtureTransportGate=null;window.fixtureReleaseTransport();});
+   const rapidClicks=async directions=>{
+    for(const direction of directions){
+     await page.locator(direction>0?'#next-time':'#previous-time').click({force:true});
+     // Keep click events in distinct tasks; coalescing itself has unit coverage.
+     await page.waitForTimeout(30);
+    }
+   };
+   const checkTime=async hour=>{
+    await ready();
+    const state=await panelState();
+    for(const panel of Object.values(state))assert.equal(panel.time,validTime(hour),'All panels identify the final requested time after a click burst');
+    assert.equal(await page.locator('#map-time').inputValue(),String(hour));
+    assert.equal(await page.locator('.map-error').filter({hasText:'Unable to load'}).count(),0,'Superseded requests cannot leave a stale loading error');
+   };
+   if(viewport.width<=650)await page.locator('#mobile-return-map').click();
+   const held=await holdColdNavigation();
+   await rapidClicks([1,1,1]);
+   await page.waitForFunction(()=>window.fixturePanels.a.frameCache.frames.has(window.fixturePanels.a.frameURLs[15]));
+   assert.equal(await page.evaluate(()=>window.fixtureNavigationJobs.every(({job})=>!job.controller.signal.aborted)),true,'Cold arrow clicks preserve useful in-flight background downloads');
+   for(const [key,panel]of Object.entries(await panelState())){
+    assert.equal(panel.time,held[key].time,'A loading target keeps the preceding image and its own label');
+    assert.equal(panel.url,held[key].url);
+   }
+   assert.equal(await page.evaluate(()=>Object.values(window.fixturePanels).every(panel=>panel.frameCache.preloaded.size>=1)),true,'Cold navigation does not reset completed-frame progress');
+   await releaseTransport();await checkTime(15);
+   await page.waitForFunction(()=>window.fixtureNavigationJobs.every(({key,url})=>window.fixturePanels[key].frameCache.preloaded.has(url)));
+   assert.equal(await page.evaluate(()=>window.fixtureNavigationJobs.every(({url})=>window.fixtureRequests.slice(window.fixtureRequestStart).filter(request=>request.type==='json'&&request.url===url).length===1)),true,'Retained downloads are not started again after the final selection commits');
+   const selectedRequestCount=()=>page.evaluate(()=>{
+    const urls=Object.values(window.fixturePanels).map(panel=>panel.frameURLs[15]).filter(Boolean);
+    return window.fixtureRequests.filter(request=>urls.some(url=>decodeURIComponent(request.url).includes(url))).length;
+   });
+   const cachedRequests=await selectedRequestCount();
+   await rapidClicks([-1,-1,-1]);await checkTime(12);
+   await rapidClicks([1,1,1]);await checkTime(15);
+   assert.equal(await selectedRequestCount(),cachedRequests,'Revisiting a prepared frame reuses its cached imagery');
+   await rapidClicks([1,1,-1]);await checkTime(16);
+   assert.equal((await panelState()).b.loaded,false,'A rapid reversal retains the explicit gap at an unsupported IFS hour');
+   // Controls follow the requested index while data is pending, so reversing
+   // immediately away from either timeline end never waits for a download.
+   for(const [edge,away,reverse]of [[0,1,-1],[60,-1,1]]){
+    await selectTime(edge);await holdColdNavigation();
+    await rapidClicks([away]);
+    assert.equal(await page.locator(reverse>0?'#next-time':'#previous-time').isEnabled(),true,'The reverse arrow enables immediately after leaving an endpoint');
+    await rapidClicks([reverse]);
+    assert.equal(await page.locator(edge===0?'#previous-time':'#next-time').isDisabled(),true,'Requested timeline bounds disable further clicks immediately');
+    await releaseTransport();await checkTime(edge);
+   }
+   if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
+   await selectTime(12);
    await page.locator('#compare-maps').uncheck();await ready();
    assert.deepEqual(await allTimes(),Array.from({length:49},(_,i)=>validTime(i)),'Single-panel mode uses the selected model alone');
    await page.locator('#compare-maps').check();await ready();
@@ -215,7 +298,7 @@ try{
    const availableHours=await check12();
    assert.ok(availableHours.some(hour=>hour%3!==0),'Hourly restores all supplied times in a mixed three-model comparison');
    assert.deepEqual(errors,[]);
-   console.log(JSON.stringify({viewport,threePanelControlsPassed:true,twelveHourMapsAndBriefingPassed:true,fullPanelHorizonsPassed:true,missingPanelPlaybackPassed:true}));
+   console.log(JSON.stringify({viewport,threePanelControlsPassed:true,twelveHourMapsAndBriefingPassed:true,fullPanelHorizonsPassed:true,missingPanelPlaybackPassed:true,rapidArrowNavigationPassed:true}));
     continue;
    }
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});

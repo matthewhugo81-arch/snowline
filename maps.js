@@ -18,10 +18,11 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,preci
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261016-navigation';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261019-mogreps-uk';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261018-rates';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261020-rapid-navigation';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rapid-navigation';
 import {createFramePrefetch} from './map-prefetch.js?v=20261011-parallel-preload';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
+import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-panel-times';
@@ -181,7 +182,7 @@ function makeMap(key){
  map.on('click',async event=>{if(!panel.loaded||panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
 locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await readMapValue(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${field.categoryLabels?(gridValueLabel(result.value,field)??'Unresolved')+' · '+(field.key===NATIVE_PRECIPITATION_TYPE?'native valid-time type':'estimated interval type'):displayValue(result.value,field).toFixed(1)+' '+displayUnit(field)} · ${modelName(panelSelection(state,key).model)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
- imageMenu.registerMap(map,()=>({...panel.imageInfo,subtitle:$('map-error-'+key).hidden?'':$('map-error-'+key).textContent,ready:panel.loaded&&panel.coastline.isReady()&&!!panel.displayedTime&&!!panel.imageInfo&&!!map.getLayer(panel.weatherLayer)}),pauseAnimation);
+ imageMenu.registerMap(map,()=>({...panel.imageInfo,subtitle:$('map-error-'+key).hidden?'':$('map-error-'+key).textContent,ready:panel.loaded&&panel.coastline.isReady()&&!!panel.displayedTime&&!!panel.imageInfo&&!!map.getLayer(panel.weatherLayer)}),()=>pauseAnimation({cancelNavigation:false}));
  return panel;
 }
 const a=makeMap('a');
@@ -253,12 +254,13 @@ async function drawGridValues(panel){
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
 function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:precipitationRateVariable(sourceVariable(source,field)??field),interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:!fields.find(f=>f.key===field)?.ensembleStatistic&&/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
-let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null,outlineWait;
+let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null,outlineWait,navigationDirection=1;
+const arrowNavigation=new ForecastNavigation({select:()=>setTime()});
 function updateOutlineStatus(panel){
  if(!panelVisible(panel.key)||briefingActive||panel.restyling)return;
  const outline=panel.coastline.state.status;
  if(panel.loaded&&outline!=='ready'){
-  pauseAnimation();panel.outlineWarning=true;
+  pauseAnimation({cancelNavigation:false});panel.outlineWarning=true;
   $('animation-status').textContent=outline==='error'?'Map outline unavailable · retry loading':'Loading map outline…';
   if(outline==='error'){$('map-error-'+panel.key).textContent='The map outline could not load. Use Retry map outline to restore the coastline.';$('map-error-'+panel.key).hidden=false;}
   status(outline==='error'?'The coastline could not finish loading. Retry the map outline.':'Loading the map outline…');
@@ -278,14 +280,18 @@ function refreshStartingTime(message='No forecast times available'){
  else select.append(new Option(message,''));
  $('map-start-time-note').textContent=state.compare?'Choose a time for all panels; playback begins here.':'Choose a forecast time; playback begins here.';
 }
+function syncArrowButtons(index){
+ $('previous-time').disabled=index<=0;$('next-time').disabled=index>=state.times.length-1;
+}
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
  $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');
  if($('map-start-time'))$('map-start-time').value=time;
  $('map-time-label').textContent=stamp(time);
- $('previous-time').disabled=index===0;$('next-time').disabled=index===state.times.length-1;
+ syncArrowButtons(index);
 }
-function pauseAnimation(){
+function pauseAnimation({cancelNavigation=true}={}){
+ if(cancelNavigation)arrowNavigation.cancel();
  const active=playing;playback?.pause();playing=false;
  if(active){
   ++timeGeneration;
@@ -295,7 +301,7 @@ function pauseAnimation(){
  $('play-map').textContent='▶ Play';$('play-map').setAttribute('aria-pressed','false');
 }
 function frameBudget(){
- return {loop:true,...(state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2})};
+ return {loop:true,direction:navigationDirection,...(state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2})};
 }
 function updatePreloadStatus(){
  const choices=panelSelections(state),total=choices.reduce((sum,{model,field})=>sum+state.times.filter(time=>hasFieldTime(state.metas[model],field,time)).length,0);
@@ -365,7 +371,21 @@ async function prepareSelection(index,valid=()=>true){
  if(prepared.some(item=>!item))return null;
  return valid()?prepared:null;
 }
-function setTime(){outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
+function setTime(){arrowNavigation.cancel();outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
+function stepTime(direction){
+ if(!state.times.length)return;
+ const shown=playing?state.times.indexOf(panels.a?.displayedTime):-1;
+ const from=shown>=0?shown:state.index,index=Math.max(0,Math.min(from+direction,state.times.length-1));
+ if(index===from)return;
+ pauseAnimation();navigationDirection=direction;state.index=index;requestedTime=Date.parse(state.times[index]);
+ // Remember every click immediately, including a reversal at either end. Keep
+ // the image and its valid-time label together until the requested panels commit.
+ syncArrowButtons(index);++timeGeneration;outlineWait?.abort();viewportRefresh.cancel();
+ failedSelection=null;for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
+ const ready=panelSelections(state).every(({key,model,field})=>!hasFieldTime(state.metas[model],field,state.times[index])||panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
+ $('animation-status').textContent='Loading '+stamp(state.times[index])+' UTC…';
+ return timePending=arrowNavigation.request({ready});
+}
 async function loadTime(outlineSignal){
  if(briefingActive)return false;
  prepareLegendLayout();
@@ -375,7 +395,7 @@ async function loadTime(outlineSignal){
  viewportRefresh.cancel(); // This selection already handles the settled view.
  failedSelection=null;
  if(!state.times.length)return false;
- const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;
+ const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;syncArrowButtons(index);
  const time=state.times[index],generation=++timeGeneration;
  const valid=()=>generation===timeGeneration&&state.times[index]===time&&state.index===index&&!mapsMoving();
  dismissLocation();requestedTime=Date.parse(time);
@@ -387,9 +407,9 @@ async function loadTime(outlineSignal){
    const panel=panels[key];await panel.ready;if(!valid()||panel.restyling)return false;
    const cache=panelCache(panel,model,field);
    panel.requestedURL=panel.frameURLs[index];
-   // Cached stepping can commit immediately without disturbing the download
-   // queue. Pause speculative work only when the chosen frame needs loading.
-   if(!cache.isReady(panel.requestedURL))cache.warm({...frameWindow(panel.frameURLs,index,frameBudget()),upcoming:[]});
+   // Give a cold selection priority without throwing away valid downloads.
+   // Only a changed model, layer or viewport cancels obsolete prefetch jobs.
+   if(!cache.isReady(panel.requestedURL))cache.focus(panel.requestedURL,frameWindow(panel.frameURLs,index,frameBudget()).keep);
   }
   viewportBounds();
   const prepared=await prepareSelection(index,valid);
@@ -700,16 +720,17 @@ $('reload-maps').addEventListener('click',refreshLiveRuns);$('map-time').addEven
  // Dragging supersedes the pending selection immediately, not only on release.
  // Its late success/failure must not reset the thumb or show a stale warning.
  for(const {key}of panelSelections(state)){panels[key].frameCache?.stop();$('map-error-'+key).hidden=true;}
- failedSelection=null;state.index=preview;e.target.value=String(preview);
+ failedSelection=null;state.index=preview;e.target.value=String(preview);syncArrowButtons(preview);
  if(state.times.length)$('animation-status').textContent='Preview '+stamp(state.times[preview])+' UTC · release to load';
 });
-$('previous-time').addEventListener('click',()=>{pauseAnimation();state.index--;setTime();});$('next-time').addEventListener('click',()=>{pauseAnimation();state.index++;setTime();});
+$('previous-time').addEventListener('click',()=>stepTime(-1));$('next-time').addEventListener('click',()=>stepTime(1));
 $('map-opacity').addEventListener('input',e=>{state.opacity=Number(e.target.value)/100;$('opacity-label').textContent=e.target.value+'%';for(const p of Object.values(panels))if(p.weatherLayer&&p.map.getLayer(p.weatherLayer)){p.map.setPaintProperty(p.weatherLayer,'raster-opacity',state.opacity);for(const id of p.frameCache?.current?.underlays??[])p.map.setPaintProperty(id,'raster-opacity',state.opacity);}});
 $('map-area').addEventListener('change',()=>{for(const p of Object.values(panels))fitArea(p.map,400);});
 $('reset-map').addEventListener('click',()=>{$('map-area').value='uk';for(const p of Object.values(panels))fitArea(p.map,400);});
 $('play-map').addEventListener('click',()=>{
  if(playing){pauseAnimation();for(const {key}of panelSelections(state))warmUpcoming(panels[key]);$('animation-status').textContent='Paused';return;}
  if(!state.times.length)return;
+ navigationDirection=1;arrowNavigation.flush();
  for(const {key}of panelSelections(state))clearGridValues(panels[key]);
  playback.start();
 });

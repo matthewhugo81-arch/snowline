@@ -66,7 +66,7 @@ export class ForecastTileCache{
   this.disk=null;this.name=null;
  }
  limit(){if(!this.limited){this.limited=true;this.onLimit();}}
- async put(store,request,response,bytes){
+ async put(store,request,response,bytes,generation=this.generation){
   if(!this.persistent)return store.put(request,response);
   let state=this.diskStates.get(store);
   if(!state){
@@ -87,6 +87,14 @@ export class ForecastTileCache{
    while((state.bytes+bytes>this.diskBytes||state.entries.size>=this.diskEntries)&&state.entries.size){
     const [key,size]=state.entries.entries().next().value;
     await store.delete(key);state.entries.delete(key);state.bytes-=size;
+    // A complete sequence no longer fits. Stop speculative full-sequence work
+    // instead of repeatedly evicting earlier frames while claiming all are kept.
+    // Late writes for an old viewport must not limit the currently active view.
+    if(generation===this.generation){
+     const entry=this.memory.get(new URL(key).searchParams.get('key'));
+     if(entry)entry.durable=false;
+     this.limit();
+    }
    }
    await store.put(request,response);state.entries.set(request,bytes);state.bytes+=bytes;
   });
@@ -106,7 +114,7 @@ export class ForecastTileCache{
  persist(key,request,entry,store,generation,type){
   // Display now; save separately. Keep pending writes bounded if storage stalls.
   const job={};this.writes.set(key,job);
-  job.promise=Promise.resolve().then(()=>this.put(store,request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes','x-snowline-bytes':String(entry.bytes)}}),entry.bytes))
+  job.promise=Promise.resolve().then(()=>this.put(store,request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes','x-snowline-bytes':String(entry.bytes)}}),entry.bytes,generation))
    .then(()=>{entry.durable=true;},()=>{/* Storage denial must not stop a map. */})
    .finally(()=>{
     entry.persisting=false;

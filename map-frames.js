@@ -1,14 +1,15 @@
 let cacheSequence=0;
 // Retain a bounded window. The browser selects a smaller budget in comparison mode.
-export function frameWindow(urls,index,{ahead=2,behind=2,loop=false}={}){
+export function frameWindow(urls,index,{ahead=2,behind=2,loop=false,direction=1}={}){
+ const reverse=direction<0;
  if(loop&&urls.length){
-  const at=offset=>urls[(index+offset+urls.length)%urls.length];
+  const at=offset=>urls[(index+(reverse?-offset:offset)+urls.length)%urls.length];
   const keep=new Set(),upcoming=[];
   for(let offset=-Math.min(behind,urls.length-1);offset<=Math.min(ahead,urls.length-1);offset++)if(at(offset))keep.add(at(offset));
   for(let offset=1;offset<=Math.min(ahead,urls.length-1);offset++)if(at(offset))upcoming.push(at(offset));
   return {keep,upcoming:[...new Set(upcoming)]};
  }
- return {keep:new Set(urls.slice(Math.max(0,index-behind),index+ahead+1).filter(Boolean)),upcoming:urls.slice(index+1,index+ahead+1).filter(Boolean)};
+ return {keep:new Set(urls.slice(Math.max(0,index-(reverse?ahead:behind)),index+(reverse?behind:ahead)+1).filter(Boolean)),upcoming:(reverse?urls.slice(Math.max(0,index-ahead),index).reverse():urls.slice(index+1,index+ahead+1)).filter(Boolean)};
 }
 // Begin just after the selected frame, then wrap to all earlier valid times.
 export function fullSequence(urls,index){return [...new Set([...urls.slice(index+1),...urls.slice(0,index+1)].filter(Boolean))];}
@@ -82,9 +83,9 @@ export class ForecastFrames{
  }
  async acquire(url,valid=()=>true){
   if(!valid())return null;
-  // A selected frame takes priority over unfinished speculative frames. Keep
-  // its downloads, but give it a fresh deadline when promoted from background.
-  if(!this.isReady(url))this.stop(url,this.keep);
+  // Pause new speculative work while the selection prepares. Existing tile
+  // jobs finish once and can be shared with this foreground request.
+  if(!this.isReady(url))this.focus(url);
   for(let attempt=0;attempt<2&&valid();attempt++){
    const frame=this.prepare(url);frame.renewTimeout?.();
    const ready=await frame.ready;
@@ -170,6 +171,12 @@ export class ForecastFrames{
   for(const url of this.failureAttempts.keys())if(!urls.has(url))this.failureAttempts.delete(url);
   this.queue.splice(0,this.queue.length,...this.queue.filter(url=>urls.has(url)));this.onProgress();
  }
+ // Navigation changes priority, not the model/run/view of existing downloads.
+ // Keep their bounded jobs alive while pausing dispatch of more distant work.
+ focus(url,keep=this.keep){
+  clearTimeout(this.timer);this.epoch++;this.queue=[];this.keep=keep;
+  for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.url!==url&&!keep.has(frame.url))this.discard(frame);
+ }
  stop(exceptURL,keep=new Set()){
   clearTimeout(this.timer);this.epoch++;this.queue=[];
   this.cancelPrefetches(new Set([...keep,exceptURL]));
@@ -199,7 +206,7 @@ export class ForecastFrames{
   this.cancelPrefetches(new Set([...keep,...all]));
   // A ready step must not restart useful distant downloads. Rejoin existing
   // jobs first so each keeps its slot across queue generations; do not launch
-  // another full batch beside it. A cold foreground acquire still preempts.
+  // another full batch beside it. Cold navigation pauses new dispatch only.
   this.keep=keep;this.queue=[...new Set([...this.prefetches.keys(),...upcoming.filter(url=>this.canRetry(url)),...all.filter(url=>!this.preloaded.has(url)&&this.canRetry(url))])];
   // Crucially, do NOT stop/cancel pending frames that are still in the window.
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
@@ -214,11 +221,17 @@ export class ForecastFrames{
     const distant=this.queue.filter(url=>!this.keep.has(url));
     const worker=async queue=>{
      while(epoch===this.epoch&&this.isActive()&&queue.length){
-      const url=queue.shift();
+      const url=queue[0];
       // retain() can remove changed companion data while this queue awaits a
       // download. Do not start a retired URL from either copied work list.
-      const queued=this.queue.indexOf(url);if(queued<0)continue;
-      this.queue.splice(queued,1);
+      const queued=this.queue.indexOf(url);if(queued<0){queue.shift();continue;}
+      // A surviving prefetch may now be a nearby/displayed frame, so merely
+      // rejoining the distant list does not account for every occupied slot.
+      // Leave this URL queued while waiting, so retain()/focus() can remove it.
+      if(!this.keep.has(url)&&!this.prefetches.has(url)&&this.prefetches.size>=this.preloadConcurrency){
+       await Promise.race([...this.prefetches.values()].map(job=>job.promise));continue;
+      }
+      queue.shift();this.queue.splice(queued,1);
       if(this.isReady(url))continue;
       if(!this.keep.has(url)&&(!this.canPreload()||this.preloaded.has(url)))continue;
       let frame,ready=false;
