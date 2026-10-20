@@ -90,13 +90,14 @@ test('both choices coalesce a check and use exact-cycle URLs, with no cross-cycl
  assert.match(modelOptionLabel(MAP_RUN_CHOICES.find(m=>m.id===UKV),{meta:latest}),/03Z · updating/);
  assert.match(modelOptionLabel(MAP_RUN_CHOICES.find(m=>m.id===UKV_PREVIOUS),{meta:previous}),/previous completed.*00Z/);
 });
-test('history independently finds three UKV runs and compares only overlapping valid times',async()=>{
+test('history independently finds three UKV runs without truncating completed forecasts to an arriving run',async()=>{
  const latest={...run(3,false,8),previousCompletedRun:run(0)},a=archive(records(run(0),run(-3))),result=await discoverPreviousRuns({model:UKV,latest,loadRun:a.loadRun});
  assert.deepEqual(result.runs.map(m=>m.reference_time),[3,0,-3].map(h=>run(h).reference_time));assert.deepEqual(a.calls,[run(-3).reference_time]);
  const weather=BRIEFING_PRESETS.find(p=>p.id==='weather');
  assert.ok(previousRunPresets(result.runs).some(p=>p.id==='weather'));
  const times=previousRunTimes(result.runs,weather,{id:UKV,regional:true});
- assert.equal(times.length,8);assert.equal(times[1],run(3).valid_times[2]);
+ assert.equal(times[0],run(-3).valid_times[1]);assert.equal(times.at(-1),run(0).valid_times.at(-1));
+ assert.ok(times.includes(run(3).valid_times[2]));
  assert.deepEqual(previousRunTimes([latest,latest,latest],weather,{id:UKV}),[]);
 });
 

@@ -4,8 +4,8 @@ import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261019-mogreps-uk';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,newerRunAvailable} from './map-previous-run-data.js?v=20261019-mogreps-uk';
-import {BRIEFING_AREAS,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-mogreps-uk';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasChart,previousRunPeriodNote,newerRunAvailable} from './map-previous-run-data.js?v=20261020-history-range';
+import {BRIEFING_AREAS,briefingTimes,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-mogreps-uk';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-coastline3';
 import {runLabel,runAvailability} from './map-runs.js?v=20261019-mogreps-uk';
 import {chartScales} from './map-image-export.js?v=20261019-mogreps-uk';
@@ -69,6 +69,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  function configureTimeline(){
   renderController?.abort();renderer?.cancel();const chosen=selected(),previous=$('preset').value;
   const available=presets=previousRunPresets(chosen,runCount(),fields);briefingOptions($('preset'),available);$('preset').disabled=!available.length;
+  for(const el of $('preset').options){const p=available.find(p=>p.id===el.value);if(p.availableRunCount<runCount())el.textContent+=' · '+p.availableRunCount+'/'+runCount()+' runs';}
   $('preset').value=available.some(p=>p.id===previous)?previous:available[0]?.id??'';
   const hours=accumulationHours(preset()?.field),native=previousRunTimes(chosen,preset(),model,interval);
   configurePeriodInterval($('interval'),hours,interval,!!model?.regional);
@@ -77,13 +78,23 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   if(hours){
    const periods=fixedAccumulationPeriods(native,hours,requestedStart??requestedTime);
    times=periods.times;index=periods.index;requestedStart=periods.start??requestedStart;
-   $('time').replaceChildren(...periods.starts.map(time=>option(time,utc(time))));
+   $('time').replaceChildren(...periods.starts.map(time=>option(time,timeLabel(new Date(Date.parse(time)+hours*3600000).toISOString(),time))));
   }else{
-   times=native;$('time').replaceChildren(...times.map((time,i)=>option(String(i),utc(time))));
+   times=native;$('time').replaceChildren(...times.map((time,i)=>option(String(i),timeLabel(time))));
    index=times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(times[best])-requestedTime)?i:best,0);
   }
-  $('note').textContent=hours?fixedPeriodNote(hours)+' All selected runs cover the identical start/end period.':preset()?.note??'Choose '+runCount()+' distinct runs that supply the same chart.';
   legend();navigation();render();
+ }
+ function timeLabel(time,labelTime=time){
+  const count=selected().filter(meta=>previousRunHasChart(meta,preset(),time)).length;
+  return utc(labelTime)+(count<runCount()?' · '+count+'/'+runCount()+' runs':'');
+ }
+ function unavailableMessage(meta,p,time){
+  const available=briefingTimes(meta,p,model,'native');
+  if(!available.length)return 'This chart is not available in this run. Choose another initialization to compare it.';
+  if(Date.parse(time)>Date.parse(available.at(-1)))return 'This run’s available '+(accumulationHours(p.field)?'complete periods end':'charts end')+' '+utc(available.at(-1))+'. Other runs continue; choose another initialization for this panel.';
+  if(Date.parse(time)<Date.parse(available[0]))return 'This run’s available '+(accumulationHours(p.field)?'complete periods begin':'charts begin')+' '+utc(available[0])+'. Choose a later time or another initialization.';
+  return accumulationHours(p.field)?'This run does not cover the complete selected period. No partial total is shown.':'This chart is not published at the selected time in this run. Its available times remain selectable.';
  }
  function render(){
   if(!active)return;renderController?.abort();renderer?.cancel();
@@ -91,13 +102,16 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   const chosen=selected(),p=preset(),time=times[index];$('retry').hidden=true;
   $('grid').style.setProperty('--briefing-aspect',size().join('/'));
   if(!time||chosen.length!==runCount()||!p){
-   for(const c of cards){c.title.textContent='No comparable chart';c.caption.textContent='';c.button.replaceChildren('No common valid time or chart for the selected runs.');c.button.disabled=true;delete c.card.dataset.ready;}
-   $('progress').textContent='Choose '+runCount()+' different runs with overlapping coverage. No missing data is substituted.';return;
+   for(const c of cards){c.title.textContent='No available chart';c.caption.textContent='';c.button.replaceChildren('No available time or chart for the selected runs.');c.button.disabled=true;delete c.card.dataset.ready;delete c.card.dataset.failed;delete c.card.dataset.unavailable;}
+   $('note').textContent='Choose '+runCount()+' distinct published runs.';
+   $('progress').textContent='Choose '+runCount()+' different runs and an available chart. No missing data is substituted.';return;
   }
   requestedTime=Date.parse(time);if(accumulationHours(p.field))requestedStart=periodStart(time,accumulationHours(p.field));navigation();
   const opts={model:model.id,preset:p,bounds:[...bounds()],size:[...size()],background:$('background').value,appearance:getAppearance(),overlays:{contours:$('contours').checked,grid:$('grid-values').checked}};
-  let loaded=0,failed=0;const started=performance.now();
-  const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+runCount()+' charts ready'+(failed?' · '+failed+' unavailable':loaded===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(accumulationHours(p.field)?' · Shared period: '+accumulationPeriod(p.field,time):' · Shared valid time: '+utc(time));};
+  const hours=accumulationHours(p.field);
+  $('note').textContent=[hours?fixedPeriodNote(hours)+' Each displayed chart covers the identical start/end period.':p.note,'The full available range is shown; panels without data are marked individually.',previousRunPeriodNote(chosen,p,time)].filter(Boolean).join(' ');
+  let loaded=0,failed=0,unavailable=0;const started=performance.now();
+  const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+(runCount()-unavailable)+' available charts ready'+(unavailable?' · '+unavailable+' run'+(unavailable===1?'':'s')+' without data at this time':'')+(failed?' · '+failed+' failed to load':loaded+unavailable===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(hours?' · Shared period: '+accumulationPeriod(p.field,time):' · Shared valid time: '+utc(time));};
   const show=(c,src,meta)=>{
    const description=model.name+' · Run '+runLabel(meta)+' · '+p.name+' · '+forecastValidity(p.field,time),subtitle=briefingCaption(meta,p,time);
    const info={title:description,subtitle,scales:chartScales(fields.find(f=>f.key===p.field),subtitle,p.id==='weather')};
@@ -105,11 +119,14 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();};loaded++;
   };
   const tasks=chosen.map((meta,i)=>{
-   const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;
+   const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;delete c.card.dataset.unavailable;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;c.button.onclick=null;
    c.title.textContent=model.name+' · '+forecastValidity(p.field,time);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
+   if(!previousRunHasChart(meta,p,time)){
+    c.card.dataset.unavailable='true';c.caption.textContent='Run '+runLabel(meta)+' · No chart for this '+(hours?'period':'time');c.button.replaceChildren(unavailableMessage(meta,p,time));unavailable++;return null;
+   }
    const key=briefingKey(model.id,meta,p,opts.bounds,time,opts.size,opts.overlays,opts.background,opts.appearance),cached=images.get(key);if(cached)show(c,cached,meta);
    return {c,meta,key,cached};
-  });progress();
+  }).filter(Boolean);progress();
   work=work.catch(()=>{}).then(async()=>{
    if(signal.aborted)return;if(renderer&&(renderer.background!==opts.background||renderer.appearanceKey!==appearanceKey(opts.appearance))){renderer.destroy();renderer=null;}
    renderer??=new BriefingRenderer({...renderOptions,fields,background:opts.background,appearance:opts.appearance});
@@ -132,6 +149,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    const next=times[index+1];if(failed||!next||accumulationHours(p.field))return;
    for(const meta of chosen){
     if(signal.aborted||!active||document.hidden)return;
+    if(!previousRunHasChart(meta,p,next))continue;
     const key=briefingKey(model.id,meta,p,opts.bounds,next,opts.size,opts.overlays,opts.background,opts.appearance);if(images.get(key))continue;
     try{const src=await renderer.render({...opts,meta,time:next,signal});if(signal.aborted){URL.revokeObjectURL(src);return;}images.set(key,src);}catch{if(signal.aborted)return;}
    }

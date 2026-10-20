@@ -1,7 +1,7 @@
 import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261019-mogreps-uk';
 import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261019-mogreps-uk';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
-import {fieldIntervalHours,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261020-native-levels';
+import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261020-native-levels';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
@@ -58,13 +58,24 @@ export function previousRunPresets(runs,count=3,fields){
  if(runs.length!==count||new Set(runs.map(meta=>Date.parse(meta.reference_time))).size!==count)return [];
  const catalogues=runs.map(meta=>briefingPresets(meta,fields));
  const sets=catalogues.map(presets=>new Set(presets.map(p=>p.id)));
- return catalogues[0].filter(p=>sets.every(set=>set.has(p.id)));
+ return [...new Map(catalogues.flat().map(p=>[p.id,p])).values()].map(p=>({...p,availableRunCount:sets.filter(set=>set.has(p.id)).length}));
+}
+export function previousRunHasChart(meta,preset,time){
+ return !!preset&&preset.required.every(key=>hasFieldTime(meta,key,time));
 }
 export function previousRunTimes(runs,preset,model,interval='3'){
  if(runs.length!==3||!preset||new Set(runs.map(m=>Date.parse(m.reference_time))).size!==runs.length)return [];
- const series=runs.map(meta=>briefingTimes(meta,preset,model,interval)),sets=series.slice(1).map(times=>new Set(times.map(Date.parse)));
+ // A short or still arriving run must not truncate the other selected runs.
+ // Preserve each run's verified windows and cadence; never fill its gaps.
+ const series=runs.flatMap(meta=>briefingTimes(meta,preset,model,interval));
+ return [...new Map(series.map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
+}
+export function previousRunPeriodNote(runs,preset,time){
+ if(!preset||!time)return '';
  const amount=preset.id==='weather'?'precipitation':preset.field;
  const intervalAmount=[...TYPE_KEYS,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)||runs.some(meta=>meta.sources?.some(source=>source.variable_intervals?.[amount]));
- return series[0].filter(time=>sets.every(set=>set.has(Date.parse(time)))&&(!intervalAmount||new Set(runs.map(meta=>fieldIntervalHours(meta,amount,time))).size===1));
+ if(!intervalAmount)return '';
+ const periods=[...new Set(runs.filter(meta=>previousRunHasChart(meta,preset,time)).map(meta=>fieldIntervalHours(meta,amount,time)).filter(Number.isFinite))].sort((a,b)=>a-b);
+ return periods.length>1?'Reporting periods differ between runs ('+periods.map(h=>h+' h').join(' / ')+'). Each chart states its own period.':'';
 }
 export function newerRunAvailable(runs,incoming){return !!incoming&&runs.length>0&&Date.parse(incoming.reference_time)>Math.max(...runs.map(meta=>Date.parse(meta.reference_time)));}

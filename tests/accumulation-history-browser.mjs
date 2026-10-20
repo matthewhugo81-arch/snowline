@@ -14,6 +14,12 @@ const oldTests=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNew
 const geo={type:'FeatureCollection',features:[]},style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'background',type:'background',paint:{'background-color':'#ffffff'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222222'}}]};
 const UKV='ukmo_uk_deterministic_2km',ref='2026-10-12T12:00:00Z',hour=3600000,periods=[6,12,18,24,36,48,72,120],key=h=>'precipitation_total_'+h+'h';
 const meta=(reference_time,domain=UKV)=>{const cycle=new Date(reference_time).getUTCHours(),ukv=domain===UKV,max=ukv?(cycle%3===0?54:12):168;return {completed:true,reference_time,variables:['temperature_2m','temperature_850hPa','relative_humidity_2m','precipitation','cloud_cover','pressure_msl'],valid_times:Array.from({length:max+1},(_,i)=>new Date(Date.parse(reference_time)+i*hour).toISOString()).filter((_,i)=>ukv||i<=120||i%3===0)};};
+const UKMO='ukmo_global_deterministic_10km';
+function ukmoMeta(reference){
+ const short=new Date(reference).getUTCHours()%12!==0,max=short?60:168;
+ return {...meta(reference,UKMO),variables:[...meta(reference,UKMO).variables,...(short?[]:['wind_speed_300hPa','wind_direction_300hPa'])],
+  valid_times:Array.from({length:max+1},(_,i)=>i).filter(h=>h<=54||h%3===0).map(h=>new Date(Date.parse(reference)+h*hour).toISOString())};
+}
 const metrics=[];
 await mkdir('review-output',{recursive:true});
 try{
@@ -28,12 +34,12 @@ try{
   await page.route('**/ensemble-data/*/latest.json',r=>r.fulfill({status:404,contentType:'application/json',body:'{}'}));
   await page.route('https://openmeteo.s3.amazonaws.com/**',r=>{
    const url=r.request().url(),domain=new URL(url).pathname.split('/')[2],isUKV=domain===UKV;requests.push(url);
-   if(!isUKV&&!['ncep_gfs013','ncep_gfs025'].includes(domain))return r.fulfill({status:404,body:'{}'});
+   if(!isUKV&&![UKMO,'ncep_gfs013','ncep_gfs025'].includes(domain))return r.fulfill({status:404,body:'{}'});
    let reference;if(/latest.json$/.test(url))reference=isUKV?'2026-10-12T13:00:00Z':ref;
    else if(/in-progress.json$/.test(url))reference=isUKV?(newer?'2026-10-12T15:00:00Z':'2026-10-12T13:00:00Z'):ref;
    else {const match=url.match(/\/(\d{4})\/(\d{2})\/(\d{2})\/(\d{2})00Z\/meta.json$/);if(match)reference=`${match[1]}-${match[2]}-${match[3]}T${match[4]}:00:00Z`;}
    const valid=reference&&Date.parse(reference)>=Date.parse(ref)-48*hour&&Date.parse(reference)<=Date.parse(newer?'2026-10-12T15:00:00Z':'2026-10-12T13:00:00Z');
-   return r.fulfill({status:valid?200:404,contentType:'application/json',body:JSON.stringify(valid?meta(reference,domain):{})});
+   return r.fulfill({status:valid?200:404,contentType:'application/json',body:JSON.stringify(valid?(domain===UKMO?ukmoMeta(reference):meta(reference,domain)):{})});
   });
   try{
    const start=performance.now();await page.goto(origin+'/maps.html?time=2026-10-13T12:00:00Z');
@@ -103,6 +109,43 @@ try{
    const previousImage=await page.locator('#previous-grid img').first().getAttribute('src');
    await page.locator('#previous-background').selectOption('streets');await page.waitForFunction(()=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===3);
    assert.notEqual(await page.locator('#previous-grid img').first().getAttribute('src'),previousImage,'Previous runs redraw for the chosen background');
+   const gfsTime=await page.locator('#previous-time').inputValue();
+   await page.locator('#previous-model').selectOption(UKMO);
+   await page.waitForFunction(()=>!document.querySelector('#previous-preset').disabled);
+   await page.locator('#previous-preset').selectOption('weather');
+   const readyCount=n=>page.waitForFunction(n=>document.querySelectorAll('#previous-grid .briefing-card[data-ready="true"]').length===n,n,{timeout:60000});
+   const chooseHistoryTime=async text=>{
+    const value=await page.locator('#previous-time option').evaluateAll((os,text)=>os.find(o=>o.textContent.startsWith(text))?.value,text);
+    assert.ok(value!==undefined,'Published valid time must remain selectable: '+text);
+    await page.locator('#previous-time').selectOption(value);
+   };
+   await chooseHistoryTime('Wed 14 Oct, 12:00');await readyCount(3);
+   assert.match(await page.locator('#previous-note').textContent(),/Reporting periods differ.*1 h \/ 3 h/);
+   assert.equal(await page.locator('#previous-grid .briefing-card[data-failed]').count(),0);
+   const ukmoPinned=await page.locator('#previous-grid select').evaluateAll(ss=>ss.map(s=>s.value));
+   await page.locator('#previous-preset').selectOption('jet');await readyCount(2);
+   assert.match(await page.locator('#previous-preset option:checked').textContent(),/2\/3 runs/);
+   assert.equal(await page.locator('#previous-grid .briefing-card[data-unavailable] img').count(),0);
+   await page.locator('#previous-preset').selectOption('weather');
+   await chooseHistoryTime('Thu 15 Oct, 12:00');await readyCount(2);
+   assert.match(await page.locator('#previous-grid .briefing-card[data-unavailable] .briefing-chart').textContent(),/charts end.*14 Oct.*18:00/);
+   assert.match(await page.locator('#previous-progress').textContent(),/2\/2 available charts ready.*1 run without data/);
+   assert.equal(await page.locator('#previous-retry').isVisible(),false,'Absent source hours are not failed downloads');
+   await page.screenshot({path:`review-output/ukmo-short-cycle-${viewport.width}.png`,fullPage:true});
+   await chooseHistoryTime('Mon 19 Oct, 12:00');await readyCount(1);
+   assert.equal(await page.locator('#previous-forward').isDisabled(),true);
+   assert.equal(await page.locator('#previous-grid .briefing-card[data-unavailable] img').count(),0,'Earlier images are cleared beyond each run’s horizon');
+   assert.deepEqual(await page.locator('#previous-grid select').evaluateAll(ss=>ss.map(s=>s.value)),ukmoPinned,'Moving beyond a short run never substitutes another initialization');
+   await page.locator('#previous-preset').selectOption(key(24));
+   await page.locator('#previous-time').selectOption('2026-10-18T12:00:00.000Z');await readyCount(1);
+   assert.equal(await page.locator('#previous-grid .briefing-card[data-unavailable]').count(),2,'Full rainfall windows remain available in the longest run only');
+   await page.locator('#previous-preset').selectOption('weather');
+   await chooseHistoryTime('Wed 14 Oct, 12:00');await readyCount(3);
+   assert.equal(await page.locator('#previous-grid .briefing-card[data-unavailable]').count(),0,'Returning to shared coverage restores all three charts');
+   await page.locator('#previous-model').selectOption('gfs_global');
+   await page.waitForFunction(()=>!document.querySelector('#previous-preset').disabled);
+   await page.locator('#previous-preset').selectOption('cloud_cover');
+   await page.locator('#previous-time').selectOption(gfsTime);await readyCount(3);
    await page.locator('#briefing-sequence-mode').click();await page.waitForFunction(()=>!document.querySelector('#briefing-preset').disabled);assert.equal(await page.locator('#previous-run-view').isVisible(),false);
    assert.equal(await page.locator('#briefing-background').inputValue(),'streets','Background follows between briefing modes');
    assert.equal(await page.locator('#briefing-preset').inputValue(),'cloud_cover','Standalone field follows from previous runs into forecast sequence');

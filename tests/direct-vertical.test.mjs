@@ -43,11 +43,12 @@ test('latest and archived model choices attach only the same-cycle direct data',
  }
 });
 
-test('three direct runs support only common valid times in Previous Run Analysis',()=>{
+test('three direct runs retain every supplied valid time in Previous Run Analysis',()=>{
  const runs=[12,0,-12].map(hour=>({...direct('snowline_gem_700'),reference_time:new Date(Date.UTC(2026,9,15,hour)).toISOString()}));
  const fields=[verticalMotionField()],preset=previousRunPresets(runs,3,fields).find(p=>p.field===VERTICAL_MOTION);
  assert.ok(preset);assert.deepEqual(previousRunTimes(runs,preset,{},'native'),[time]);
- runs[1]={...runs[1],valid_times:['2026-10-15T18:00:00Z']};assert.deepEqual(previousRunTimes(runs,preset,{},'native'),[]);
+ runs[1]={...runs[1],valid_times:['2026-10-15T18:00:00Z']};
+ assert.deepEqual(previousRunTimes(runs,preset,{},'native'),[time,'2026-10-15T18:00:00Z'].sort((a,b)=>Date.parse(a)-Date.parse(b)));
 });
 
 test('exported provider and coverage notes retain one copy of the scale explanation',()=>{

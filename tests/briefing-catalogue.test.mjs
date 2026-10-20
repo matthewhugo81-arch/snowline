@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as OM from '../vendor/index.mjs';
 import {availableFields,extendCatalogue} from '../map-catalogue.js';
 import {briefingPresets,briefingTimes,briefingCaption} from '../map-briefing-data.js';
-import {previousRunPresets,previousRunTimes,discoverPreviousRuns} from '../map-previous-run-data.js';
+import {previousRunPresets,previousRunTimes,previousRunHasChart,discoverPreviousRuns} from '../map-previous-run-data.js';
 import {WEATHER_COMPOSITE,compositeField} from '../map-weather-composite.js';
 import {PRECIPITATION_SCALE} from '../map-catalogue.js';
 const hour=3600000,ref=Date.UTC(2026,9,13,0),time=h=>new Date(ref+h*hour).toISOString();
@@ -42,13 +42,17 @@ test('IFS feeds retain their own supported fields; theta-w needs same-grid T850 
  assert.ok(!briefingPresets(nine,fields).some(p=>p.id==='theta-w'));
  assert.ok(briefingPresets(quarter,fields).some(p=>p.id==='theta-w'));
  const runs=[quarter,{...quarter,reference_time:time(-6)},{...quarter,reference_time:time(-12),variables:weather}];
- assert.ok(!previousRunPresets(runs,3,fields).some(p=>p.id==='theta-w'));
+ const p=previousRunPresets(runs,3,fields).find(p=>p.id==='theta-w');
+ assert.equal(p.availableRunCount,2);
+ assert.deepEqual(runs.map(m=>previousRunHasChart(m,p,time(3))),[true,true,false]);
 });
 test('standalone precipitation comparisons label mean rates and retain verified periods despite gaps',()=>{
  const one=meta('dwd_icon_eu',weather),three={...one,reference_time:time(-3),valid_times:[time(0),time(3),time(6)]},older={...one,reference_time:time(-6)};
  const p=briefingPresets(one,catalogue([one])).find(p=>p.key==='precipitation');
  assert.match(briefingCaption(one,p,time(3)),/Mean rate \(mm\/h\) over preceding 1 h/);
- assert.deepEqual(previousRunTimes([one,three,older],p,{},'native'),[time(3),time(6)]);
+ const times=previousRunTimes([one,three,older],p,{},'native');
+ assert.ok(times.includes(time(3)));assert.equal(times.at(-1),time(54));
+ assert.equal(previousRunHasChart(three,p,time(7)),false);
 });
 test('ensemble catalogue is exposed in sequence; absent archives are explained without substituting models',async()=>{
  const m=meta('snowline_ecmwf_ensemble',['temperature_850hPa_mean','temperature_850hPa_spread','pressure_msl_mean']),fields=catalogue([m]);

@@ -87,13 +87,13 @@ test('height contours use metres for geometry and dam for labels; barbs use knot
 });
 
 
-test('previous-run comparison requires this complete chart in each distinct initialization',()=>{
+test('previous-run comparison identifies which distinct initializations supply the complete chart',()=>{
  const runs=[0,6,12].map(hour=>({...meta('ncep_gfs025'),reference_time:'2026-10-15T'+String(hour).padStart(2,'0')+':00:00Z'}));
  const fields=[],settings={colorScales:{}};extendCatalogue(fields,runs,OM,settings);
  const preset=previousRunPresets(runs,3,fields).find(p=>p.field===VERTICAL_MOTION);assert.ok(preset);
  assert.deepEqual(previousRunTimes(runs,preset,{},'native'),[time]);
  runs[1]={...runs[1],variables:runs[1].variables.filter(v=>v!=='vertical_velocity_700hPa')};
- assert.ok(!previousRunPresets(runs,3,fields).some(p=>p.field===VERTICAL_MOTION));
+ assert.equal(previousRunPresets(runs,3,fields).find(p=>p.field===VERTICAL_MOTION).availableRunCount,2);
 });
 
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {runCandidates,discoverPreviousRuns,previousRunTimes,previousRunPresets,newerRunAvailable} from '../map-previous-run-data.js';
+import {runCandidates,discoverPreviousRuns,previousRunTimes,previousRunPresets,previousRunHasChart,previousRunPeriodNote,newerRunAvailable} from '../map-previous-run-data.js';
 import {loadSpatialRun,fieldDataURL} from '../map-sources.js';
 import {BRIEFING_PRESETS} from '../map-briefing-data.js';
 const main='ukmo_uk_deterministic_2km',nowcast=main+'_nowcast',ref='2026-10-12T12:00:00Z';
@@ -24,13 +24,40 @@ test('failed metadata checks are distinguished from expired or unpublished cycle
  }});
  assert.deepEqual(result.runs.map(m=>new Date(m.reference_time).getUTCHours()),[12,9,0]);assert.equal(result.unavailable.length,1);assert.equal(result.errors.length,1);
 });
-test('three-run comparison locks valid time, not lead time, and uses only common complete intervals',()=>{
+test('three-run comparison locks valid time and retains each run’s complete intervals',()=>{
  const runs=[meta(-6),meta(-3),meta()],weather=BRIEFING_PRESETS.find(p=>p.id==='weather');
- const times=previousRunTimes(runs,weather,{regional:true});assert.equal(times[0],'2026-10-12T13:00:00.000Z');
- assert.deepEqual(runs.map(m=>(Date.parse(times[0])-Date.parse(m.reference_time))/3600000),[7,4,1]);
+ const times=previousRunTimes(runs,weather,{regional:true});assert.equal(times[0],'2026-10-12T07:00:00.000Z');
+ const shared='2026-10-12T13:00:00.000Z';assert.ok(times.includes(shared));
+ assert.deepEqual(runs.map(m=>(Date.parse(shared)-Date.parse(m.reference_time))/3600000),[7,4,1]);
  const total=BRIEFING_PRESETS.find(p=>p.id==='precipitation_total_24h');const ending=previousRunTimes(runs,total,{regional:true})[0];
- assert.equal(ending,'2026-10-13T12:00:00.000Z');
+ assert.equal(ending,'2026-10-13T06:00:00.000Z');
+ assert.deepEqual(runs.map(m=>previousRunHasChart(m,total,ending)),[true,false,false]);
  assert.deepEqual(previousRunPresets([runs[0],runs[0],runs[2]]),[]);
+});
+
+test('UKMO long runs reach T+168 despite an intervening T+60 run and different rain periods',()=>{
+ const domain='ukmo_global_deterministic_10km',zero=Date.parse('2026-10-20T00:00Z'),at=h=>new Date(zero+h*3600000).toISOString();
+ const make=(init,last)=>({...meta(),domain,reference_time:at(init),valid_times:Array.from({length:last+1},(_,i)=>i).filter(h=>h<=54||h%3===0).map(h=>at(init+h))});
+ const runs=[make(-12,168),make(-6,60),make(0,168)],weather=BRIEFING_PRESETS[0],times=previousRunTimes(runs,weather,{});
+ assert.equal(times.at(-1),at(168));assert.ok(times.includes(at(48)),'Different 1 h / 3 h rain periods must not hide a valid time');
+ assert.match(previousRunPeriodNote(runs,weather,at(48)),/1 h \/ 3 h/);
+ assert.deepEqual(runs.map(m=>previousRunHasChart(m,weather,at(72))),[true,false,true]);
+ assert.deepEqual(runs.map(m=>previousRunHasChart(m,weather,at(168))),[false,false,true]);
+ const total=BRIEFING_PRESETS.find(p=>p.id==='precipitation_total_24h');
+ assert.equal(previousRunTimes(runs,total,{}).at(-1),at(168));
+ assert.deepEqual(runs.map(m=>previousRunHasChart(m,total,at(72))),[true,false,true]);
+ assert.equal(previousRunPeriodNote(runs,total,at(72)),'');
+});
+
+test('sparse per-variable publications retain other runs’ times without inventing a chart',()=>{
+ const p={id:'height',field:'geopotential_height_500hPa',required:['geopotential_height_500hPa']};
+ const runs=[meta(-12),meta(-6),meta()].map(m=>({...m,variables:p.required}));
+ const all=previousRunTimes(runs,p,{},'native'),end=all.at(-1);
+ runs[2]={...runs[2],variable_valid_times:{geopotential_height_500hPa:[end]}};
+ const times=previousRunTimes(runs,p,{},'native');
+ assert.ok(times.includes(end));assert.ok(times.includes(runs[0].valid_times[1]));
+ assert.equal(previousRunHasChart(runs[2],p,runs[2].valid_times[1]),false);
+ assert.equal(previousRunHasChart(runs[2],p,end),true);
 });
 test('history omits unsupported fields and never changes pinned runs when a new cycle arrives',()=>{
  const runs=[meta(-6),meta(-3),meta()],refs=runs.map(m=>m.reference_time);assert.ok(previousRunPresets(runs).some(p=>p.id==='dew-point'));
