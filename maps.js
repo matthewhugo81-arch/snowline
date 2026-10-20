@@ -696,11 +696,27 @@ for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],
  }
 });
 const comparisonInitialized=new Set(state.compare?panelSelections(state).map(p=>p.key):['a']);
+function setPanelMenuExpanded(key,expanded){
+ const button=$('toggle-panel-menu-'+key);
+ $('panel-selectors-'+key).hidden=!expanded;
+ $('panel-overlays-'+key).hidden=!expanded;
+ button.setAttribute('aria-expanded',String(expanded));
+ const label=(expanded?'Collapse':'Show')+' Panel '+(['a','b','c'].indexOf(key)+1)+' menu';
+ button.setAttribute('aria-label',label);button.title=label;
+}
+for(const key of ['a','b','c'])$('toggle-panel-menu-'+key).addEventListener('click',()=>{
+ const expanded=$('toggle-panel-menu-'+key).getAttribute('aria-expanded')==='true';
+ setPanelMenuExpanded(key,!expanded);
+});
 async function changeComparison(){
  pauseAnimation();requestedTime=Date.parse(state.times[state.index])||requestedTime;
  state.compare=$('compare-maps').checked;
  state.comparisonCount=Number($('map-comparison-count').value);
  $('comparison-count-control').hidden=!state.compare;
+ for(const key of ['a','b','c']){
+  $('toggle-panel-menu-'+key).hidden=!state.compare;
+  if(!state.compare)setPanelMenuExpanded(key,true);
+ }
  for(const key of ['b','c']){
   const visible=panelVisible(key);
   if(visible&&!comparisonInitialized.has(key)){

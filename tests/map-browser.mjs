@@ -98,6 +98,36 @@ try{
   try{
    if(process.env.MAP_THREE_PANELS_ONLY){
    const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   const checkPanelMenus=async count=>{
+    const keys=['a','b','c'].slice(0,count);
+    const selection=()=>page.locator('.panel-selectors select,.panel-overlays input,#map-start-time').evaluateAll(controls=>controls.map(control=>control.type==='checkbox'?control.checked:control.value));
+    const original=await selection();
+    const sizes=()=>page.locator('.map-panel:not([hidden]) .map-view').evaluateAll(views=>views.map(view=>view.getBoundingClientRect().height));
+    const expandedSizes=await sizes();
+    for(const [index,key]of keys.entries()){
+     // Native buttons must also work from the keyboard.
+     await page.locator('#toggle-panel-menu-'+key).press('Enter');
+     for(const [otherIndex,other]of keys.entries()){
+      assert.equal(await page.locator('#toggle-panel-menu-'+other).getAttribute('aria-expanded'),String(otherIndex>index));
+      assert.equal(await page.locator('#panel-selectors-'+other).isVisible(),otherIndex>index,'Each menu collapses independently');
+      assert.equal(await page.locator('#panel-overlays-'+other).isVisible(),otherIndex>index);
+     }
+     await page.waitForFunction(()=>[...document.querySelectorAll('.map-panel:not([hidden]) .map-canvas')].every(map=>map.clientHeight===map.querySelector('canvas').clientHeight));
+     if(viewport.width>1050){
+      const heights=await sizes();
+      heights.forEach((height,i)=>assert.ok(i<=index?height>expandedSizes[i]+40:Math.abs(height-expandedSizes[i])<2,'Only collapsed panels gain map height'));
+     }
+     assert.deepEqual(await selection(),original,'Collapsing retains models, layers, runs, overlays and valid time');
+    }
+    await ready();
+    for(const key of keys.toReversed()){
+     await page.locator('#toggle-panel-menu-'+key).click();
+     assert.equal(await page.locator('#panel-selectors-'+key).isVisible(),true);
+     assert.equal(await page.locator('#panel-overlays-'+key).isVisible(),true);
+    }
+    await ready();
+    assert.deepEqual(await selection(),original,'Reopening retains the same forecast selections');
+   };
    await ready();
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'native');
    assert.equal(await page.locator('#map-forecast-interval').isEnabled(),true,'UKV viewing interval is selectable');
@@ -124,6 +154,7 @@ try{
    await page.locator('#briefing-close').click();await ready();
    if(viewport.width<=650&&!(await page.locator('#compare-maps').isVisible()))await page.locator('#mobile-map-settings').click();
    await page.locator('#compare-maps').check();await ready();
+   await checkPanelMenus(2);
    assert.equal(await page.locator('#map-variable-b').inputValue(),'precipitation','The existing second-panel default is retained');
    await page.locator('#map-comparison-count').selectOption('3');await ready();
    await page.locator('#map-model-b').selectOption('ecmwf_ifs');await ready();
@@ -133,6 +164,7 @@ try{
    assert.equal(await page.locator('#map-variable').inputValue(),'temperature_2m');
    assert.equal(await page.locator('#map-variable-b').inputValue(),'temperature_2m');
    assert.equal(await page.locator('#map-variable-c').inputValue(),'cloud_cover');
+   await checkPanelMenus(3);
    if(viewport.width<=650)await page.locator('#mobile-return-map').click();
    await page.locator('#next-time').click();await ready();
    const labels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
@@ -271,7 +303,10 @@ try{
    }
    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
    await selectTime(12);
+   await page.locator('#toggle-panel-menu-a').click();
    await page.locator('#compare-maps').uncheck();await ready();
+   assert.equal(await page.locator('#toggle-panel-menu-a').isVisible(),false,'Single-panel view has no comparison menu button');
+   assert.equal(await page.locator('#panel-selectors-a').isVisible(),true,'Returning to one panel restores its menu');
    assert.deepEqual(await allTimes(),Array.from({length:49},(_,i)=>validTime(i)),'Single-panel mode uses the selected model alone');
    await page.locator('#compare-maps').check();await ready();
    assert.equal((await allTimes()).at(-1),validTime(60),'Reopening comparison restores the third model horizon');

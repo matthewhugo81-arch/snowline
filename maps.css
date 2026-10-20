@@ -265,3 +265,13 @@
  .map-canvases:not(:has(#panel-c:not([hidden]))) .panel-run-selector{grid-column:auto}
  .map-canvases:not(:has(#panel-c:not([hidden]))) .panel-selectors select{padding:6px 7px}
 }
+
+/* Each comparison panel can reclaim its own menu space. */
+.panel-heading{display:flex;align-items:center;justify-content:space-between}
+.panel-menu-toggle{display:inline-flex;align-items:center;justify-content:center;flex:none;width:26px;height:24px;padding:0}
+.panel-menu-toggle[hidden],.panel-selectors[hidden],.panel-overlays[hidden]{display:none}
+.panel-menu-toggle[aria-expanded=false] svg{transform:rotate(180deg)}
+.map-canvases:has(#panel-b:not([hidden])) .panel-heading{min-height:24px;margin-bottom:5px}
+.map-canvases:has(#panel-b:not([hidden])) .panel-heading .panel-number{margin-bottom:0}
+.panel-controls:has(.panel-selectors[hidden]) .panel-heading{margin-bottom:0}
+@media(max-width:650px){.panel-menu-toggle{width:40px;height:40px}.panel-controls:has(.panel-selectors[hidden]){padding-bottom:7px}}
