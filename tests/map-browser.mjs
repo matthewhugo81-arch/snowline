@@ -86,7 +86,7 @@ try{
    const url=route.request().url();metadata.push(url);
    const domain=new URL(url).pathname.split('/')[2],ensemble=ensembleFixtures[domain];
    let gfs=domain==='ncep_gfs013'?{...fixture(0,48),variables:['temperature_2m','snowfall_water_equivalent','cloud_cover','precipitation']}:domain==='ncep_gfs025'?{...fixture(0,48),variables:['pressure_msl','freezing_level_height','temperature_850hPa','relative_humidity_850hPa','geopotential_height_500hPa',...['300','400'].flatMap(level=>['wind_u_component_'+level+'hPa','wind_v_component_'+level+'hPa'])]}:null;
-   if(gfs&&livePhase&& !url.endsWith('/latest.json'))gfs={...gfs,...fixture(12,livePhase===1?6:livePhase===2?12:18),variables:gfs.variables,completed:false};
+   if(gfs&&livePhase&&(url.endsWith('/in-progress.json')||url.includes('/1200Z/')))gfs={...gfs,...fixture(12,livePhase===1?6:livePhase===2?12:18),variables:gfs.variables,completed:false};
    const ifs=domain==='ecmwf_ifs'?{...fixture(0,process.env.MAP_THREE_PANELS_ONLY?24:48),variables:['pressure_msl','temperature_2m','temperature_2m_max','temperature_2m_min',...['temperature','relative_humidity','geopotential_height','wind_u_component','wind_v_component'].flatMap(kind=>[1000,925,850,700,500,400,300,250,200,100,50,10].map(level=>kind+'_'+level+'hPa'))]}:null;
    if(ifs&&process.env.MAP_THREE_PANELS_ONLY)ifs.valid_times=ifs.valid_times.filter((_,i)=>i%3===0);
    const meta=(domain==='dwd_icon'?fixture(0,process.env.MAP_THREE_PANELS_ONLY?60:48):null)??ifs??gfs??(ensemble?(url.endsWith('/latest.json')?ensemble:null):domain==='ukmo_uk_deterministic_2km'?(url.endsWith('/latest.json')?fixture(8,12):url.includes('/0600Z/meta.json')?fixture(6,54):url.includes('/0300Z/meta.json')?fixture(3,120):null):null);
@@ -525,7 +525,7 @@ try{
    assert.equal(await page.locator('#map-model').inputValue(),main);
    assert.match(await page.locator('#panel-label-a').textContent(),/0600Z/);
    assert.equal(metadata.some(url=>url.includes('/0300Z/')),true,'Verify precisely one previous completed main cycle');
-   assert.deepEqual(await page.locator('#map-model option').evaluateAll(os=>os.filter(o=>o.value.startsWith('ukmo_uk_deterministic_2km')).map(o=>o.value)),[main,main+'_previous']);
+   assert.deepEqual(await page.locator('#map-model option').evaluateAll(os=>os.filter(o=>o.value.startsWith('ukmo_uk_deterministic_2km')).map(o=>o.value)),[main]);
    assert.equal(await page.locator('#map-model-b option[value="'+nowcast+'"]').count(),0);
    await page.locator('#map-model-b').selectOption(main);
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('0600Z'));
@@ -670,7 +670,7 @@ try{
    assert.equal(await page.locator('#briefing-model').inputValue(),'gfs_global');
    await page.locator('#briefing-preset').selectOption('weather');
    await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6,{},{timeout:60000});
-   await page.waitForFunction(()=>document.querySelector('#briefing-model option:checked').textContent.includes('00Z'));
+   await page.waitForFunction(()=>document.querySelector('#briefing-run-select option:checked').textContent.includes('00Z'));
    assert.equal(await page.locator('#briefing-model option:checked').textContent(),await page.locator('#map-model option:checked').textContent());
    assert.deepEqual(await page.locator('#briefing-model optgroup').evaluateAll(groups=>groups.map(g=>g.label)),['Short-term models','Medium-term models','Ensemble models']);
    assert.equal(await page.locator('#briefing-area').inputValue(),'uk');
@@ -826,6 +826,9 @@ try{
    await page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    livePhase=1;
    await page.evaluate(()=>Promise.all(window.fixtureRefreshers.map(refresh=>refresh())));
+   assert.match(await page.locator('#panel-label-a').textContent(),/0000Z/,'New cycles cannot replace the viewed run');
+   await page.locator('#map-run').selectOption('gfs_global@2026-10-10T12:00:00.000Z');
+   if(await page.locator('#panel-b').isVisible())await page.locator('#map-run-b').selectOption('gfs_global@2026-10-10T12:00:00.000Z');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('1200Z'));
    assert.match(await page.locator('#run-update-status').textContent(),/Updating/);
    assert.equal(await page.locator('#map-time').getAttribute('max'),'6');

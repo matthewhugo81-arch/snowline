@@ -364,6 +364,15 @@ def prepare_history(model, root, now, workers, max_new_frames=128):
     # Clean only after all retained runs and their index have been verified.
     keep = {frame_path(root, config['domain'], datetime.fromisoformat(meta['reference_time']), 0).parent
             for meta in retained + pending[:1]}
+    from run_retention import last_complete_folder
+    protected = last_complete_folder(domain_root, latest['reference_time'])
+    if protected:
+        keep.add(protected)
+        protected_meta = json.loads((protected / 'meta.json').read_text())
+        if protected_meta['reference_time'] not in index['runs']:
+            index['runs'].append(protected_meta['reference_time'])
+            path.with_suffix('.tmp').write_text(json.dumps(index, indent=2) + '\n')
+            path.with_suffix('.tmp').replace(path)
     for folder in domain_root.glob('*/*/*/*Z'):
         if folder not in keep:
             if not folder.resolve().is_relative_to(domain_root.resolve()):

@@ -1,7 +1,7 @@
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {accumulationHours,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
-import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261019-mogreps-uk';
+import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261020-run-selector';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
 import {sourceVariable} from './map-catalogue.js?v=20261020-ifs-coverage';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
@@ -77,7 +77,7 @@ export function runPath(referenceTime){
 }
 export function combineSources(primary,other=[]){
  const sources=[primary,...other.filter(meta=>Date.parse(meta.reference_time)===Date.parse(primary.reference_time))];
- return {...primary,sources,completed:sources.every(meta=>meta.completed!==false),variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
+ return {...primary,sources,completed:sources.every(meta=>meta.completed===true),variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
 }
 export function fieldSource(meta,key,time){
  if(accumulationHours(key))return accumulationSource(meta,key,time);
@@ -99,9 +99,15 @@ async function directVertical(model,reference,load,domain=DIRECT_VERTICAL_MODELS
 }
 async function ensembleExtra(model,reference,load){
  const domain=ENSEMBLE_EXTRAS[model];
- const meta=await load(ownBase+domain+'/'+runPath(reference)+'meta.json');
- if(!verifiedEnsembleExtra(meta,domain,reference))throw Error('Unverified additional ensemble fields');
- return {...meta,domain,baseURL:ownBase};
+ let failure;
+ for(const baseURL of [ownBase,COMPANION_BASE]){
+  try{
+   const meta=await load(baseURL+domain+'/'+runPath(reference)+'meta.json');
+   if(!verifiedEnsembleExtra(meta,domain,reference))throw Error('Unverified additional ensemble fields');
+   return {...meta,domain,baseURL};
+  }catch(error){failure=error;}
+ }
+ throw failure;
 }
 async function mogrepsSnow(model,load,reference){
  const base=ownBase+model.snowDomain+'/';
@@ -177,7 +183,8 @@ export async function loadSpatialModel(model,load){
    if(Date.now()-Date.parse(snow.reference_time)>8*3600000)warnings.push('MOGREPS snowfall publication is overdue; check the displayed initialization time.');
   }catch{warnings.push('Member snowfall probabilities are currently unavailable; precipitation probability remains available.');}
  }
- return {...combineSources(primary,other.filter(Boolean)),ensembleNote:domain===MOGREPS_GLOBAL?MOGREPS_GLOBAL_NOTE:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning,publicationStatus};
+ const completedReferenceTime=published.filter(m=>publishedRun(m)&&m.completed===true).sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0]?.reference_time;
+ return {...combineSources(primary,other.filter(Boolean)),completedReferenceTime,ensembleNote:domain===MOGREPS_GLOBAL?MOGREPS_GLOBAL_NOTE:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning,publicationStatus};
 }
 
 // Deliberate historical selection never falls back to latest.json or a different
@@ -195,7 +202,7 @@ export async function loadSpatialRun(model,referenceTime,load){
   if(domain!==MOGREPS_GLOBAL)throw error;
   baseURL=ownBase;data=await load(baseURL+domain+'/'+runPath(referenceTime)+'meta.json');
  }
- if(model===UKV&&Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
+ if(Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(data))throw Error('Unverified MOGREPS-G archive.');
@@ -206,7 +213,7 @@ export async function loadSpatialRun(model,referenceTime,load){
  }));
  if(ENSEMBLE_EXTRAS[model]){
   try{other.push(await ensembleExtra(model,primary.reference_time,load));}
-  catch{warnings.push('Additional ensemble fields are available on the latest run only. The original mean and spread layers remain available for archived runs.');}
+  catch{warnings.push('Additional ensemble fields have not been retained for this run. The original mean and spread layers remain available.');}
  }
  if(model==='gem_global'){
   try{other.push(await directVertical(model,primary.reference_time,load,'snowline_gem_upper'));}

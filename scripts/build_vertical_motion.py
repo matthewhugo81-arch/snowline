@@ -212,6 +212,15 @@ def build_model(model,root,workers=4,run=None,hours=None):
  write_json(domain_root/'history.json',dict(format_version=VERSION,runs=[m['reference_time'] for m in retained]))
  # Preserve all attempted runs plus a previous fallback when the new run failed.
  keep={frame_path(root,cfg['domain'],datetime.fromisoformat(m['reference_time']),0).parent for m in retained}
+ from run_retention import last_complete_folder
+ protected=last_complete_folder(domain_root,latest['reference_time'])
+ if protected:
+  if protected not in keep:
+   keep={frame_path(root,cfg['domain'],datetime.fromisoformat(meta['reference_time']),0).parent for meta in retained[:2]}|{protected}
+   retained=[meta for meta in retained if frame_path(root,cfg['domain'],datetime.fromisoformat(meta['reference_time']),0).parent in keep]
+  if all(meta['reference_time']!=json.loads((protected/'meta.json').read_text())['reference_time'] for meta in retained):
+   retained.append(json.loads((protected/'meta.json').read_text()))
+   write_json(domain_root/'history.json',dict(format_version=VERSION,runs=[m['reference_time'] for m in retained]))
  for folder in domain_root.glob('*/*/*/*Z'):
   if folder not in keep:
    if not folder.resolve().is_relative_to(domain_root.resolve()): raise ValueError('Refusing cleanup outside generated data')

@@ -1,5 +1,9 @@
 # Snowline
 
+## Complete and incoming model runs
+
+Every model now appears once in Maps and Forecast Briefing, with a separate dated **Run** selector. New selections prefer the latest verified complete run. Incoming runs remain immediately selectable, and each panel stays pinned to its chosen initialization while published hours grow. Native archives stay on the provider; complete extra ensemble fields are retained on the existing companion publication. See [run selection, retention and measured storage](docs/model-run-selection.md).
+
 GEFS and ECMWF ENS maps now include additional surface and upper-air ensemble
 fields across the UK, Europe and North Atlantic map areas. Both include mean
 precipitation in mm/h; ECMWF also includes mean snowfall water equivalent and
@@ -18,7 +22,7 @@ The header's **Theme** menu offers **System**, **Light** and **Dark** on locatio
 
 **Compare panels** offers two or three independently selected model/layer panels with one shared valid-time control. The timeline includes the full available range of every visible panel, so a shorter or coarser model cannot hide another model's charts. At a time missing from one selected model/layer, that panel clears its weather and overlays and shows an availability message while the others continue. Returning to a supplied time restores its chart. Collapsing the sidebar widens every map; smaller screens stack the panels. A shared forecast-interval dropdown beside the starting time offers Hourly / all available, 3 hourly, 6 hourly and 12 hourly in the main maps, including UKV and mixed-model comparisons. Regional panels default to all supplied hours; an explicit choice applies to every panel and remains selected when models change. Viewing intervals are applied separately to each selected layer before combining the timeline, retaining coarse and off-cycle model steps. Precipitation periods are unchanged. Briefing and Previous Run Analysis retain their existing interval rules.
 
-Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK maps](https://matthewhugo81-arch.github.io/snowline/maps.html). The map page includes model comparison, weather layers, MSLP isobars, forecast animation and point event analysis. Maps default to the latest published initialization and show their actual UTC run date/cycle. UKV additionally offers exactly one previous completed main run. Click a map location to open its charts; navigation retains the chosen location and valid time.
+Open [Location charts](https://matthewhugo81-arch.github.io/snowline/) or [UK maps](https://matthewhugo81-arch.github.io/snowline/maps.html). The map page includes model comparison, weather layers, MSLP isobars, forecast animation and point event analysis. Maps default to the latest verified complete initialization and show their actual UTC run date/cycle. Every model has a separate dated Run selector. Click a map location to open its charts; navigation retains the chosen location and valid time.
 
 Maps load live Open-Meteo spatial data and OpenFreeMap basemaps directly in the browser. The bundled map renderer, WebAssembly decoder and licences are in `vendor/`; see [map credits](map-credits.html). Wind speeds and gusts display in mph on maps, legends, contours, grid-value labels and point readouts; source grids and renderer scales retain native m/s. Surface 10 m wind speeds, gusts and their ensemble means share a smooth, fixed 0–110 mph scale: yellow/orange/red distinguish storm speeds, with purple reserved for the highest end. Contours are spaced every 10 mph. Speeds above 110 mph retain their actual readout and use the top colour. The same scale applies to main maps, comparison panels, briefing charts and image exports.
 

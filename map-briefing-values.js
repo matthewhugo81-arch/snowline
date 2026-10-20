@@ -1,6 +1,6 @@
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
-import {fieldSource,fieldDataURL} from './map-sources.js?v=20261020-ifs-coverage';
+import {fieldSource,fieldDataURL} from './map-sources.js?v=20261020-run-selector';
 import {sourceVariable} from './map-catalogue.js?v=20261020-ifs-coverage';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261020-ifs-coverage';
 

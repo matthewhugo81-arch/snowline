@@ -188,7 +188,12 @@ def build(model, root, hours=None, workers=2):
         target.with_suffix('.tmp').replace(target)
     # Three cycles support comparison and allow already-open pages to finish.
     folders = sorted(domain_root.glob('*/*/*/*Z'), reverse=True)
-    for old in folders[3:]:
+    from run_retention import last_complete_folder
+    protected = last_complete_folder(domain_root, metadata['reference_time'])
+    keep = set(folders[:3] if not protected or protected in folders[:3] else folders[:2] + [protected])
+    for old in folders:
+        if old in keep:
+            continue
         if not old.resolve().is_relative_to(domain_root.resolve()):
             raise ValueError('Refusing to clean outside generated snow data')
         shutil.rmtree(old)

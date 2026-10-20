@@ -27,6 +27,9 @@ test('EC ensemble scalar wind reads preserve ranges and cancellation without a f
   assert.deepEqual(await reader.readVariable(url,key,ranges,signal),{values,directions:undefined});
   assert.deepEqual(calls.splice(0),[['file',url+'.png'],['scalar',key]]);
  }
+ const archived='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/snowline_ecmwf_extra_v2/run/frame.om';
+ assert.deepEqual(await reader.readVariable(archived,'wind_speed_850hPa_mean',ranges,signal),{values,directions:undefined});
+ assert.deepEqual(calls.splice(0),[['file',archived+'.png'],['scalar','wind_speed_850hPa_mean']]);
  for(const [source,key] of [[url,'wind_speed_10m'],[url,'temperature_2m_mean'],[base+'other/run/frame.om','wind_speed_10m_mean'],['https://other.test/snowline_ecmwf_extra_v2/run/frame.om','wind_speed_10m_mean']]){
   assert.equal(await reader.readVariable(source,key,ranges,signal),'normal');
   assert.deepEqual(calls.splice(0),[['normal',source,key]]);

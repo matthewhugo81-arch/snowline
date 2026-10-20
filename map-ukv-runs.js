@@ -1,6 +1,6 @@
 import {UKV,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
-import {loadSpatialModel,loadSpatialRun} from './map-sources.js?v=20261020-ifs-coverage';
-import {publishedRun,retainRunProgress} from './map-runs.js?v=20261019-mogreps-uk';
+import {loadSpatialModel,loadSpatialRun} from './map-sources.js?v=20261020-run-selector';
+import {publishedRun,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
 
 // A map-only run choice, not another operational model or point-forecast ID.
 export const UKV_PREVIOUS=UKV+'_previous';

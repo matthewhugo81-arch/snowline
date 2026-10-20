@@ -1,4 +1,4 @@
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261020-ifs-coverage';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261020-run-selector';
 // Decorate native model options only: model IDs and selections stay unchanged.
 const runDate = new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short', timeZone: 'UTC'});
 
@@ -19,7 +19,7 @@ export function modelOptionLabel(model, result) {
   return `${model.name} (${label})`;
 }
 
-export function installModelRunMenu({models, loadModel, loadJSON, root = document, refreshMs = 60000, concurrency = 3}) {
+export function installModelRunMenu({models, loadModel, loadJSON, root = document, refreshMs = 60000, concurrency = 3, showRuns = true}) {
   const selects = new Set();
   const knownModels = new Map(models.map(model => [model.id, model]));
   const results = new Map();
@@ -46,7 +46,7 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
         if (!model) continue;
         const result = results.get(model.id);
         if(model.id===UKV_PREVIOUS)option.disabled=!result?.meta;
-        const text = modelOptionLabel(model, result);
+        const text = showRuns||select.id==='previous-model'?modelOptionLabel(model,result):model.name;
         if (option.textContent !== text) option.textContent = text;
         const run = formatModelRun(result?.meta);
         option.title = run

@@ -2,25 +2,27 @@ import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261020-ifs-coverage';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261020-run-selector';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261020-ifs-coverage';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261020-ifs-coverage';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261020-run-selector';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261020-run-selector';
 import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
-import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261019-mogreps-uk';
+import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261020-ifs-coverage';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {chartScales} from './map-image-export.js?v=20261020-ifs-coverage';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261020-run-selector';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
 
-export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,imageMenu,onClose,getAppearance=()=>({}),getBackground=()=>'light',onBackgroundChange=()=>{},...renderOptions}){
+export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,imageMenu,onClose,onMetadata=()=>{},getAppearance=()=>({}),getBackground=()=>'light',onBackgroundChange=()=>{},...renderOptions}){
  host.innerHTML=`<div class="briefing-mode-row" role="group" aria-label="Briefing mode"><button type="button" id="briefing-sequence-mode" aria-pressed="true">Forecast sequence</button><button type="button" class="secondary" id="briefing-history-mode" aria-pressed="false">Previous Run Analysis</button></div><div id="briefing-sequence"><div class="briefing-heading"><div><h2>Forecast briefing</h2><p id="briefing-run">Choose a model and chart.</p></div><div class="briefing-heading-actions"><button type="button" id="briefing-toggle-controls" class="secondary" aria-expanded="true" aria-controls="briefing-control-section">Hide controls</button><button type="button" id="briefing-close" class="secondary">Back to maps</button></div></div>
  <div id="briefing-control-section"><div class="briefing-controls">
  <label>Forecast model<select id="briefing-model"></select></label>
+ <label>Run<select id="briefing-run-select" disabled><option>Checking runs…</option></select></label>
  <label>Chart<select id="briefing-preset"></select></label>
  <label>Area<select id="briefing-area"></select></label>
  <label><span id="briefing-time-heading">Starting time</span><select id="briefing-time"></select></label>
@@ -30,8 +32,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <div id="briefing-legend" class="briefing-legend" role="group" aria-label="Chart colour scale"></div></div>
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
- <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html?v=20261015-direct-vertical">Data and map credits</a>.</p>
- <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong><button id="briefing-enlarged-close" class="secondary">Close chart</button></div><img id="briefing-enlarged-image" alt=""><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html?v=20261015-direct-vertical">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
+ <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html?v=20261020-run-selector">Data and map credits</a>.</p>
+ <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong><button id="briefing-enlarged-close" class="secondary">Close chart</button></div><img id="briefing-enlarged-image" alt=""><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html?v=20261020-run-selector">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
  const $=id=>host.querySelector('#briefing-'+id);
  const choices=models;
  for(const [label,items] of [['Short-term models',choices.filter(model=>model.regional&&!model.ensemble)],['Medium-term models',choices.filter(model=>!model.regional&&!model.ensemble)],['Ensemble models',choices.filter(model=>model.ensemble)]] ){
@@ -45,7 +47,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  $('area').append(option('current','Current map area'));
  for(const preset of BRIEFING_PRESETS)$('preset').append(option(preset.id,preset.name));
  const images=new BriefingImages();
- let renderer,active=false,generation=0,controller,work=Promise.resolve(),model,meta,preset,times=[],start=0,interval='3',currentBounds,requestedTime,requestedStart=null,requestedChart=null,presets=[];
+ let renderer,active=false,generation=0,controller,work=Promise.resolve(),model,meta,preset,times=[],start=0,interval='3',currentBounds,requestedTime,requestedStart=null,requestedChart=null,presets=[],runKey=null;
  const count=()=>Number($('count').value);
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
@@ -166,10 +168,13 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  }
  async function configure(force=false){
   cancel();const token=generation;
-  model=choices.find(item=>item.id===$('model').value);meta=null;times=[];controlsDisabled(true);
+  model=choices.find(item=>item.id===$('model').value);meta=null;times=[];controlsDisabled(true);$('run-select').disabled=true;
+  if(runKey&&sourceModel(runKey)!==model.id)runKey=null;
   $('grid').replaceChildren();$('legend').replaceChildren();$('run').textContent='Checking model run…';$('status').textContent='Checking available chart fields…';$('retry').hidden=true;
   try{
-   const data=await loadModel(model.id,force);if(token!==generation||!active)return;meta=data;
+   const selected=await mapRunCatalogue.select(runKey??model.id,url=>loadJSON(url,{force}));if(token!==generation||!active)return;
+   meta=selected.meta;runKey=selected.key;renderRunSelector($('run-select'),model.id,selected,meta);
+   onMetadata(meta);
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:model.id,meta}}));
    const available=presets=briefingPresets(meta,fields),previous=requestedChart??$('preset').value;
    requestedChart=null;briefingOptions($('preset'),available);
@@ -185,9 +190,11 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(!meta)return configure(true);
   refreshing=true;const selected=model.id,previous=meta;
   try{
-   const incoming=await loadModel(selected,true);
+   const result=await mapRunCatalogue.select(runKey,url=>loadJSON(url,{force:true})),incoming=result.meta;
    if(!active||model.id!==selected||meta!==previous)return;
    const next=retainRunProgress(previous,incoming);
+   onMetadata(next);
+   renderRunSelector($('run-select'),model.id,result,next);
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:selected,meta:next}}));
    if(runSignature(next)!==runSignature(previous)){
     rememberTime();meta=next;
@@ -204,7 +211,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  let refreshTimer=setInterval(refreshRun,60000);
  window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(refreshTimer);refreshTimer=setInterval(refreshRun,60000);refreshRun();}});
  $('background').addEventListener('change',()=>{onBackgroundChange($('background').value);renderPage();});
- $('model').addEventListener('change',()=>{rememberTime();configure();});
+ $('model').addEventListener('change',()=>{rememberTime();runKey=null;configure();});
+ $('run-select').addEventListener('change',()=>{rememberTime();runKey=$('run-select').value;configure();});
  for(const id of ['preset','interval'])$(id).addEventListener('change',()=>{
   if(!meta)return;rememberTime();
   if(id==='interval')interval=$('interval').value;
@@ -249,7 +257,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  return {open(selection){$('background').value=getBackground();
   history?.close();$('sequence').hidden=false;$('sequence-mode').setAttribute('aria-pressed','true');$('history-mode').setAttribute('aria-pressed','false');
   active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=accumulationHours(selection.field)&&selection.time?periodStart(selection.time,accumulationHours(selection.field)):null;requestedChart=selection.field??selection.preset??null;
-  $('model').value=choices.some(item=>item.id===selection.model)?selection.model:choices[0].id;
+  $('model').value=choices.some(item=>item.id===sourceModel(selection.model))?sourceModel(selection.model):choices[0].id;
+  runKey=selection.model.includes('@')?selection.model:null;
   $('area').value=selection.area??'uk';$('close').focus({preventScroll:true});configure();
  },close};
 }

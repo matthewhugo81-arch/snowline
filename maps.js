@@ -12,7 +12,7 @@ import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-native-levels';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-run-selector';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
@@ -26,19 +26,20 @@ import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
 import {createViewRefresh} from './map-view-refresh.js?v=20261014-interaction-audit';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-ifs-coverage';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-run-selector';
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261020-ifs-coverage';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261020-ifs-coverage';
-import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-panel-times';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261020-run-selector';
+import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261020-ifs-coverage';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261019-mogreps-uk';
-import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261020-ifs-coverage';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261020-ifs-coverage';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261020-run-selector';
+import {mapRunCatalogue,sourceModel,renderRunSelector} from './map-run-selection.js?v=20261020-run-selector';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261020-run-selector';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
 import {isJetWind,is850Temperature,temperatureContourLevels,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
@@ -92,7 +93,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
  const result=await renderMapTile(params,controller);
  if(params.type==='json'&&params.url.includes('/ensemble-data/')){
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
-  result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html?v=20261015-direct-vertical">Open-Meteo</a>';
+  result.data.attribution='Weather: <a href="map-credits.html#ensembles">'+source+'</a> | Renderer: <a href="map-credits.html?v=20261020-run-selector">Open-Meteo</a>';
  }
  if(params.type==='json'&&/\/(ukmo_uk_ensemble_2km|snowline_mogreps_uk|snowline_mogreps_global)\//.test(params.url)){
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
@@ -144,12 +145,12 @@ let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(params.get('model')==='ukmo_uk_deterministic_2km_nowcast')params.set('model','ukmo_uk_deterministic_2km');
-if(MODELS.some(m=>m.id===params.get('model')))state.model=params.get('model');
+if(params.get('model')&&MODELS.some(m=>m.id===sourceModel(params.get('model'))))state.model=params.get('model');
 $('compare-maps').checked=state.compare;$('map-comparison-count').value=String(state.comparisonCount);$('comparison-count-control').hidden=!state.compare;
 for(const key of ['b','c']){$('panel-'+key).hidden=!panelVisible(key);$('layer-notes-'+key).hidden=!panelVisible(key);}
 const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
 if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isFinite(initialLon)&&Math.abs(initialLat)<=90&&Math.abs(initialLon)<=180){state.location={latitude:initialLat,longitude:initialLon};$('nav-charts').href='./?'+new URLSearchParams({lat:initialLat,lon:initialLon,time:params.get('time')??''});}
-function modelName(id){return MODELS.find(m=>m.id===id)?.name??id;}
+function modelName(id){return MODELS.find(m=>m.id===sourceModel(id))?.name??id;}
 function panelRunLabel(model){return modelName(model)+' · '+runLabel(state.metas[model])+(state.metas[model]?.completed===false?' · updating':'');}
 function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · '+forecastValidity(field,time);}
 function status(message){$('map-status').textContent=message;}
@@ -166,7 +167,7 @@ for(const id of ['map-model','map-model-b','map-model-c']){
   $(id).append(group);
  }
 }
-$('map-model').value=state.model;$('map-model-b').value=state.modelB;$('map-model-c').value=state.modelC;
+$('map-model').value=sourceModel(state.model);$('map-model-b').value=sourceModel(state.modelB);$('map-model-c').value=sourceModel(state.modelC);
 function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false});
  map.touchZoomRotate.disableRotation();
@@ -213,7 +214,7 @@ function pressureNote(){
   const missing=!hasFieldTime(state.metas[model],'pressure_msl',state.times[state.index]),warnings=state.metas[model]?.sourceWarnings??[];
   $('mslp-note-'+key).textContent=warnings.length?warnings.join(' '):missing?'MSLP is unavailable at this time.':'MSLP isobars every 4 hPa.';
   if(model.startsWith('snowline_')&&!missing&&!warnings.length)$('mslp-note-'+key).textContent='Ensemble-mean MSLP isobars every 4 hPa.';
-  if(model==='gfs_global'&&!missing)$('mslp-note-'+key).textContent+=' Uses the GFS 0.25° grid from the same run.';
+  if(sourceModel(model)==='gfs_global'&&!missing)$('mslp-note-'+key).textContent+=' Uses the GFS 0.25° grid from the same run.';
   $('map-mslp-'+key).disabled=missing||composite;
   $('map-mslp-'+key).checked=composite||state.overlays[key].isobars;
   $('map-mslp-'+key).title=composite?'MSLP is included in this combined layer.':'';
@@ -582,7 +583,7 @@ function populateVariables(){
  }
 }
 function refreshTimeline(){
- const models=panelModelIds(state).map(id=>MODELS.find(model=>model.id===id));
+ const models=panelModelIds(state).map(id=>MODELS.find(model=>model.id===sourceModel(id)));
  const {hours}=forecastInterval(models,state.interval,{allowRegionalSteps:true});
  state.times=panelForecastTimes(state,hours);
  $('map-forecast-interval').value=hours?String(hours):'native';
@@ -603,6 +604,12 @@ function metadataLoader(force){
  const requests=new Map();
  return url=>{if(!requests.has(url))requests.set(url,cachedJSON(url,{force,kind:'metadata',ttl:60000}));return requests.get(url);};
 }
+function updateRunMenus(results){
+ for(const {key,model} of panelSelections(state)){
+  const result=results.find(item=>sourceModel(item.key)===sourceModel(model));
+  if(result&&state.metas[model])renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(model),result,state.metas[model]);
+ }
+}
 function showRunUpdates(message=''){
  const pairs=panelModelIds(state).filter(id=>state.metas[id]).map(id=>[id,state.metas[id]]);
  $('ukv-run-note').textContent='Selected model runs: '+pairs.map(([id,meta])=>modelName(id)+' '+runLabel(meta)+(meta.selectionWarnings?.length?' · '+meta.selectionWarnings.join(' '):'')).join(' · ');
@@ -616,13 +623,13 @@ async function refreshLiveRuns(){
  const generation=state.generation,ids=panelModelIds(state);
  try{
   const load=metadataLoader(true);
-  const results=await Promise.allSettled(ids.map(id=>loadSpatialModel(id,load)));
+  const results=await Promise.allSettled(ids.map(id=>mapRunCatalogue.select(id,load)));
   if(generation!==state.generation||briefingActive||document.hidden)return;
   const next={...state.metas};let changed=false,failed=false;
   results.forEach((result,index)=>{
    if(result.status==='rejected'){failed=true;return;}
-   const id=ids[index],meta=retainRunProgress(state.metas[id],result.value);
-   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:id,meta}}));
+   const id=ids[index],meta=retainRunProgress(state.metas[id],result.value.meta);
+   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(id),meta:result.value.latest}}));
    if(runSignature(meta)!==runSignature(state.metas[id])){next[id]=meta;changed=true;}
   });
   if(changed){
@@ -631,6 +638,7 @@ async function refreshLiveRuns(){
    extendCatalogue(fields,Object.values(next),OM,settings);populateVariables();refreshTimeline();
    await setTime();if(resume&&generation===state.generation&&!failedSelection&&!briefingActive)playback.start();
   }
+  updateRunMenus(results.filter(r=>r.status==='fulfilled').map(r=>r.value));
   showRunUpdates(failed?'Live check temporarily unavailable. Keeping the displayed run; retrying in one minute.':'');
  }catch(error){showRunUpdates('Live update could not finish: '+error.message+' Retrying in one minute.');}
  finally{checkingLiveRuns=false;}
@@ -650,12 +658,21 @@ async function configure(force=false){
   clearGridValues(p);$('panel-label-'+p.key).textContent='Checking model run…';$('map-error-'+p.key).hidden=true;
  }
  const generation=++state.generation;$('reload-maps').disabled=true;$('map-variable').disabled=true;$('map-variable-b').disabled=true;$('map-variable-c').disabled=true;
+ for(const {key} of panelSelections(state))$('map-run'+(key==='a'?'':'-'+key)).disabled=true;
  status('Checking model runs…');
  try{
   const load=metadataLoader(force);
-  const pairs=await Promise.all(panelModelIds(state).map(async id=>[id,await loadSpatialModel(id,load)]));if(generation!==state.generation)return;
+  const selected=panelSelections(state);
+  const results=await Promise.all(selected.map(async item=>({...item,...await mapRunCatalogue.select(item.model,load)})));if(generation!==state.generation)return;
+  const pairs=results.map(result=>[result.key,result.meta]);
+  for(let i=0;i<selected.length;i++){
+   const panelKey=selected[i].key,suffix=panelKey==='a'?'':panelKey.toUpperCase();
+   state['model'+suffix]=results[i].key;
+   $('map-model'+(panelKey==='a'?'':'-'+panelKey)).value=sourceModel(results[i].key);
+  }
   state.metas=Object.fromEntries(pairs);const metas=pairs.map(p=>p[1]);
-  for(const [model,meta] of pairs)document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model,meta}}));
+  updateRunMenus(results);
+  for(const result of results)document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(result.key),meta:result.latest}}));
   showRunUpdates();
   extendCatalogue(fields,metas,OM,settings);populateVariables();
   if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
@@ -667,6 +684,9 @@ async function configure(force=false){
 $('map-model').addEventListener('change',e=>{state.model=e.target.value;configure();});
 $('map-model-b').addEventListener('change',e=>{state.modelB=e.target.value;configure();});
 $('map-model-c').addEventListener('change',e=>{state.modelC=e.target.value;configure();});
+for(const [id,property]of [['map-run','model'],['map-run-b','modelB'],['map-run-c','modelC']])$(id).addEventListener('change',e=>{
+ requestedTime=Date.parse(state.times[state.index])||requestedTime;state[property]=e.target.value;configure();
+});
 for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
  pauseAnimation();failedSelection=null;state[property]=e.target.value;
  try{refreshTimeline();setTime();}
@@ -685,7 +705,7 @@ async function changeComparison(){
   const visible=panelVisible(key);
   if(visible&&!comparisonInitialized.has(key)){
    const suffix=key.toUpperCase();state['model'+suffix]=state.model;if(key==='c')state['field'+suffix]=state.field;
-   $('map-model-'+key).value=state['model'+suffix];comparisonInitialized.add(key);
+   $('map-model-'+key).value=sourceModel(state['model'+suffix]);comparisonInitialized.add(key);
   }
   $('panel-'+key).hidden=!visible;$('layer-notes-'+key).hidden=!visible;
   if(visible&&!panels[key])makeMap(key);
@@ -746,7 +766,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261020-ifs-coverage').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261020-run-selector').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;
@@ -774,7 +794,7 @@ async function openBriefing(){
    const {createBriefing}=await loadBriefing();
    if(opening!==briefingOpening||!briefingActive)return;
    briefingView=createBriefing({getAppearance:()=>({opacity:state.opacity,terrain,roads}),getBackground:()=>background,onBackgroundChange:selectBackground,host:$('briefing-content'),models:MODELS,fields,imageMenu,maplibre:maplibregl,OM,settings,createURL:concreteURL,
-    loadJSON:url=>cachedJSON(url,{kind:'metadata',ttl:60000}),
+    loadJSON:(url,options={})=>cachedJSON(url,{kind:'metadata',ttl:60000,...options}),onMetadata:meta=>extendCatalogue(fields,[meta],OM,settings),
     loadRun:async (model,reference,load)=>{const meta=await loadSpatialRun(model,reference,load);extendCatalogue(fields,[meta],OM,settings);return meta;},
     loadModel:async (model,force=false)=>{const meta=await loadSpatialModel(model,metadataLoader(force));extendCatalogue(fields,[meta],OM,settings);return meta;},
     onClose:closeBriefing

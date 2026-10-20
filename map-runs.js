@@ -35,5 +35,5 @@ export function retainRunProgress(previous,next){
    ...(variableKeys.length?{variable_valid_times:Object.fromEntries(variableKeys.map(key=>[key,forecastTimes([{valid_times:a.variable_valid_times?.[key]??[]},{valid_times:b.variable_valid_times?.[key]??[]}])]))}:{}),
    ...(periods.length?{variable_intervals:Object.fromEntries(periods.map(key=>[key,{...a.variable_intervals?.[key],...b.variable_intervals?.[key]}]))}:{})};
  });
- return {...next,sources,completed:sources.every(source=>source.completed!==false),variables:[...new Set(sources.flatMap(source=>source.variables))],valid_times:forecastTimes(sources)};
+ return {...next,sources,completed:sources.every(source=>source.completed===true),variables:[...new Set(sources.flatMap(source=>source.variables))],valid_times:forecastTimes(sources)};
 }

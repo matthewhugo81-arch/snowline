@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261020-ifs-coverage';
+import {hasFieldTime} from './map-sources.js?v=20261020-run-selector';
 import {intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 
 export function createPanelOverlays(){

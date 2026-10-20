@@ -90,7 +90,7 @@ test('ensemble history loads three distinct exact cycles from the publication in
   };
   const result=await discoverPreviousRuns({model:domain,latest:runs[0],load});
   assert.equal(result.errors.length,0);assert.equal(calls.filter(url=>!url.includes('_extra_v2/')).length,3);
-  assert.equal(calls.filter(url=>url.includes('_extra_v2/')).length,2);
+  assert.equal(calls.filter(url=>url.includes('_extra_v2/')).length,4,'Each older run checks the primary publication and retained companion archive');
   assert.deepEqual(result.runs.map(m=>m.reference_time),runs.map(m=>m.reference_time));
   for(const archived of result.runs.slice(1))assert.match(fieldDataURL(archived,'temperature_850hPa_spread',archived.valid_times[1]),new RegExp('/ensemble-data/'+domain+'/'));
   const time=previousRunTimes(result.runs,{id:'temperature_850hPa_spread',field:'temperature_850hPa_spread',required:['temperature_850hPa_spread']},{regional:false})[0];

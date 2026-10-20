@@ -279,11 +279,16 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison
     # Latest may show verified progress; subsequent builds retain every field/time.
     atomic_json(latest, meta)
     folders = sorted(domain.glob('*/*/*/*Z'), reverse=True)
-    for old in folders[3:]:
+    from run_retention import last_complete_folder
+    protected = last_complete_folder(domain, meta['reference_time'])
+    keep = set(folders[:3] if not protected or protected in folders[:3] else folders[:2] + [protected])
+    for old in folders:
+        if old in keep:
+            continue
         if not old.resolve().is_relative_to(domain.resolve()):
             raise ValueError('Refusing cleanup outside domain')
         shutil.rmtree(old)
-    runs = [json.loads((p/'meta.json').read_text())['reference_time'] for p in folders[:3] if (p/'meta.json').exists()]
+    runs = [json.loads((p/'meta.json').read_text())['reference_time'] for p in sorted(keep,reverse=True) if (p/'meta.json').exists()]
     atomic_json(domain/'history.json', dict(format_version=1, runs=runs))
     print(f'MOGREPS-G: {len(records)}/83 frames published for {iso(run)}', flush=True)
 

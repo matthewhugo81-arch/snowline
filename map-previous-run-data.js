@@ -1,11 +1,11 @@
-import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261020-ifs-coverage';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261020-ifs-coverage';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261020-run-selector';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261020-run-selector';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
-import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261020-ifs-coverage';
+import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261020-run-selector';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
-import {retainRunProgress,runSignature} from './map-runs.js?v=20261019-mogreps-uk';
+import {retainRunProgress,runSignature} from './map-runs.js?v=20261020-run-selector';
 const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
  if(!Number.isInteger(lookbackHours)||lookbackHours<1||lookbackHours>48)throw Error('Archive search is limited to 48 hours.');

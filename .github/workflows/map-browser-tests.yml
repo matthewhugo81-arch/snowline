@@ -2,10 +2,10 @@ name: Map playback browser tests
 on:
   push:
     branches: [main]
-    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
   pull_request:
     branches: [main]
-    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,7 +31,7 @@ jobs:
       - name: Check fixed rainfall periods and North Atlantic framing
         run: node tests/accumulation-periods-browser.mjs
       - name: Check UKV completed fallback, rollover and exact-cycle loading
-        run: node tests/ukv-retention-browser.mjs
+        run: node tests/run-selector-browser.mjs
       - name: Check three-model comparison, twelve-hour steps and sidebar collapse
         run: MAP_THREE_PANELS_ONLY=1 node tests/map-browser.mjs
       - name: Check desktop and phone controls with delayed synthetic weather transport
