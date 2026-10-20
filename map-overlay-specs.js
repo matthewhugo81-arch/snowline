@@ -1,6 +1,6 @@
 import {isWindField,MPH_PER_MS} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {isJetWind,JET_MIN_MS,contourLineWidth} from './map-chart-style.js?v=20261019-ensemble-extra4';
-import {VERTICAL_MOTION} from './map-vertical-motion.js?v=20261015-direct-vertical';
+import {VERTICAL_MOTION} from './map-vertical-motion.js?v=20261020-comparison-feeds';
 
 // Construct the enabled overlays once per cached frame, rather than re-creating
 // them after the raster has already changed. Source URLs remain cycle-specific.

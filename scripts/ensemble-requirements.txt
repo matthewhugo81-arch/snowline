@@ -4,3 +4,6 @@ omfiles==1.2.0
 requests==2.34.2
 netCDF4==1.7.4
 pyproj==3.8.0
+
+fsspec[http]==2026.9.0
+h5py==3.16.0

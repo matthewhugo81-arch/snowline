@@ -90,7 +90,7 @@ jobs:
                   # than the age of the latest official cycle (which resets).
                   reference = datetime.fromisoformat(model['source_reference'].replace('Z', '+00:00'))
                   published = model.get('published_reference')
-                  tolerance_hours = {'snowline_gefs_ensemble':12,'snowline_ecmwf_ensemble':24,'snowline_mogreps_uk':6,'snowline_mogreps_global':12,'snowline_gem_700':24,'snowline_icon_eu_700':6}[model['model']]
+                  tolerance_hours = {'snowline_gefs_ensemble':12,'snowline_ecmwf_ensemble':24,'snowline_mogreps_uk':6,'snowline_mogreps_global':12,'snowline_gem_700':24,'snowline_gem_upper':24,'snowline_icon_eu_700':6}[model['model']]
                   if not published:
                       problems.append(f"{model['model']}: no ensemble cycle is published")
                   else:

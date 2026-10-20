@@ -11,7 +11,7 @@ const run='2026-10-15T12:00:00Z',time='2026-10-15T21:00:00Z';
 const direct=domain=>({format_version:1,domain,reference_time:run,valid_times:[time],completed:true,variables:DIRECT_VERTICAL_FIELDS,units:DIRECT_VERTICAL_UNITS,grid:DIRECT_VERTICAL_DOMAINS.find(d=>d.value===domain).grid});
 
 test('direct charts require verified pressure units, complete companions and the registered grid',()=>{
- for(const {value:domain} of DIRECT_VERTICAL_DOMAINS){
+ for(const {value:domain} of DIRECT_VERTICAL_DOMAINS.filter(d=>d.value!=='snowline_gem_upper')){
   const meta=direct(domain);assert.equal(verifiedDirectVertical(meta),true);assert.equal(sourceVariable(meta,VERTICAL_MOTION),'omega_700hPa');
   for(const key of DIRECT_VERTICAL_FIELDS)assert.equal(sourceVariable({...meta,variables:meta.variables.filter(k=>k!==key)},VERTICAL_MOTION),null);
   for(const invalid of [{...meta,units:{...meta.units,omega_700hPa:'m/s'}},{...meta,grid:{...meta.grid,lonMin:0}},{...meta,format_version:0}])assert.equal(sourceVariable(invalid,VERTICAL_MOTION),null);

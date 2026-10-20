@@ -15,6 +15,8 @@ import shutil
 import threading
 import time
 import zlib
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import numpy as np
 from omfiles import OmFileWriter
@@ -28,7 +30,8 @@ GRID = dict(type='regular', nx=365, ny=232, lonMin=-66.234375, latMin=30.84375, 
 TEMPERATURES = ['temperature_850hPa', 'temperature_500hPa']
 INSTANT = [key + suffix for key in TEMPERATURES for suffix in ('_mean', '_spread')]
 PERIOD = ['precipitation_mean', 'snowfall_water_equivalent_mean', 'precipitation_probability', 'snowfall_probability']
-FIELDS = INSTANT + PERIOD
+COMPARISON = [f'{base}_{stat}' for base in ['geopotential_height_500hPa', 'wind_speed_300hPa', 'wind_speed_200hPa', 'pressure_msl'] for stat in ['mean', 'spread']] + ['geopotential_height_500hPa_anomaly_mean']
+FIELDS = INSTANT + PERIOD + COMPARISON
 _local = threading.local()
 
 
@@ -51,7 +54,7 @@ def fetch(url, headers=None):
 
 
 def read_json(url):
-    data = fetch(url).content
+    data = Path(url2pathname(urlparse(url).path)).read_bytes() if url.startswith('file:') else fetch(url).content
     return json.loads(gzip.decompress(data) if url.endswith('.gz') else data)
 
 
@@ -179,8 +182,14 @@ def atomic_json(path, value):
     temp.replace(path)
 
 
-def write_frame(manifest, lead, path, workers):
+def write_frame(manifest, lead, path, workers, include_comparison=True):
     values = frame_values(manifest, lead, workers)
+    from mogreps_comparison_fields import comparison_values
+    try:
+        if include_comparison:
+            values.update(comparison_values(manifest, lead, workers))
+    except Exception as error:
+        print(f'::warning::MOGREPS comparison fields T+{lead} await retry: {error}', flush=True)
     if any(not np.isfinite(v).any() for v in values.values()):
         raise ValueError('No complete-member cells')
     temporary = path.with_suffix('.tmp')
@@ -190,7 +199,7 @@ def write_frame(manifest, lead, path, workers):
                 for k, v in values.items()]
     writer.close(writer.write_group(name='root', children=children))
     temporary.replace(path)
-    atomic_json(path.with_suffix('.json'), dict(version=1, variables=list(values)))
+    atomic_json(path.with_suffix('.json'), dict(version=2 if all(k in values for k in COMPARISON) else 1, variables=list(values)))
     return list(values)
 
 
@@ -208,10 +217,11 @@ def metadata(manifest, records):
                 source='Met Office MOGREPS-G native ensemble members', source_url='https://registry.opendata.aws/met-office-global-ensemble/',
                 licence='© Crown copyright 2026, Met Office; CC BY-SA 4.0',
                 method='All 18 same-cycle members; arithmetic mean, population standard deviation (ddof=0), raw member fractions at >=0.1 mm/h over the preceding 3 hours. Missing/below-ground cells stay missing. No time-lagging or smoothing.',
-                grid_processing='Native latitude/longitude cells cropped without interpolation; rows 644:876, columns 404:769')
+                grid_processing='Native latitude/longitude cells cropped without interpolation; rows 644:876, columns 404:769',
+                anomaly_reference=dict(dataset='NOAA NCEP/NCAR Reanalysis 1', period='1991-2020', statistic='daily mean', level_hPa=500, units='m', interpolation='Bilinear climatology to native forecast cells; Feb 29 averages Feb 28 and Mar 1'))
 
 
-def build(root, hours=None, workers=3, range_workers=12, run_id=None):
+def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison_frames=24):
     manifest = read_json(INDEX + (run_id+'/manifest.json' if run_id else 'latest.json'))
     run = validate_manifest(manifest)
     if datetime.now(timezone.utc)-run > timedelta(hours=72):
@@ -227,15 +237,20 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None):
     if any(h not in manifest['leads'] for h in requested):
         raise ValueError('Invalid lead')
     records, failures = {}, []
+    comparison_budget = comparison_frames if hours is None else len(requested)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         jobs = {}
         for h in manifest['leads']:
             path = folder / ((run+timedelta(hours=h)).strftime('%Y-%m-%dT%H%M')+'.om')
             record = json.loads(path.with_suffix('.json').read_text()) if path.exists() and path.with_suffix('.json').exists() else None
-            if record and record.get('version') == 1:
+            if record and record.get('version') in (1, 2):
                 records[h] = record['variables']
-            elif h in requested:
-                jobs[pool.submit(write_frame, manifest, h, path, range_workers)] = h
+            if h in requested and (not record or record.get('version') != 2):
+                include_comparison = comparison_budget > 0
+                if record and not include_comparison:
+                    continue
+                comparison_budget -= int(include_comparison)
+                jobs[pool.submit(write_frame, manifest, h, path, range_workers, include_comparison)] = h
         for i, job in enumerate(as_completed(jobs), 1):
             h = jobs[job]
             try:
@@ -262,15 +277,20 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None):
 
 
 def main():
+    global INDEX
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=Path('ensemble-data'))
     parser.add_argument('--hours')
     parser.add_argument('--run')
+    parser.add_argument('--index-root',type=Path)
+    parser.add_argument('--comparison-frames',type=int,default=24)
     parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--range-workers', type=int, default=12)
     args = parser.parse_args()
+    if args.index_root:
+        INDEX = args.index_root.resolve().as_uri()+'/'
     try:
-        build(args.output, [int(h) for h in args.hours.split(',')] if args.hours else None, args.workers, args.range_workers, args.run)
+        build(args.output, [int(h) for h in args.hours.split(',')] if args.hours else None, args.workers, args.range_workers, args.run, args.comparison_frames)
     except Exception as error:
         if (args.output/DOMAIN/'latest.json').exists():
             print(f'::warning::MOGREPS-G retaining verified previous run: {error}', flush=True)
@@ -279,4 +299,6 @@ def main():
 
 
 if __name__ == '__main__':
+    import sys
+    sys.modules['build_mogreps_global'] = sys.modules[__name__]
     main()

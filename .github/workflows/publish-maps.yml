@@ -58,8 +58,6 @@ jobs:
           ecmwf=$!
           python scripts/build_mogreps_snow.py --model uk --workers 2 &
           mogreps_uk=$!
-          python scripts/build_mogreps_global.py --workers 3 --range-workers 12 &
-          mogreps_global=$!
           python scripts/build_vertical_motion.py --model gem --workers 3 &
           vertical_gem=$!
           python scripts/build_vertical_motion.py --model icon-eu --workers 3 &
@@ -68,7 +66,6 @@ jobs:
           wait "$gefs" || failed=1
           wait "$ecmwf" || failed=1
           wait "$mogreps_uk" || failed=1
-          wait "$mogreps_global" || failed=1
           wait "$vertical_gem" || failed=1
           wait "$vertical_icon" || failed=1
           exit "$failed"
@@ -99,7 +96,6 @@ jobs:
               cp -a "ensemble-data/$extra" _site/ensemble-data/
             fi
           done
-          cp -a ensemble-data/snowline_mogreps_global _site/ensemble-data/
           if [ -f ensemble-data/health.json ]; then cp ensemble-data/health.json _site/ensemble-data/; fi
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           git rev-parse HEAD > _site/site-revision.txt

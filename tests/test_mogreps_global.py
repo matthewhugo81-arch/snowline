@@ -70,7 +70,7 @@ class GlobalMogrepsTests(unittest.TestCase):
             path=Path(directory)/'frame.om'
             values={key:np.full((232,365),-20.123 if key in b.INSTANT else 100/18) for key in b.FIELDS}
             values['temperature_850hPa_mean'][0,0]=np.nan
-            with patch.object(b,'frame_values',return_value=values): b.write_frame(self.manifest(),24,path,1)
+            with patch.object(b,'frame_values',return_value=values), patch('mogreps_comparison_fields.comparison_values',return_value={}): b.write_frame(self.manifest(),24,path,1)
             reader=OmFileReader(str(path))
             self.assertTrue(np.isnan(reader.get_child_by_name('temperature_850hPa_mean')[0,0]))
             self.assertAlmostEqual(float(reader.get_child_by_name('temperature_500hPa_mean')[0,0]),-20.123,delta=.011)

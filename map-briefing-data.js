@@ -1,16 +1,16 @@
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
-import {ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
+import {ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-comparison-feeds';
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261014-interaction-audit';
-import {directVerticalNote} from './map-direct-vertical.js?v=20261015-direct-vertical';
-import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261019-mogreps-uk';
+import {directVerticalNote} from './map-direct-vertical.js?v=20261020-comparison-feeds';
+import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261020-comparison-feeds';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261019-mogreps-uk';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261020-comparison-feeds';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
-import {VERTICAL_MOTION,verticalMotionField} from './map-vertical-motion.js?v=20261015-direct-vertical';
+import {VERTICAL_MOTION,verticalMotionField} from './map-vertical-motion.js?v=20261020-comparison-feeds';
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, precipitation & MSLP',field:WEATHER_COMPOSITE,required:['cloud_cover','precipitation','pressure_msl'],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},
  {id:'temperature',name:'2 m air temperature & pressure',field:'temperature_2m',required:['temperature_2m','pressure_msl'],note:'2 m air temperature in °C at the chart valid time, with MSLP isobars every 4 hPa. This is instantaneous air temperature, not a maximum or minimum.'},

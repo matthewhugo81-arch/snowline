@@ -20,6 +20,7 @@ from mogreps_source import newest_complete_after
 DIRECT = {
     'mogreps': ('snowline_mogreps_uk', 'ukmo_uk_ensemble_2km'),
     'gem': ('snowline_gem_700', 'cmc_gem_gdps_15km'),
+    'gem-upper': ('snowline_gem_upper', 'cmc_gem_gdps_15km'),
     'icon-eu': ('snowline_icon_eu_700', 'dwd_icon_eu'),
 }
 
@@ -43,7 +44,7 @@ def expected_hours(model, run, native):
     if model == 'mogreps':
         return sorted({int((datetime.fromisoformat(t.replace('Z', '+00:00')) - run).total_seconds() / 3600)
                        for t in native['valid_times'] if datetime.fromisoformat(t.replace('Z', '+00:00')) > run})
-    if model == 'gem':
+    if model in ('gem', 'gem-upper'):
         return list(range(0, 241, 3))
     return list(range(79)) + list(range(81, 121, 3)) if run.hour % 6 == 0 else list(range(31)) + [36, 42, 48]
 
@@ -85,16 +86,21 @@ def direct_hours(model, run, candidates):
     base = f'https://dd.weather.gc.ca/{run:%Y%m%d}/WXO-DD/model_gdps/15km/{run:%H}/'
     listing = ensemble.get(base).decode()
     available = set(candidates) & {int(h) for h in re.findall(r'href="(\d{3})/"', listing)}
+    upper = {'AirTemp':[1000,850,500,250],'GeopotentialHeight':[500,300,200],'RelativeHumidity':[1000,700,300],'WindU':[1000,500,300,200],'WindV':[1000,500,300,200]}
+    pairs = [(field, level) for field, levels in upper.items() for level in levels] if model == 'gem-upper' else [(field,700) for field in ('VerticalVelocity','GeopotentialHeight','WindU','WindV')]
     def complete(hour):
         text = ensemble.get(base + f'{hour:03d}/').decode()
-        return hour if all(f'{run:%Y%m%dT%H}Z_MSC_GDPS_{field}_IsbL-0700_LatLon0.15_PT{hour:03d}H.grib2' in text
-                           for field in ('VerticalVelocity', 'GeopotentialHeight', 'WindU', 'WindV')) else None
+        return hour if all(f'{run:%Y%m%dT%H}Z_MSC_GDPS_{field}_IsbL-{level:04d}_LatLon0.15_PT{hour:03d}H.grib2' in text
+                           for field, level in pairs) else None
     with ThreadPoolExecutor(max_workers=6) as pool:
         return sorted(h for h in pool.map(complete, sorted(available)) if h is not None)
 
 
 def check_direct(model, site, now, local_root=None):
     domain, native_domain = DIRECT[model]
+    if model == 'gem-upper':
+        site = 'https://matthewhugo81-arch.github.io/snowline-ensembles'
+        local_root = None
     native = native_meta(native_domain)
     run = datetime.fromisoformat(native['reference_time'].replace('Z', '+00:00'))
     try:
@@ -111,6 +117,8 @@ def check_direct(model, site, now, local_root=None):
                     source_reference=ensemble.iso(run), published_reference=ensemble.iso(reference), checked_at=ensemble.iso(now))
     expected = expected_hours(model, run, native)
     fields = {'snowfall_probability'} if model == 'mogreps' else {'omega_700hPa', 'geopotential_height_700hPa', 'wind_u_component_700hPa', 'wind_v_component_700hPa'}
+    if model == 'gem-upper':
+        fields = {f'{kind}_{level}hPa' for kind, levels in {'temperature':[1000,850,500,250],'geopotential_height':[500,300,200],'relative_humidity':[1000,700,300],'wind_u_component':[1000,500,300,200],'wind_v_component':[1000,500,300,200]}.items() for level in levels}
     valid = published and published.get('format_version') == 1 and fields <= set(published.get('variables', []))
     prepared = {int((datetime.fromisoformat(t.replace('Z', '+00:00')) - run).total_seconds() / 3600)
                 for t in published.get('valid_times', [])} if reference == run and valid else set()
@@ -126,6 +134,8 @@ def check_direct(model, site, now, local_root=None):
 
 def check_global(site, now, local_root=None):
     domain = 'snowline_mogreps_global'
+    site = 'https://matthewhugo81-arch.github.io/snowline-ensembles'
+    local_root = None
     manifest = json.loads(ensemble.get('https://matthewhugo81-arch.github.io/snowline-ensembles/mogreps/latest.json'))
     reference = ensemble.iso(datetime.fromtimestamp(manifest['run'], timezone.utc))
     if manifest.get('schema') != 1 or manifest.get('intervalHours') != 3 or len(manifest.get('members', [])) != 18:
@@ -143,9 +153,10 @@ def check_global(site, now, local_root=None):
     same = published.get('reference_time') == reference and published.get('format_version') == 2
     fields = ['temperature_850hPa_mean','temperature_850hPa_spread','temperature_500hPa_mean','temperature_500hPa_spread',
               'precipitation_mean','snowfall_water_equivalent_mean','precipitation_probability','snowfall_probability']
+    comparison = [f'{base}_{stat}' for base in ['geopotential_height_500hPa','wind_speed_300hPa','wind_speed_200hPa','pressure_msl'] for stat in ['mean','spread']] + ['geopotential_height_500hPa_anomaly_mean']
     missing = [h for h in manifest['leads'] if not same or any(
         ensemble.iso(datetime.fromtimestamp(manifest['run']+h*3600, timezone.utc)) not in published.get('variable_valid_times', {}).get(key, [])
-        for key in (fields if h else fields[:4]))]
+        for key in ((fields if h else fields[:4]) + comparison))]
     behind = published.get('reference_time', '') > reference
     return dict(model=domain, status='index-pending' if index_pending else 'upstream-behind' if behind else 'current' if not missing else 'hours-pending' if same else 'newer-source-run',
                 refresh_needed=bool(missing) and not behind, source_reference=reference, source_hours=manifest['leads'],

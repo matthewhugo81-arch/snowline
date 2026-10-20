@@ -63,14 +63,16 @@ def expected_hours(model,run):
 class Source:
  def __init__(self,model,run):
   self.model,self.run,self.config=model,run,CONFIG[model]
+  self.fields=self.config.get('fields',FIELDS)
   if run.minute or run.second or run.hour%self.config['cycle']: raise ValueError('Invalid model cycle')
   self.base=(f'https://dd.weather.gc.ca/{run:%Y%m%d}/WXO-DD/model_gdps/15km/{run:%H}/' if model=='gem'
    else f'https://opendata.dwd.de/weather/nwp/icon-eu/grib/{run:%H}/')
 
  def url(self,hour,key):
-  variable=self.config['variables'][FIELDS.index(key)]
-  if self.model=='gem': return self.base+f'{hour:03d}/{self.run:%Y%m%dT%H}Z_MSC_GDPS_{variable}_IsbL-0700_LatLon0.15_PT{hour:03d}H.grib2'
-  return self.base+f'{variable}/icon-eu_europe_regular-lat-lon_pressure-level_{self.run:%Y%m%d%H}_{hour:03d}_700_{variable.upper()}.grib2.bz2'
+  variable=self.config['variables'][self.fields.index(key)]
+  level=int(re.search(r'_(\d+)hPa$',key)[1])
+  if self.model=='gem': return self.base+f'{hour:03d}/{self.run:%Y%m%dT%H}Z_MSC_GDPS_{variable}_IsbL-{level:04d}_LatLon0.15_PT{hour:03d}H.grib2'
+  return self.base+f'{variable}/icon-eu_europe_regular-lat-lon_pressure-level_{self.run:%Y%m%d%H}_{hour:03d}_{level}_{variable.upper()}.grib2.bz2'
 
  def available_hours(self):
   expected=set(expected_hours(self.model,self.run))
@@ -91,8 +93,9 @@ def decode(message,key,source,hour):
   g=ec.codes_new_from_message(message)
   try:
    get=lambda k:ec.codes_get(g,k)
-   i=FIELDS.index(key);cfg=source.config
-   if get('paramId')!=cfg['params'][i] or get('typeOfLevel')!='isobaricInhPa' or get('level')!=700 or get('units')!=cfg['units'][i]:
+   i=source.fields.index(key);cfg=source.config
+   level=int(re.search(r'_(\d+)hPa$',key)[1])
+   if get('paramId')!=cfg['params'][i] or get('typeOfLevel')!='isobaricInhPa' or get('level')!=level or get('units')!=cfg['units'][i]:
     raise ValueError('Incorrect parameter, pressure level or units')
    valid=source.run+timedelta(hours=hour)
    # DWD analysis steps use minutes (ecCodes returns "0m" for endStep).
@@ -114,7 +117,8 @@ def decode(message,key,source,hour):
    if source.model=='gem': values=np.roll(values,nx//2,axis=1)
    y0,y1,x0,x1=cfg['crop'];values=values[y0:y1,x0:x1]
    if key=='omega_700hPa': values=values*10
-   if key=='geopotential_height_700hPa' and source.model=='icon-eu': values=values/9.80665
+   if key.startswith('temperature_'): values=values-273.15
+   if key.startswith('geopotential_height_') and source.model=='icon-eu': values=values/9.80665
    if not np.isfinite(values).any(): raise ValueError('No finite values in chart coverage')
    return np.ascontiguousarray(values,dtype=np.float32)
   finally: ec.codes_release(g)
@@ -123,11 +127,11 @@ def frame_path(root,domain,run,hour):
  return root/domain/run.strftime('%Y/%m/%d/%H00Z')/((run+timedelta(hours=hour)).strftime('%Y-%m-%dT%H%M')+'.om')
 
 def write_frame(source,hour,path):
- arrays={key:decode(fetch(source.url(hour,key)),key,source,hour) for key in FIELDS}
+ arrays={key:decode(fetch(source.url(hour,key)),key,source,hour) for key in source.fields}
  path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_suffix('.tmp')
  writer=OmFileWriter(str(tmp));children=[]
  for key,array in arrays.items():
-  children.append(writer.write_array(array,chunks=[10,100],scale_factor=SCALES[key],add_offset=0,compression='pfor_delta_2d',name=key))
+  children.append(writer.write_array(array,chunks=[10,100],scale_factor=source.config.get('scales',SCALES)[key],add_offset=0,compression='pfor_delta_2d',name=key))
  writer.close(writer.write_group(name='root',children=children));tmp.replace(path)
  return path.stat().st_size
 
@@ -139,7 +143,7 @@ def read_meta(path,model,run=None):
  try: data=json.loads(path.read_text())
  except (OSError,ValueError): return None
  cfg=CONFIG[model]
- if data.get('format_version')!=VERSION or data.get('variables')!=FIELDS or data.get('units')!=UNITS or data.get('grid')!=cfg['grid'] or data.get('domain')!=cfg['domain']: return None
+ if data.get('format_version')!=VERSION or data.get('variables')!=cfg.get('fields',FIELDS) or data.get('units')!=cfg.get('output_units',UNITS) or data.get('grid')!=cfg['grid'] or data.get('domain')!=cfg['domain']: return None
  if run is not None and data.get('reference_time')!=iso(run): return None
  return data
 
@@ -169,9 +173,9 @@ def build_run(model,root,run,workers=4,hours=None):
  if failures: print(f'::warning::{model}: {len(failures)} incomplete frames will be retried: {failures[0]}',flush=True)
  if not prepared: raise ValueError('No complete verified 700 hPa frames')
  meta=dict(format_version=VERSION,domain=cfg['domain'],reference_time=iso(run),completed=prepared==set(expected),
-  variables=FIELDS,units=UNITS,grid=cfg['grid'],valid_times=[iso(run+timedelta(hours=h)) for h in sorted(prepared)],
+  variables=cfg.get('fields',FIELDS),units=cfg.get('output_units',UNITS),grid=cfg['grid'],valid_times=[iso(run+timedelta(hours=h)) for h in sorted(prepared)],
   expected_forecast_hours=expected[-1],generated_at=iso(datetime.now(timezone.utc)),source=cfg['source'],source_url=cfg['source_url'],
-  method='Native-resolution regional subset; omega in 0.1 Pa/s, geopotential height in metres, earth-relative wind components in m/s.',
+  method=cfg.get('method','Native-resolution regional subset; omega in 0.1 Pa/s, geopotential height in metres, earth-relative wind components in m/s.'),
   precision={'omega_Pa_s':.01,'height_m':1,'wind_m_s':.1})
  write_json(meta_path,meta)
  print(f'{model} {iso(run)}: {len(prepared)}/{len(expected)} complete frames published',flush=True)

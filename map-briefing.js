@@ -8,7 +8,7 @@ import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefing
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-coastline3';
 import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261019-mogreps-uk';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261019-mogreps-uk';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261020-comparison-feeds';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {chartScales} from './map-image-export.js?v=20261019-mogreps-uk';
 

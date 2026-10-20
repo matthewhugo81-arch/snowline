@@ -8,6 +8,8 @@ const colors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee97
 const blue=['#ffffff','#dbeefd','#9ecae1','#4292c6','#2171b5','#08519c','#08306b'];
 const spread=['#ffffff','#dceaf2','#9ecae1','#4292c6','#5460ab','#8f479d','#d4486b','#9e1538'];
 const definitions={
+ wind_speed_300hPa:['300 hPa wind speed','m/s',[0,10,20,30,40,50,70,90],10],
+ wind_speed_200hPa:['200 hPa wind speed','m/s',[0,10,20,30,40,50,70,90],10],
  temperature_2m:['2 m air temperature','°C',[-20,-10,-5,0,5,10,20,30],2],
  dew_point_2m:['2 m dew point','°C',[-20,-10,-5,0,5,10,20,30],2],
  relative_humidity_2m:['2 m relative humidity','%',[0,20,40,60,70,80,90,100],10],

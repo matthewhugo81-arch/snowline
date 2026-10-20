@@ -96,7 +96,7 @@ class GeneratedFeedTests(unittest.TestCase):
         with patch.object(f.ensemble, 'check_model', side_effect=lambda model, *args: dict(model=f.ensemble.MODELS[model][0], status='current', refresh_needed=False)), \
              patch.object(f, 'check_direct', side_effect=direct), patch.object(f, 'check_global', return_value=dict(model='snowline_mogreps_global', status='current', refresh_needed=False)), patch.object(f.ensemble, 'publication_check_overdue', return_value=False):
             result = f.report('https://site.test', self.reference)
-        self.assertEqual(len(result['models']), 6)
+        self.assertEqual(len(result['models']), 7)
         self.assertTrue(result['refresh_needed'])
         self.assertEqual(next(row for row in result['models'] if row['model'] == 'snowline_gem_700')['status'], 'check-failed')
 
@@ -106,6 +106,7 @@ class GlobalIndexFreshnessTests(unittest.TestCase):
         reference = datetime(2026, 10, 20, tzinfo=timezone.utc)
         stamp = f.ensemble.iso(reference)
         fields = ['temperature_850hPa_mean', 'temperature_850hPa_spread', 'temperature_500hPa_mean', 'temperature_500hPa_spread']
+        fields += [f'{base}_{stat}' for base in ['geopotential_height_500hPa','wind_speed_300hPa','wind_speed_200hPa','pressure_msl'] for stat in ['mean','spread']] + ['geopotential_height_500hPa_anomaly_mean']
         manifest = dict(schema=1, intervalHours=3, members=list(range(18)), run=int(reference.timestamp()), leads=[0])
         published = dict(reference_time=stamp, format_version=2, variable_valid_times={key:[stamp] for key in fields})
         with patch.object(f.ensemble, 'get', side_effect=[json.dumps(manifest).encode(), json.dumps(published).encode()]), patch.object(f, 'newest_complete_after', return_value=reference+timedelta(hours=6)):

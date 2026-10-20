@@ -1,31 +1,19 @@
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
-import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-source-health';
-import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
+import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-comparison-feeds';
+import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261020-comparison-feeds';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {isJetWind,JET_WIND_SCALE,is850Temperature,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261014-interaction-audit';
-import {VERTICAL_MOTION,verticalMotionVariable,verticalMotionField} from './map-vertical-motion.js?v=20261015-direct-vertical';
+import {VERTICAL_MOTION,verticalMotionVariable,verticalMotionField} from './map-vertical-motion.js?v=20261020-comparison-feeds';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
-export const PRESSURE_LEVELS = [1000,925,850,700,500,300,250,200,100,50,10];
-// Shared menu policy for every model and both panels. Native inputs remain
-// available internally for diagnostics such as 850 hPa theta-w.
-const MENU_PRESSURE_LEVELS = {
- temperature:[1000,850,500,250],
- wind_speed:[1000,500,300,200],
- relative_humidity:[1000,700,300],
- geopotential_height:[500,300,200]
-};
-function menuField(key){
- const pressure=key.match(/^(temperature|wind_speed|relative_humidity|geopotential_height)_(\d+)hPa$/);
- return !pressure||MENU_PRESSURE_LEVELS[pressure[1]].includes(Number(pressure[2]));
-}
-const HEIGHT_LEVELS = [50,100,200,300];
+export const PRESSURE_LEVELS = [1000,975,950,925,900,875,850,825,800,775,750,725,700,675,650,625,600,575,550,525,500,475,450,425,400,375,350,325,300,275,250,225,200,175,150,125,100,70,50,40,30,20,15,10];
+// Availability comes from the selected run, not a curated pressure-level menu.
 const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Ensemble probabilities','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
@@ -93,6 +81,9 @@ export function variableGroup(key){
 const hex=rgba=>'#'+rgba.slice(0,3).map(n=>Math.round(n).toString(16).padStart(2,'0')).join('')+Math.round((rgba[3]??1)*255).toString(16).padStart(2,'0');
 const plain=key=>key.replace(/_/g,' ').replace(/(\d)(cm|m)\b/g,'$1 $2').replace(/\bto\b/g,'–').replace(/^./,s=>s.toUpperCase());
 const extras={
+ convective_cloud_base:['Convective cloud base','cloud_base','Native convective cloud-base height in metres.'],
+ convective_cloud_top:['Convective cloud top','convective_cloud_top','Native convective cloud-top height in metres.'],
+ sea_surface_temperature:['Sea-surface temperature','temperature','Native model sea-surface temperature, in °C.'],
  temperature_2m_max:['2 m maximum temperature · native period','temperature','Native maximum 2 m air temperature over the provider’s reporting period ending at the valid time. Not a daily maximum. The spatial metadata does not specify the period length; do not infer it from the playback interval.'],
  temperature_2m_min:['2 m minimum temperature · native period','temperature','Native minimum 2 m air temperature over the provider’s reporting period ending at the valid time. Not a daily minimum. The spatial metadata does not specify the period length; do not infer it from the playback interval.'],
  wind_gusts_10m:['10 m wind gusts','wind','Maximum gust over the model interval, in m/s. Location-chart gusts are shown in mph.'],
@@ -117,6 +108,7 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ if(/^cloud_cover_\d+(hPa|m)$/.test(key))return {key,name:key.match(/\d+/)[0]+(key.endsWith('hPa')?' hPa':' m')+' cloud cover',group:'Cloud & visibility',unit:'%',...CLOUD_COVER_SCALE,note:'Native model cloud fraction at the stated level; pressure surfaces can lie below terrain.'};
  if(key===VERTICAL_MOTION)return verticalMotionField();
  if(key==='snowfall_probability')return {
   key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
@@ -153,7 +145,7 @@ export function describeVariable(key,OM){
   name=pressure[2]+' hPa '+({temperature:'temperature',relative_humidity:'relative humidity',wind_speed:'wind speed & direction',geopotential_height:'geopotential height'}[kind]);
   scaleKey={temperature:'temperature',relative_humidity:'relative',wind_speed:'wind',geopotential_height:key}[kind];
   note='Native model field on the '+pressure[2]+' hPa pressure surface, which can lie below high terrain.';
- }else if(height&&HEIGHT_LEVELS.includes(Number(height[2]))){
+ }else if(height&&Number(height[2])>=10&&Number(height[2])<=10000){
   name=height[2]+' m '+(height[1]==='temperature'?'temperature':'wind speed & direction');
   scaleKey=height[1]==='temperature'?'temperature':'wind';
   note='Model field at '+height[2]+' m above ground.';
@@ -174,7 +166,7 @@ export function describeVariable(key,OM){
  return {key,name,group:variableGroup(key),unit:unit??raw.unit,note,stops,colors:raw.colors.map(hex)};
 }
 export function availableFields(fields,metas){
- return fields.filter(f=>!f.overlayOnly&&menuField(f.key)&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
+ return fields.filter(f=>!f.overlayOnly&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
   const group=GROUPS.indexOf(variableGroup(a.key))-GROUPS.indexOf(variableGroup(b.key));
   if(group)return group;
   const ap=a.key.match(/_(\d+)hPa$/),bp=b.key.match(/_(\d+)hPa$/);

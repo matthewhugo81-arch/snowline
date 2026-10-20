@@ -24,7 +24,7 @@ function rawPoint(){
 function metadata(){
  const valid=[0,3,6].map(time);
  return {format_version:2,domain:MOGREPS_GLOBAL,reference_time:time(0),completed:true,grid:MOGREPS_GLOBAL_DOMAIN.grid,member_count:18,member_ids:manifest.members,threshold_mm_per_hour:.1,
-  variables:MOGREPS_GLOBAL_FIELDS,valid_times:valid,
+  anomaly_reference:{period:'1991-2020',level_hPa:500,units:'m'},variables:MOGREPS_GLOBAL_FIELDS,valid_times:valid,
   variable_valid_times:Object.fromEntries(MOGREPS_GLOBAL_FIELDS.map(k=>[k,MOGREPS_GLOBAL_PERIOD_FIELDS.includes(k)?valid.slice(1):valid])),
   variable_intervals:Object.fromEntries(MOGREPS_GLOBAL_PERIOD_FIELDS.map(k=>[k,Object.fromEntries([3,6].map(h=>[time(h),{start:time(h-3),end:time(h),hours:3}]))]))};
 }
@@ -56,7 +56,7 @@ test('point loader dispatches MOGREPS independently and cancellation emits nothi
  const controller=new AbortController();
  await assert.rejects(loadPointForecasts(location,{models:[model],signal:controller.signal,loadMogreps:async()=>{controller.abort();return loaded[0];},onModel:()=>assert.fail('Stale model')}),{name:'AbortError'});
 });
-test('map native crop, metadata, all eight fields, and exact periods load without pressure substitution',async()=>{
+test('map native crop, metadata, all published fields, and exact periods load without pressure substitution',async()=>{
  const fixture=metadata();assert.ok(verifiedMogrepsGlobal(fixture));
  assert.equal(MAP_MODELS.filter(m=>m.id===MOGREPS_GLOBAL).length,1);
  assert.ok(!MAP_MODELS.some(m=>m.id===model.id));
@@ -64,7 +64,7 @@ test('map native crop, metadata, all eight fields, and exact periods load withou
  const meta=await loadSpatialModel(MOGREPS_GLOBAL,async url=>url.endsWith('health.json')?{checked_at:new Date().toISOString(),models:[{model:MOGREPS_GLOBAL,status:'current',source_reference:time(0)}]}:fixture);
  const fields=[],settings={colorScales:{}};
  assert.deepEqual(extendCatalogue(fields,[meta],OM,settings),[]);
- assert.equal(availableFields(fields,[meta]).length,8);
+ assert.equal(availableFields(fields,[meta]).length,MOGREPS_GLOBAL_FIELDS.length);
  for(const key of MOGREPS_GLOBAL_FIELDS){
   assert.equal(sourceVariable(meta,key),key);
   assert.ok(fieldDataURL(meta,key,time(3)).endsWith('/2026/10/19/0600Z/2026-10-19T0900.om'));
@@ -72,7 +72,7 @@ test('map native crop, metadata, all eight fields, and exact periods load withou
  }
  assert.equal(fieldDataURL(meta,'precipitation_mean',time(0)),null);
  assert.equal(fieldIntervalHours(meta,'snowfall_probability',time(3)),3);
- assert.equal(sourceVariable(meta,'pressure_msl'),null);
+ assert.equal(sourceVariable(meta,'pressure_msl'),'pressure_msl_mean');
  assert.equal(settings.colorScales.temperature_500hPa_mean.unit,'°C');
  assert.equal(settings.colorScales.precipitation_mean.unit,'mm/h');
  await assert.rejects(loadSpatialRun(MOGREPS_GLOBAL,time(0),async()=>({...fixture,member_count:17})),/Unverified/);

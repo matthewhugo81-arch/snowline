@@ -3,16 +3,16 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261019-mogreps-uk';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261019-mogreps-uk';
+import {sourceVariable} from './map-catalogue.js?v=20261020-comparison-feeds';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261020-source-health';
-import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
+import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261020-comparison-feeds';
+import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261020-comparison-feeds';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
-import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mogreps-global.js?v=20261019-mogreps-uk';
+import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mogreps-global.js?v=20261020-comparison-feeds';
 
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
 import {precipitationStepHours,precipitationExistsAt} from './map-accumulation.js?v=20261014-interaction-audit';
-import {DIRECT_VERTICAL_MODELS,verifiedDirectVertical} from './map-direct-vertical.js?v=20261015-direct-vertical';
+import {DIRECT_VERTICAL_MODELS,verifiedDirectVertical} from './map-direct-vertical.js?v=20261020-comparison-feeds';
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
 // Open-Meteo splits GFS surface and pressure/upper-air fields into two grids.
@@ -23,9 +23,11 @@ for(const model of MOGREPS_MODELS)domains[model.id]=model.id;
 const ownEnsembles=new Set(ENSEMBLE_DOMAINS.map(d=>d.value));
 for(const domain of ownEnsembles)domains[domain]=domain;
 const ownBase=new URL('./ensemble-data/',import.meta.url).href;
+export const COMPANION_BASE='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/';
+const generatedBase=domain=>domain===MOGREPS_GLOBAL?COMPANION_BASE:ownBase;
 export function ensembleHistoryURL(model){
  if(!ownEnsembles.has(model))throw Error('Unknown statistical ensemble model');
- return ownBase+model+'/history.json';
+ return generatedBase(model)+model+'/history.json';
 }
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
@@ -87,11 +89,11 @@ export function fieldDataURL(meta,key,time){
  if(!source)return null;
  return (source.baseURL??SPATIAL_BASE)+source.domain+'/'+runPath(source.reference_time)+time.slice(0,16).replace(':','')+'.om';
 }
-async function directVertical(model,reference,load){
- const domain=DIRECT_VERTICAL_MODELS[model];
- const meta=await load(ownBase+domain+'/'+runPath(reference)+'meta.json');
+async function directVertical(model,reference,load,domain=DIRECT_VERTICAL_MODELS[model]){
+ const baseURL=domain==='snowline_gem_upper'?COMPANION_BASE:ownBase;
+ const meta=await load(baseURL+domain+'/'+runPath(reference)+'meta.json');
  if(!verifiedDirectVertical(meta,domain)||Date.parse(meta.reference_time)!==Date.parse(reference))throw Error('Unverified direct 700 hPa run');
- return {...meta,domain,baseURL:ownBase};
+ return {...meta,domain,baseURL};
 }
 async function ensembleExtra(model,reference,load){
  const domain=ENSEMBLE_EXTRAS[model];
@@ -108,11 +110,11 @@ async function mogrepsSnow(model,load,reference){
 export async function loadSpatialModel(model,load){
  const domain=domains[model===UKV_NOWCAST?UKV:model];
  if(!domain)throw new Error('Unknown spatial model');
- const baseURL=ownEnsembles.has(domain)?ownBase:SPATIAL_BASE;
+ const baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;
  const base=baseURL+domain+'/';
  // in-progress.json advances after EACH uploaded forecast hour. latest.json
  // alone deliberately points to the last fully completed run.
- const results=await Promise.allSettled((ownEnsembles.has(domain)?['latest.json','../health.json']:['latest.json','in-progress.json']).map(path=>load(base+path)));
+ const results=await Promise.allSettled((ownEnsembles.has(domain)?['latest.json','../health.json']:['latest.json','in-progress.json']).map(path=>load(path==='../health.json'?ownBase+'health.json':base+path)));
  const published=results.filter(result=>result.status==='fulfilled').map(result=>result.value);
  if(!published.some(publishedRun))throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
  const latest=await chooseRun(...published);
@@ -120,6 +122,7 @@ export async function loadSpatialModel(model,load){
  let primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(primary))throw Error('Unverified MOGREPS-G run metadata.');
  const warnings=[...(primary.selectionWarnings??[])];
+ if(domain===MOGREPS_GLOBAL&&(primary.variable_valid_times?.geopotential_height_500hPa_anomaly_mean?.length??0)<primary.valid_times.length)warnings.push('Additional MOGREPS-G comparison layers are being prepared. Each layer shows only its published forecast hours.');
  if(domain==='ecmwf_ifs025')warnings.push('IFS 0.25° gusts are unavailable from T+93 to T+144 h in the source feed; those gust steps are omitted. Other fields retain their full timelines.');
  if(results.some(result=>result.status==='rejected'&&result.reason?.status!==404))warnings.push('A live run check failed; using verified published data and retrying automatically.');
  const publicationStatus=ownEnsembles.has(domain)?ensemblePublicationStatus(primary,results[1]?.status==='fulfilled'?results[1].value:null):null;
@@ -138,6 +141,10 @@ export async function loadSpatialModel(model,load){
  if(ENSEMBLE_EXTRAS[model]){
   try{const extra=await ensembleExtra(model,primary.reference_time,load);other.push(extra);if(!extra.completed)warnings.push('Additional ensemble fields are still being prepared for this run. Each layer shows only its verified forecast hours.');}
   catch{warnings.push('Additional ensemble fields are not yet available for this run; the published mean and spread charts remain available.');}
+ }
+ if(model==='gem_global'){
+  try{other.push(await directVertical(model,primary.reference_time,load,'snowline_gem_upper'));}
+  catch{warnings.push('Additional GEM upper-air fields are being prepared for this run. Check latest runs to retry.');}
  }
  if(DIRECT_VERTICAL_MODELS[model]){
   try{other.push(await directVertical(model,primary.reference_time,load));}
@@ -170,7 +177,7 @@ export async function loadSpatialRun(model,referenceTime,load){
  const reference=Date.parse(referenceTime);if(!Number.isFinite(reference))throw Error('Invalid archive run time.');
  const family=ukvRunFamily(model);
  if(family&&((new Date(reference).getUTCHours()%3===0?'main':'nowcast')!==family))throw Error('Archived UKV run is in a different run family.');
- const baseURL=ownEnsembles.has(domain)?ownBase:SPATIAL_BASE;
+ const baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;
  const base=baseURL+domain+'/',data=await load(base+runPath(referenceTime)+'meta.json');
  if(model===UKV&&Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
@@ -184,6 +191,10 @@ export async function loadSpatialRun(model,referenceTime,load){
  if(ENSEMBLE_EXTRAS[model]){
   try{other.push(await ensembleExtra(model,primary.reference_time,load));}
   catch{warnings.push('Additional ensemble fields are available on the latest run only. The original mean and spread layers remain available for archived runs.');}
+ }
+ if(model==='gem_global'){
+  try{other.push(await directVertical(model,primary.reference_time,load,'snowline_gem_upper'));}
+  catch{warnings.push('Additional GEM upper-air fields are being prepared for this run. Check latest runs to retry.');}
  }
  if(DIRECT_VERTICAL_MODELS[model]){
   try{other.push(await directVertical(model,primary.reference_time,load));}

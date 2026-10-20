@@ -1,5 +1,6 @@
-import {extraEnsembleField} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
-import {MOGREPS_GLOBAL_DOMAIN} from './map-mogreps-global.js?v=20261019-mogreps-uk';
+import {JET_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
+import {extraEnsembleField} from './map-ensemble-extra.js?v=20261020-comparison-feeds';
+import {MOGREPS_GLOBAL_DOMAIN} from './map-mogreps-global.js?v=20261020-comparison-feeds';
 // Same native global grids as the official GEFS/IFS mean and SD GRIB products.
 export const ENSEMBLE_DOMAINS = [
  {value:'snowline_gefs_ensemble',label:'GEFS mean & spread',grid:{type:'regular',nx:720,ny:361,latMin:-90,lonMin:-180,dx:.5,dy:.5,zoom:1},time_interval:'3_hourly',model_interval:'6_hourly'},
@@ -14,7 +15,11 @@ const definitions={
  pressure_msl:{name:'Mean sea-level pressure',unit:'hPa',mean:[940,960,980,1000,1010,1020,1040,1060],spread:[0,1,2,4,6,8,12,20],step:4,spreadStep:2}
 };
 export function ensembleField(key){
- const extra=extraEnsembleField(key);if(extra)return extra;
+ if(key==='geopotential_height_500hPa_anomaly_mean')return {key,name:'500 hPa height anomaly · ensemble mean (1991–2020)',unit:'m',group:'Ensemble mean',ensembleStatistic:'mean',
+  stops:[-300,-200,-150,-100,-50,0,50,100,150,200,300],colors:['#302080','#244bb8','#3687d0','#76b7de','#c7e3f1','#ffffff','#fee2b5','#f8b86c','#ed7844','#ce3836','#841e48'],
+  contourValues:[-300,-200,-100,0,100,200,300],contourLabel:'100 m',
+  note:'MOGREPS-G 18-member mean 500 hPa height minus NOAA NCEP/NCAR Reanalysis 1 daily 1991–2020 climatology, in metres. The baseline is bilinearly interpolated to the native forecast grid; forecast cells are not smoothed. This is an anomaly from climatology, not ensemble spread or a model-bias-corrected anomaly.'};
+ const extra=extraEnsembleField(key);if(extra)return /^wind_speed_(300|200)hPa_mean$/.test(key)?{...extra,...JET_WIND_SCALE}:extra;
  const match=key.match(/^(.*)_(mean|spread)$/),d=definitions[match?.[1]];
  if(!d)return null;
  const spread=match[2]==='spread',stops=spread?d.spread:d.mean,step=spread?d.spreadStep:d.step;

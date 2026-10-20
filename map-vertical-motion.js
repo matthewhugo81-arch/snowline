@@ -1,7 +1,7 @@
 // Match the reference chart: pressure velocity in 0.1 Pa/s (microbar/s).
 // Negative = ascent (red); positive = descent (blue). JMA's spatial arrays
 // retain omega in Pa/s; the other five feeds store geometric w in m/s.
-import {verifiedDirectVertical,DIRECT_VERTICAL_DOMAINS} from './map-direct-vertical.js?v=20261015-direct-vertical';
+import {verifiedDirectVertical,DIRECT_VERTICAL_DOMAINS} from './map-direct-vertical.js?v=20261020-comparison-feeds';
 export const VERTICAL_MOTION='vertical_motion_700hPa';
 export const VERTICAL_DOMAINS=Object.freeze(['ncep_gfs025','ecmwf_ifs025','ecmwf_aifs025_single','ncep_aigfs025','ukmo_global_deterministic_10km','jma_gsm']);
 export const HEIGHT_700='geopotential_height_700hPa';
@@ -13,7 +13,7 @@ export function verticalMotionInputs(domain){
   ...(domain==='ukmo_global_deterministic_10km'?['wind_speed_700hPa','wind_direction_700hPa']:['wind_u_component_700hPa','wind_v_component_700hPa'])];
 }
 export function verticalMotionVariable(meta){
- if(DIRECT_VERTICAL_DOMAINS.some(d=>d.value===meta?.domain))return verifiedDirectVertical(meta)?'omega_700hPa':null;
+ if(DIRECT_VERTICAL_DOMAINS.some(d=>d.value===meta?.domain))return verifiedDirectVertical(meta)&&meta.variables.includes('omega_700hPa')?'omega_700hPa':null;
  const inputs=verticalMotionInputs(meta?.domain);
  return inputs?.every(key=>meta.variables?.includes(key))?(meta.domain==='jma_gsm'?'omega_700hPa_from_pressure':'omega_700hPa_from_w'):null;
 }
