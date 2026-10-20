@@ -5,7 +5,7 @@ import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261019-mogre
 import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261019-ensemble-extra4';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
-import {isJetWind,JET_WIND_SCALE,is850Temperature} from './map-chart-style.js?v=20261019-ensemble-extra4';
+import {isJetWind,JET_WIND_SCALE,is850Temperature,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261014-interaction-audit';
 import {VERTICAL_MOTION,verticalMotionVariable,verticalMotionField} from './map-vertical-motion.js?v=20261015-direct-vertical';
@@ -128,7 +128,11 @@ export function describeVariable(key,OM){
  if(key===THETA_SYMBOLS)return thetaSymbolsField();
  const accumulation=accumulationField(key);if(accumulation)return accumulation;
  const diagnostic=diagnosticField(key);if(diagnostic)return diagnostic;
- const ensemble=ensembleField(key);if(ensemble)return ensemble;
+ const ensemble=ensembleField(key);if(ensemble)return isSurfaceWind(key)?{...ensemble,...SURFACE_WIND_SCALE}:ensemble;
+ if(key==='wind_speed_10m'||key==='wind_gusts_10m')return {
+  key,name:key==='wind_gusts_10m'?'10 m wind gusts':'10 m wind speed & direction',group:'Wind',unit:'m/s',...SURFACE_WIND_SCALE,
+  note:(key==='wind_gusts_10m'?'Maximum gust over the model reporting interval. ':'Arrows show flow direction. ')+'Shading, legend and readouts display mph on a fixed 0–110 mph colour scale; underlying spatial data remains in m/s. Values above 110 mph retain their actual readout and use the top colour.'
+ };
  if(isJetWind(key))return {
   key,name:key.match(/\d+/)[0]+' hPa wind speed & direction',group:variableGroup(key),unit:'m/s',...JET_WIND_SCALE,
   contourValues:JET_WIND_SCALE.stops.slice(1),contourLabel:'15 mph from 60 to 180 mph',
@@ -191,6 +195,7 @@ export function extendCatalogue(fields,metas,OM,settings){
    const field=describeVariable(key,OM);if(!field){omitted.push(key);continue;}fields.push(field);
   }
   const field=fields.find(f=>f.key===key);
+  if(isSurfaceWind(key))Object.assign(field,SURFACE_WIND_SCALE);
   field.group=variableGroup(key);
   if(is850Temperature(key))field.contourLabel='2°C intermediate contours, with thicker contours every 5°C from −25°C to +25°C';
   // Use exactly the same temperature palette for instantaneous and extreme

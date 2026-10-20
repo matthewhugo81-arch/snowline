@@ -32,7 +32,7 @@ import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-unit
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261019-mogreps-uk';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-panel-times';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261019-mogreps-uk';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261020-surface-wind110';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261019-mogreps-uk';
@@ -40,7 +40,7 @@ import {MAP_RUN_CHOICES as MODELS} from './map-models.js?v=20261019-mogreps-uk';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261019-mogreps-uk';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
-import {isJetWind,is850Temperature,temperatureContourLevels} from './map-chart-style.js?v=20261019-ensemble-extra4';
+import {isJetWind,is850Temperature,temperatureContourLevels,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
 import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261019-mogreps-uk';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
@@ -70,7 +70,7 @@ const fields=[
  {key:'snow_depth_water_equivalent',name:'Snow cover · water equivalent',unit:'mm water',note:'Water equivalent of existing snow cover, not its physical depth.',stops:[0,1,5,10,25,50,100,200],colors:['#ffffff','#e6e9ff','#c7c9fb','#a29ae9','#7963d3','#6440b9','#8c2d9e','#bc3b83']},
  {key:'relative_humidity_2m',name:'2 m relative humidity',unit:'%',note:'Near-surface moisture context. Humidity alone does not determine surface wetness.',stops:[0,20,40,60,75,85,95,100],colors:['#f7ecce','#edce9c','#c6d4b1','#98cdbf','#60b7ba','#359ab0','#257ca2','#225987']},
  {key:'cloud_cover',name:'Total cloud cover',unit:'%',note:'Watch for cloud clearance after rain and overnight cooling.',...CLOUD_COVER_SCALE},
- {key:'wind_speed_10m',name:'10 m wind speed',unit:'m/s',note:'Map shading and values displayed in mph; model grid retained in m/s.',stops:[0,2,4,6,8,12,18,25],colors:['#e8f2f6','#b9dede','#80c5c0','#42a7a6','#308caa','#416cad','#7d52a4','#bf4d84']},
+ {key:'wind_speed_10m',name:'10 m wind speed',unit:'m/s',note:'Map shading and values displayed in mph; model grid retained in m/s.',...SURFACE_WIND_SCALE},
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
@@ -253,7 +253,7 @@ async function drawGridValues(panel){
   note.textContent=features.length?'Grid values · '+(field===WEATHER_COMPOSITE?'precipitation · ':'')+displayUnit(f):'No grid values in this area.';
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
-function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:precipitationRateVariable(sourceVariable(source,field)??field),interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:!fields.find(f=>f.key===field)?.ensembleStatistic&&/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
+function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isSurfaceWind(field)?{wind_style:'20261020-surface-wind110'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:precipitationRateVariable(sourceVariable(source,field)??field),interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:!fields.find(f=>f.key===field)?.ensembleStatistic&&/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
 let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null,outlineWait,navigationDirection=1;
 const arrowNavigation=new ForecastNavigation({select:()=>setTime()});
 function updateOutlineStatus(panel){
