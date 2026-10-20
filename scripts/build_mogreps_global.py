@@ -210,13 +210,13 @@ def metadata(manifest, records):
     variable_times = {key: [times[h] for h in times if key in records[h]] for key in FIELDS}
     periods = {key: {times[h]: dict(start=iso(run+timedelta(hours=h-3)), end=times[h], hours=3)
                     for h in times if key in records[h]} for key in PERIOD}
-    return dict(format_version=2, domain=DOMAIN, reference_time=iso(run), completed=sorted(records)==manifest['leads'],
+    return dict(format_version=2, domain=DOMAIN, reference_time=iso(run), completed=sorted(records)==manifest['leads'] and all(all(key in records[h] for key in COMPARISON) for h in records),
                 variables=[key for key in FIELDS if variable_times[key]], valid_times=list(times.values()),
                 variable_valid_times=variable_times, variable_intervals=periods, member_count=18, member_ids=manifest['members'],
                 grid=GRID, coverage=[GRID['lonMin'], GRID['latMin'], 36.140625, 74.15625],
                 generated_at=iso(datetime.now(timezone.utc)), threshold_mm_per_hour=.1,
                 source='Met Office MOGREPS-G native ensemble members', source_url='https://registry.opendata.aws/met-office-global-ensemble/',
-                licence='Â© Crown copyright 2026, Met Office; CC BY-SA 4.0',
+                licence='\u00a9 Crown copyright 2026, Met Office; CC BY-SA 4.0',
                 method='All 18 same-cycle members; arithmetic mean, population standard deviation (ddof=0), raw member fractions at >=0.1 mm/h over the preceding 3 hours. Missing/below-ground cells stay missing. No time-lagging or smoothing.',
                 grid_processing='Native latitude/longitude cells cropped without interpolation; rows 644:876, columns 404:769',
                 anomaly_reference=dict(dataset='NOAA NCEP/NCAR Reanalysis 1', period='1991-2020', statistic='daily mean', level_hPa=500, units='m', interpolation='Bilinear climatology to native forecast cells; Feb 29 averages Feb 28 and Mar 1'))

@@ -65,6 +65,13 @@ class GlobalMogrepsTests(unittest.TestCase):
         manifest['members']=list(range(18))
         with self.assertRaises(ValueError): b.validate_manifest(manifest)
 
+    def test_core_horizon_does_not_hide_pending_comparison_hours(self):
+        manifest=self.manifest()
+        records={h:list(b.INSTANT if h==0 else b.INSTANT+b.PERIOD) for h in manifest['leads']}
+        self.assertFalse(b.metadata(manifest,records)['completed'])
+        for h in records: records[h]+=b.COMPARISON
+        self.assertTrue(b.metadata(manifest,records)['completed'])
+
     def test_om_keeps_missing_temperature_and_probability_precision(self):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'frame.om'
