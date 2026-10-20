@@ -14,6 +14,7 @@ import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.j
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-native-levels';
 import {installDewPoint} from './map-dew-point.js';
+import {installSurfaceDerived} from './map-surface-derived.js';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
@@ -32,7 +33,7 @@ import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-unit
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261020-native-levels';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-panel-times';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261020-native-levels';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261020-ifs-coverage';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261019-mogreps-uk';
@@ -78,6 +79,7 @@ const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptio
 installRangeReads(OM,settings);
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);
+installSurfaceDerived(OM,settings);
 installDiagnostics(OM,settings);
 installVerticalMotion(OM,settings);
 installPrecipitationType(OM,settings);
@@ -744,7 +746,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261020-history-range4').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261020-ifs-coverage').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

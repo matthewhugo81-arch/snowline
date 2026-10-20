@@ -4,6 +4,7 @@ import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-co
 import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
+import {SURFACE_DERIVED_KEYS,surfaceDerivedVariable} from './map-surface-derived.js';
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {isJetWind,JET_WIND_SCALE,is850Temperature,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
@@ -14,7 +15,7 @@ export {JET_WIND_SCALE};
 // Scales follow the bundled Open-Meteo renderer; do not guess units for new keys.
 export const PRESSURE_LEVELS = [1000,975,950,925,900,875,850,825,800,775,750,725,700,675,650,625,600,575,550,525,500,475,450,425,400,375,350,325,300,275,250,225,200,175,150,125,100,70,50,40,30,20,15,10];
 // Availability comes from the selected run, not a curated pressure-level menu.
-const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Ensemble probabilities','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Ensemble probabilities','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Marine','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
 export const PRECIPITATION_SCALE = {
@@ -37,6 +38,8 @@ export function sourceVariable(meta,key){
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
+ if(SURFACE_DERIVED_KEYS.includes(key)&&!vars.includes(key))return surfaceDerivedVariable(meta,key);
+ if(key==='ocean_current_speed')return ['ocean_u_current','ocean_v_current'].every(k=>vars.includes(k))?'ocean_u_current':null;
  if(/^vertical_motion_\d+hPa$/.test(key))return pressureMotionVariable(meta,key);
  if(key===NATIVE_PRECIPITATION_TYPE)return typeMethod(meta)==='native'?NATIVE_TYPE_SOURCE:null;
  if(key===PRECIPITATION_TYPE)return canDerivePrecipitationType(meta)?PRECIPITATION_TYPE_SOURCE:null;
@@ -55,12 +58,14 @@ export function sourceVariable(meta,key){
  return vars.includes(key)?key:null;
 }
 export function canonicalVariable(key){
+ if(/^ocean_[uv]_current$/.test(key))return 'ocean_current_speed';
  if(/^vertical_velocity_\d+hPa$/.test(key))return key.replace('vertical_velocity_','vertical_motion_');
  if(/^wind_[uv]_component_/.test(key))return key.replace(/^wind_[uv]_component_/,'wind_speed_');
  if(key.startsWith('wind_direction_'))return key.replace('wind_direction_','wind_speed_');
  return key;
 }
 export function variableGroup(key){
+ if(/^ocean_|^sea_(ice|level|water)_/.test(key))return 'Marine';
  if(/^vertical_motion_\d+hPa$/.test(key))return 'Derived diagnostics';
  if(isTypeField(key)||key===THETA_SYMBOLS||key==='snowfall_probability')return 'Winter Analysis';
  if(accumulationHours(key))return 'Accumulated precipitation';
@@ -82,6 +87,7 @@ export function variableGroup(key){
 const hex=rgba=>'#'+rgba.slice(0,3).map(n=>Math.round(n).toString(16).padStart(2,'0')).join('')+Math.round((rgba[3]??1)*255).toString(16).padStart(2,'0');
 const plain=key=>key.replace(/_/g,' ').replace(/(\d)(cm|m)\b/g,'$1 $2').replace(/\bto\b/g,'–').replace(/^./,s=>s.toUpperCase());
 const extras={
+ relative_humidity_2m:['2 m relative humidity','relative','Near-surface relative humidity. For IFS 9 km, derived from native temperature and dew point in the same file using the provider’s Magnus formula.'],
  latent_heat_flux:['Surface latent heat flux','latent_heat_flux','Native surface latent heat flux in W/m², over the model reporting interval.'],
  sensible_heat_flux:['Surface sensible heat flux','sensible_heat_flux','Native surface sensible heat flux in W/m², over the model reporting interval.'],
  convective_cloud_base:['Convective cloud base','cloud_base','Native convective cloud-base height in metres.'],
@@ -111,6 +117,14 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ const additional={
+  snow_density:{name:'Snow density',unit:'kg/m³',stops:[0,50,100,150,200,300,400,500,700],colors:['#ffffff','#e4f3ff','#bfdef3','#92bce2','#7391ce','#7d66b3','#9a4194','#8a235e','#501337'],note:'Native density of the model snowpack. The model can retain a default density in snow-free cells; use with snow depth. This is not fresh-snow density or snowfall accumulation.'},
+  ocean_current_speed:{name:'Ocean current speed & direction',unit:'m/s',stops:[0,.1,.25,.5,.75,1,1.5,2,3],colors:['#ffffff','#c5e9f3','#7fcddd','#38a9bf','#2480b3','#345ca7','#69469e','#ac3d85','#e65b59'],note:'Ocean current magnitude from the native eastward and northward components. Arrows show flow direction. Ocean values only; missing land cells remain blank.'},
+  sea_ice_thickness:{name:'Sea-ice thickness',unit:'m',decimals:2,stops:[0,.1,.25,.5,1,2,3,5],colors:['#ffffff','#e3f2ff','#bedff4','#8bbde2','#6595ce','#6365b5','#694395','#502369'],note:'Native sea-ice thickness in metres. Missing land cells remain blank; zero means no model sea ice.'},
+  sea_level_height_msl:{name:'Sea-level height',unit:'m',decimals:2,contourValues:[-2,-1,-.5,-.2,0,.2,.5,1,2],stops:[-2,-1,-.5,-.2,0,.2,.5,1,2],colors:['#263582','#386bb0','#70acd0','#c6dfed','#ffffff','#f7d3b2','#eea16c','#cf5b3b','#8e2424'],note:'Native sea-level height in metres relative to the provider’s mean-sea-level reference. This is not a local tide-table height, storm-surge residual or coastal flood forecast.'},
+  sea_water_salinity:{name:'Sea-water salinity',unit:'g/kg',decimals:1,stops:[0,10,20,25,30,32,34,36,40],colors:['#eef8e8','#c6e6bc','#90d2bd','#57b9c6','#3193bd','#3472ad','#4e5498','#783c88','#9a2a69'],note:'Native sea-water salinity in g/kg. Missing land cells remain blank.'}
+ }[key];
+ if(additional)return {key,group:variableGroup(key),...additional};
  if(/^cloud_cover_\d+(hPa|m)$/.test(key))return {key,name:key.match(/\d+/)[0]+(key.endsWith('hPa')?' hPa':' m')+' cloud cover',group:'Cloud & visibility',unit:'%',...CLOUD_COVER_SCALE,note:'Native model cloud fraction at the stated level; pressure surfaces can lie below terrain.'};
  if(/^vertical_motion_\d+hPa$/.test(key))return pressureMotionField(key);
  if(key==='snowfall_probability')return {
@@ -181,6 +195,7 @@ export function extendCatalogue(fields,metas,OM,settings){
  if(metas.some(meta=>sourceVariable(meta,VERTICAL_MOTION)))keys.push(VERTICAL_MOTION);
  for(const key of ACCUMULATION_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of DIAGNOSTIC_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
+ for(const key of SURFACE_DERIVED_KEYS)if(!keys.includes(key)&&metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of [...TYPE_KEYS,THETA_SYMBOLS])if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  if(metas.some(meta=>sourceVariable(meta,'dew_point_2m'))&&!keys.includes('dew_point_2m'))keys.push('dew_point_2m');
  const omitted=[];

@@ -8,6 +8,7 @@ import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rolling-cache';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261020-native-levels';
 import {installDewPoint} from './map-dew-point.js';
+import {installSurfaceDerived} from './map-surface-derived.js';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-native-levels';
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
@@ -17,7 +18,7 @@ import {compositeSettings as briefingSettings,compositeUnderlay} from './map-wea
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
 import {fieldSource} from './map-sources.js?v=20261020-native-levels';
-import {sourceVariable} from './map-catalogue.js?v=20261020-native-levels';
+import {sourceVariable} from './map-catalogue.js?v=20261020-ifs-coverage';
 import {forecastInputWork} from './map-work-queue.js';
 import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261020-native-levels';
 export {briefingSettings};
@@ -43,6 +44,7 @@ export class BriefingRenderer{
   installDiagnostics(OM,this.settings);
   installVerticalMotion(OM,this.settings);
   installDewPoint(OM,this.settings);
+  installSurfaceDerived(OM,this.settings);
   installPrecipitationType(OM,this.settings);
   installPrecipitationRates(OM,this.settings);
   installEnsembleTransport(OM,this.settings);

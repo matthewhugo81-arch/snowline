@@ -5,10 +5,10 @@ import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriod
 import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261020-history-range4';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261019-mogreps-uk';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261019-coastline3';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261020-ifs-coverage';
 import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261019-mogreps-uk';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261020-native-levels';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261020-ifs-coverage';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {chartScales} from './map-image-export.js?v=20261019-mogreps-uk';
 

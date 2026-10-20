@@ -5,7 +5,7 @@ import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accum
 import {directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
 import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261020-native-levels';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261020-native-levels';
+import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261020-ifs-coverage';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 

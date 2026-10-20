@@ -33,7 +33,7 @@ test('calculated dew point is selectable and registers its own Celsius scale wit
  const field={key:'dew_point_2m',name:'2 m dew point',unit:'°C',stops:[-10,0,10],colors:['#0000ff','#ffffff','#ff0000']};
  const fields=[field],settings={colorScales:{temperature_2m:{unit:'°C',breakpoints:[1]}}};
  extendCatalogue(fields,[meta],OM,settings);
- assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['dew_point_2m']);
+ assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['dew_point_2m','relative_humidity_2m']);
  assert.deepEqual(settings.colorScales[DERIVED_DEW_POINT].breakpoints,field.stops);
  assert.deepEqual(settings.colorScales.temperature_2m.breakpoints,[1]);
  assert.deepEqual(availableFields(fields,[{...meta,variables:['temperature_2m']}]),[]);

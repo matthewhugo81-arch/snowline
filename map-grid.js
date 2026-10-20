@@ -45,7 +45,7 @@ export function gridValueLabel(value,field){
  if(field.categoryLabels)return field.categoryLabels[value]??null;
  if(field.key==='pressure_msl'&&value>2000)value/=100;
  value=displayValue(value,field);
- const digits=field.unit==='m snow'||field.unit==='m³/m³'?3:displayUnit(field)==='mph'?0:field.unit==='m/s'||(field.unit==='mm water'||field.unit==='mm/h')?1:0;
+ const digits=field.decimals??(field.unit==='m snow'||field.unit==='m³/m³'?3:displayUnit(field)==='mph'?0:field.unit==='m/s'||(field.unit==='mm water'||field.unit==='mm/h')?1:0);
  const rounded=Number(value.toFixed(digits));
  return Object.is(rounded,-0)?'0':String(rounded);
 }
