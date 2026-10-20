@@ -36,17 +36,22 @@ test('EC ensemble scalar wind reads preserve ranges and cancellation without a f
  }
 });
 
-test('companion MOGREPS winds remain scalar and use the binary-safe transport suffix',async()=>{
+test('companion and retained local MOGREPS winds remain scalar through current and archive transport',async()=>{
  const calls=[],reader={
   withReader(url,fn){calls.push(url);return fn({});},
   readSimpleVariable(file,key){return {key,directions:undefined};},
   readVariable(){throw Error('Must not request a fabricated direction field');}
  };
- installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{});
- const url='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/snowline_mogreps_global/run/frame.om';
- for(const key of ['wind_speed_300hPa_mean','wind_speed_200hPa_spread']){
-  assert.deepEqual(await reader.readVariable(url,key),{key,directions:undefined});
-  assert.equal(calls.pop(),url+'.png');
+ const base='https://matthewhugo81-arch.github.io/snowline/ensemble-data/';
+ installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{},base);
+ for(const prefix of [base,'https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/']){
+  for(const run of ['2026/10/20/0600Z','2026/10/20/0000Z']){
+   const url=prefix+'snowline_mogreps_global/'+run+'/2026-10-21T0000.om';
+   for(const key of ['wind_speed_300hPa_mean','wind_speed_300hPa_spread','wind_speed_200hPa_mean','wind_speed_200hPa_spread']){
+    assert.deepEqual(await reader.readVariable(url,key),{key,directions:undefined});
+    assert.equal(calls.pop(),url+'.png');
+   }
+  }
  }
 });
 

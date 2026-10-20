@@ -49,6 +49,26 @@ test('3-hour temperature line joins actual samples and breaks at a missing nativ
  const d=nativeSeriesPath(series,times,'temperature_850hPa',i=>i,v=>v);
  assert.equal(d,'M0.0,-0.5 L3.0,-0.5 M9.0,-0.5 ');
 });
+test('native MSLP uses all 18 hPa values at actual samples and never invents an hourly or partial-member mean',()=>{
+ const index={...manifest,variables:['temperature_850hPa','temperature_500hPa','precipitation','snowfall','pressure_msl']};
+ const raw=createMogrepsRaw(index),lead=3;
+ const payload={schema:1,run,time:run+lead*3600,intervalHours:3,members:manifest.members,
+  latitude:53.90625,longitude:-2.109375,units:{pressure_msl:'hPa'},values:{
+   temperature_850hPa:Array(18).fill(4),temperature_500hPa:Array(18).fill(-15),
+   precipitation:Array(18).fill(6),snowfall:Array(18).fill(.6),pressure_msl:manifest.members.map((_,i)=>990+i)}};
+ applyMogrepsStep(raw,index,payload,lead);
+ const point=mogrepsMean(raw,model);
+ assert.equal(valueAt(point,'pressure_msl',time(3)),998.5,'Already-hPa pressure is neither divided by 100 nor by 3');
+ assert.equal(valueAt(point,'pressure_msl',time(1)),null);
+ assert.equal(valueAt(point,'pressure_msl',time(2)),null);
+ assert.match(point.periodNote,/pressure at 3 h steps/);
+ raw.hourly.pressure_msl_member0[1]=null;
+ assert.equal(valueAt(mogrepsMean(raw,model),'pressure_msl',time(3)),null,'An 18-member mean cannot use only 17 members');
+ applyMogrepsStep(raw,index,{...payload,units:{pressure_msl:'Pa'}},lead);
+ assert.equal(valueAt(mogrepsMean(raw,model),'pressure_msl',time(3)),null,'Unverified pressure units stay missing');
+ assert.equal(valueAt(mogrepsMean(raw,model),'temperature_850hPa',time(3)),4,'Invalid optional pressure does not discard temperature');
+ assert.deepEqual(mogrepsMean(raw,model).missingVariables,['pressure_msl']);
+});
 test('point loader dispatches MOGREPS independently and cancellation emits nothing stale',async()=>{
  const loaded=[],location={latitude:52,longitude:1};let calls=0;
  await loadPointForecasts(location,{models:[model],load:()=>{throw Error('Must not use Open-Meteo');},loadMogreps:async(l,m)=>{assert.deepEqual(l,location);calls++;return mogrepsMean(rawPoint(),m);},onModel:m=>loaded.push(m)});

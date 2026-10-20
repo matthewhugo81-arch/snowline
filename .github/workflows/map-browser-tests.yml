@@ -2,11 +2,16 @@ name: Map playback browser tests
 on:
   push:
     branches: [main]
-    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/map-test-hook.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
   pull_request:
     branches: [main]
-    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/map-test-hook.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      revision:
+        required: true
+        type: string
 permissions:
   contents: read
 # Only supersede older runs of these tests on the same ref, never feed or publish jobs.
@@ -19,6 +24,8 @@ jobs:
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

@@ -4,6 +4,7 @@ import {createServer} from 'node:http';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve,extname,sep} from 'node:path';
 import assert from 'node:assert/strict';
+import {injectMapTestHook} from './map-test-hook.mjs';
 import {chromium} from 'playwright';
 const root=process.cwd(),outputs=resolve(process.env.SNOWLINE_TEST_OUTPUT??'review-output/vertical-motion');await mkdir(outputs,{recursive:true});
 const types={'.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.html':'text/html','.json':'application/json','.geojson':'application/json','.wasm':'application/wasm'};
@@ -12,7 +13,7 @@ const origin=process.env.SNOWLINE_LIVE_URL||'http://127.0.0.1:'+server.address()
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--enable-unsafe-swiftshader','--use-angle=swiftshader']});
 const page=await browser.newPage({viewport:{width:1500,height:1050},deviceScaleFactor:1});let errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(()=>{localStorage.setItem('snowline-terrain','false');localStorage.setItem('snowline-background','light');});
-await page.route('**/maps.js*',async route=>{const body=process.env.SNOWLINE_LIVE_URL?(await route.fetch()).text():readFile(resolve(root,'maps.js'),'utf8');await route.fulfill({contentType:'text/javascript',body:await body+'\nwindow.verticalTest={panels,state,fields,settings,OM,readMapValue,concreteURL};'});});
+await page.route('**/maps.js*',async route=>{const body=process.env.SNOWLINE_LIVE_URL?(await route.fetch()).text():readFile(resolve(root,'maps.js'),'utf8');await route.fulfill({contentType:'text/javascript',body:injectMapTestHook(await body,'window.verticalTest={panels,state,fields,settings,OM,readMapValue,concreteURL};')});});
 const pair=process.env.SNOWLINE_TEST_PAIR?.split(',')??['gfs_global','ecmwf_ifs025'];
 const report={origin,models:[],errors};
 async function ready(model){await page.waitForFunction(model=>{const x=window.verticalTest,p=x?.panels.a;return p?.loaded&&p.displayedField==='vertical_motion_700hPa'&&p.displayedModel===model&&p.displayedTime===x.state.times[x.state.index];},model,{timeout:90000});}

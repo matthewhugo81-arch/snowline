@@ -12,7 +12,7 @@ import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-ens-loading';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-audit-reliability';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
@@ -47,6 +47,8 @@ import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261020
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
+import {createMapSafely,waitForMapStyle,renderMapStartupFailure,runMapStartup} from './map-startup.js?v=20261020-audit-reliability';
+await runMapStartup(async()=>{
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
@@ -162,7 +164,13 @@ if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isF
 function modelName(id){return MODELS.find(m=>m.id===sourceModel(id))?.name??id;}
 function panelRunLabel(model){return modelName(model)+' · '+runLabel(state.metas[model])+(state.metas[model]?.completed===false?' · updating':'');}
 function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · '+forecastValidity(field,time);}
-function status(message){$('map-status').textContent=message;}
+function mapUnavailable(){return document.body.dataset.mapState==='unavailable';}
+function status(message){if(!mapUnavailable())$('map-status').textContent=message;}
+function failMap(error){
+ pauseAnimation();++timeGeneration;++state.generation;viewportRefresh.cancel();outlineWait?.abort();
+ for(const panel of Object.values(panels)){panel.frameCache?.clear();panel.loaded=false;}
+ renderMapStartupFailure(document,error);
+}
 function usageUpdate(){$('usage-summary').textContent=usageText();}window.addEventListener('snowline-usage',usageUpdate);usageUpdate();
 const modelGroups=[
  ['Short-term models',MODELS.filter(model=>model.regional&&!model.ensemble)],
@@ -178,19 +186,20 @@ for(const id of ['map-model','map-model-b','map-model-c']){
 }
 $('map-model').value=sourceModel(state.model);$('map-model-b').value=sourceModel(state.modelB);$('map-model-c').value=sourceModel(state.modelC);
 function makeMap(key){
- const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false});
+ const map=createMapSafely(()=>new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false}));
  map.touchZoomRotate.disableRotation();
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');fitArea(map);
- const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',event=>{if(briefingActive||event.snowlineLayoutResize)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive||event.snowlineLayoutResize)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});
+ const styleWait=new AbortController(),ready=waitForMapStyle(map,{signal:styleWait.signal});ready.catch(()=>{});
+ const panel={key,map,background,ready,styleWait,url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',event=>{if(briefingActive||event.snowlineLayoutResize)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive||event.snowlineLayoutResize)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});
  // Geography starts with the map, independently of model metadata or frames.
  panel.coastline=coastlineController(map,{onState:()=>queueMicrotask(()=>updateOutlineStatus(panel))});
  // One resize owner avoids duplicate movement events invalidating the buffer.
  let pixelRatio=map.getPixelRatio();
  panel.resize=({layoutOnly=false}={})=>{if(briefingActive)return;const container=map.getContainer(),canvas=map.getCanvas(),ratio=map.getPixelRatio();if(container.clientWidth!==canvas.clientWidth||container.clientHeight!==canvas.clientHeight||pixelRatio!==ratio){pixelRatio=ratio;map.resize(layoutOnly?{snowlineLayoutResize:true}:undefined);if(layoutOnly)scheduleGridValues(panel);}};
  new ResizeObserver(panel.resize).observe($('map-'+key));window.addEventListener('resize',panel.resize);
- map.on('style.load',()=>{panel.styleOrdered=false;applyMapAppearance(map,{roads,terrain});if(panel.restyling){panel.restyling=false;panel.sourceId=null;if(panelVisible(key)&&panelSelections(state).every(({key})=>!panels[key]?.restyling))void restoreMapFrame();}});
+ map.on('style.load',()=>{if(mapUnavailable())return;panel.styleOrdered=false;applyMapAppearance(map,{roads,terrain});if(panel.restyling){panel.restyling=false;panel.sourceId=null;if(panelVisible(key)&&panelSelections(state).every(({key})=>!panels[key]?.restyling))void restoreMapFrame();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
- map.on('sourcedata',event=>{if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded&&panel.coastline.isReady()){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
+ map.on('sourcedata',event=>{if(mapUnavailable())return;if(event.sourceId===panel.sourceId&&event.isSourceLoaded&&panel.frameCache?.current?.loaded&&panel.coastline.isReady()){panel.loaded=true;status('Click a map for a value and local charts.');scheduleGridValues(panel);}});
  map.on('click',async event=>{if(!panel.loaded||panel.displayedTime!==state.times[state.index])return;dismissLocation();const latitude=Number(event.lngLat.lat.toFixed(5)),longitude=Number(event.lngLat.lng.toFixed(5));state.location={latitude,longitude};const div=document.createElement('div');const title=document.createElement('strong');title.textContent=`${Math.abs(latitude).toFixed(3)}° ${latitude<0?'S':'N'}, ${Math.abs(longitude).toFixed(3)}° ${longitude<0?'W':'E'}`;div.append(title);const value=document.createElement('p');value.textContent='Reading model value…';div.append(value);const link=document.createElement('a');const selectedTime=state.times[state.index]??'';const pointParams=new URLSearchParams({lat:latitude.toFixed(5),lon:longitude.toFixed(5),time:selectedTime});link.href='./?'+pointParams;link.textContent='Open location charts';div.append(link);$('nav-charts').href=link.href;const eventButton=document.createElement('button');eventButton.type='button';eventButton.className='event-link';eventButton.textContent='Analyse an event here';eventButton.addEventListener('click',()=>{selectEventPoint({latitude,longitude},selectedTime);$('event-analysis').scrollIntoView({behavior:'smooth',block:'start'});$('event-start').focus({preventScroll:true});});div.append(eventButton);locationMarker=new maplibregl.Marker({color:'#007e84'}).setLngLat(event.lngLat).addTo(map);
 const popup=new maplibregl.Popup({closeButton:true,closeOnClick:false,offset:30}).setLngLat(event.lngLat).setDOMContent(div).addTo(map);
 locationPopup=popup;popup.on('close',()=>{if(locationPopup===popup)dismissLocation();});try{const result=panel.loaded?await readMapValue(latitude,longitude,panel.url,map.getZoom()):null;const field=fields.find(f=>f.key===panel.displayedField);value.textContent=result&&finite(result.value)?`${field.categoryLabels?(gridValueLabel(result.value,field)??'Unresolved')+' · '+(field.key===NATIVE_PRECIPITATION_TYPE?'native valid-time type':'estimated interval type'):displayValue(result.value,field).toFixed(1)+' '+displayUnit(field)} · ${modelName(panelSelection(state,key).model)}`:'No value available here for this layer.';}catch{value.textContent='No value available here for this layer.';}});
@@ -316,6 +325,7 @@ function frameBudget(){
  return {loop:true,direction:navigationDirection,...(state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2})};
 }
 function updatePreloadStatus(){
+ if(mapUnavailable())return;
  const choices=panelSelections(state),total=choices.reduce((sum,{model,field})=>sum+state.times.filter(time=>hasFieldTime(state.metas[model],field,time)).length,0);
  let loaded=0,failed=0;
  for(const {key}of choices){const panel=panels[key];for(const url of panel?.frameURLs??[]){if(panel.frameCache?.preloaded.has(url))loaded++;else if(panel.frameCache?.failures.has(url))failed++;}}
@@ -389,9 +399,9 @@ async function prepareSelection(index,valid=()=>true){
  if(prepared.some(item=>!item))return null;
  return valid()?prepared:null;
 }
-function setTime(){arrowNavigation.cancel();outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
+function setTime(){if(mapUnavailable())return Promise.resolve();arrowNavigation.cancel();outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
 function stepTime(direction){
- if(!state.times.length)return;
+ if(mapUnavailable()||!state.times.length)return;
  const shown=playing?state.times.indexOf(panels.a?.displayedTime):-1;
  const from=shown>=0?shown:state.index,index=Math.max(0,Math.min(from+direction,state.times.length-1));
  if(index===from)return;
@@ -664,6 +674,7 @@ async function refreshLiveRuns(){
 }
 
 async function configure(force=false){
+ if(mapUnavailable())return;
  failedSelection=null;
  pauseAnimation();++timeGeneration;
  state.times=[];state.index=0;
@@ -748,10 +759,12 @@ async function changeComparison(){
   if(!visible){panels[key]?.frameCache?.clear();if(panels[key])clearGridValues(panels[key]);}
  }
  for(const {key} of panelSelections(state)){panels[key].map.resize();fitArea(panels[key].map);}
+ await Promise.all(panelSelections(state).map(({key})=>panels[key].ready));
  await configure();
 }
-$('compare-maps').addEventListener('change',changeComparison);
-$('map-comparison-count').addEventListener('change',changeComparison);
+const changeComparisonSafely=()=>void changeComparison().catch(failMap);
+$('compare-maps').addEventListener('change',changeComparisonSafely);
+$('map-comparison-count').addEventListener('change',changeComparisonSafely);
 for(const key of ['a','b','c']){
  for(const [control,setting]of [['contours','contours'],['mslp','isobars']]){
   $('map-'+control+'-'+key).addEventListener('change',event=>{pauseAnimation();state.overlays[key][setting]=event.target.checked;setTime();});
@@ -764,7 +777,7 @@ function restyleMaps(){
  const changed=Object.values(panels).filter(panel=>panel.background!==background);
  if(!changed.length)return false;
  pauseAnimation();++timeGeneration;$('animation-status').textContent='Loading map background…';
- for(const panel of changed){clearGridValues(panel);panel.background=background;panel.restyling=true;panel.loaded=false;panel.version++;panel.frameCache?.clear();panel.frameCache=null;panel.frames=new Map();panel.map.setStyle(backgroundStyle(background));}
+ for(const panel of changed){clearGridValues(panel);panel.background=background;panel.restyling=true;panel.loaded=false;panel.version++;panel.frameCache?.clear();panel.frameCache=null;panel.frames=new Map();panel.styleWait.abort();panel.styleWait=new AbortController();try{panel.map.setStyle(backgroundStyle(background));panel.ready=waitForMapStyle(panel.map,{signal:panel.styleWait.signal});void panel.ready.catch(error=>{if(error.name!=='AbortError')failMap(error);});}catch(error){failMap(error);return false;}}
  return true;
 }
 function selectBackground(value){background=value;$('map-background').value=value;try{localStorage.setItem('snowline-background',background);}catch{}if(!briefingActive)restyleMaps();}
@@ -861,8 +874,11 @@ $('open-briefing').addEventListener('click',openBriefing);$('mobile-briefing').a
 $('briefing-loading-close').addEventListener('click',closeBriefing);
 // Prepare the optional view when the user approaches either button.
 for(const id of ['open-briefing','mobile-briefing'])for(const event of ['pointerenter','focus'])$(id).addEventListener(event,()=>{void loadBriefing().catch(()=>{});});
+// SNOWLINE_BROWSER_TEST_HOOK
+await Promise.all(Object.values(panels).map(panel=>panel.ready));
 await configure();
 let liveRunTimer=setInterval(refreshLiveRuns,60000);
 window.addEventListener('pagehide',()=>clearInterval(liveRunTimer));
 window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(liveRunTimer);liveRunTimer=setInterval(refreshLiveRuns,60000);refreshLiveRuns();}});
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'select_event_location',title:'Prepare an event analysis at a location',description:'Select latitude and longitude for the visible event analysis form. Does not calculate a hazard or fetch point forecasts; use the visible Calculate event action afterwards.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');state.location={latitude:input.latitude,longitude:input.longitude};selectEventPoint(state.location,state.times[state.index]);$('event-analysis').scrollIntoView({block:'start'});return {location:state.location,eventStartUTC:$('event-start').value+'Z',eventEndUTC:$('event-end').value+'Z',calculated:false};}},{signal:lifecycle.signal});}catch(error){console.info('Optional map tool unavailable:',error.message);}}
+});

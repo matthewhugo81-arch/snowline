@@ -1,0 +1,45 @@
+name: Pages package preflight
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/assemble_pages.py'
+      - 'scripts/pages_release.py'
+      - 'tests/test_pages*.py'
+      - '.github/workflows/publish-maps.yml'
+      - '.github/workflows/pages-package-check.yml'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check assembly and release decisions offline
+        run: python -m unittest discover -s tests -p 'test_pages*.py'
+      # Restore only: this read-only PR check never downloads new model runs,
+      # changes the publication cache, uploads a Pages artifact or deploys.
+      - uses: actions/cache/restore@v4
+        id: grids
+        with:
+          path: ensemble-data
+          key: ensemble-grids-v1-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ensemble-grids-v1-
+      - uses: actions/cache/restore@v4
+        id: points
+        with:
+          path: point-data
+          key: point-forecasts-v1-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: point-forecasts-v1-
+      - name: Assemble the proposed application with the last cached forecasts
+        if: steps.grids.outputs.cache-matched-key != '' && steps.points.outputs.cache-matched-key != ''
+        run: python scripts/assemble_pages.py
+      - name: Measure actual unpacked site size before release
+        if: steps.grids.outputs.cache-matched-key != '' && steps.points.outputs.cache-matched-key != ''
+        run: python scripts/pages_release.py prepare --revision "$GITHUB_SHA"
+      - name: Explain a missing conversion cache
+        if: steps.grids.outputs.cache-matched-key == '' || steps.points.outputs.cache-matched-key == ''
+        run: |
+          echo '::warning::A publication cache was unavailable. Offline regression checks passed, but actual package size must be checked by the publisher before deployment.'
+          echo '## Package size not measured: cached forecasts unavailable' >> "$GITHUB_STEP_SUMMARY"

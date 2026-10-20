@@ -4,6 +4,7 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {resolve,extname,sep} from 'node:path';
 import assert from 'node:assert/strict';
+import {injectMapTestHook} from './map-test-hook.mjs';
 import {chromium} from 'playwright';
 const root=process.cwd(),types={'.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.html':'text/html','.json':'application/json','.geojson':'application/json','.wasm':'application/wasm'};
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!path.startsWith(root+sep))throw Error('Invalid path');const data=await readFile(path);res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(data);}catch{res.writeHead(404);res.end();}});
@@ -52,6 +53,34 @@ const fakeOM=`
 const geo={type:'FeatureCollection',features:[]};
 const style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'background',type:'background',paint:{'background-color':'#ffffff'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222222'}}]};
 try{
+ // Exercise the actual MapLibre constructor on a browser without WebGL. The
+ // page must settle visibly and retain a working escape to location charts.
+ const unavailable=await browser.newPage({viewport:{width:1280,height:900}}),startupErrors=[];
+ try{
+  unavailable.on('pageerror',error=>startupErrors.push(error.message));
+  await unavailable.addInitScript(()=>{
+   const getContext=HTMLCanvasElement.prototype.getContext;
+   HTMLCanvasElement.prototype.getContext=function(type,...args){return /webgl/i.test(type)?null:getContext.call(this,type,...args);};
+  });
+  await unavailable.route('https://**',route=>route.abort());
+  await unavailable.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
+  // This local static-file test server serves maps.html directly; provide its
+  // directory index for the recovery-link navigation without starting forecasts.
+  await unavailable.route(origin+'/',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Location charts</title><main>Location charts</main>'}));
+  await unavailable.goto(origin+'/maps.html');
+  const failure=unavailable.locator('#map-startup-error');await failure.waitFor({state:'visible',timeout:10000});
+  assert.equal(await failure.getAttribute('role'),'alert');
+  assert.match(await failure.innerText(),/hardware acceleration and WebGL/);
+  for(const id of ['map-time-label','panel-label-a','animation-status','preload-status','run-update-status','map-start-time'])assert.doesNotMatch(await unavailable.locator('#'+id).innerText(),/Loading|Checking/);
+  assert.equal(await unavailable.locator('#play-map').isDisabled(),true);
+  assert.equal(await unavailable.locator('#map-model').isDisabled(),true);
+  assert.equal(await unavailable.locator('#nav-charts').getAttribute('href'),'./');
+  assert.deepEqual(startupErrors,[],'WebGL failure must be caught by the startup boundary');
+  await failure.getByRole('link',{name:'Open location charts',exact:true}).click();
+  await unavailable.waitForURL(origin+'/');
+  assert.equal(await unavailable.title(),'Location charts');
+  console.log(JSON.stringify({webglUnavailable:true,visibleRecovery:true,passed:true}));
+ }finally{await unavailable.close();}
  for(const viewport of [{width:1280,height:900},{width:390,height:844}]){
   const page=await browser.newPage({viewport,deviceScaleFactor:1});const errors=[];
   let releaseBriefing,briefingRequests=0;
@@ -71,7 +100,7 @@ try{
    window.setInterval=(callback,delay,...args)=>{if(delay===60000){window.fixtureRefreshers.push(callback);return 0;}return original(callback,delay,...args);};
   });
   await page.route('**/vendor/index.mjs*',route=>route.fulfill({contentType:'text/javascript',body:fakeOM}));
-  await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:(await readFile(resolve(root,'maps.js'),'utf8'))+'\nwindow.fixturePanel=panels.a;window.fixturePanels=panels;window.fixtureImageryCache=imageryCache;'}));
+  await page.route('**/maps.js*',async route=>route.fulfill({contentType:'text/javascript',body:injectMapTestHook(await readFile(resolve(root,'maps.js'),'utf8'),'window.fixturePanel=panels.a;window.fixturePanels=panels;window.fixtureImageryCache=imageryCache;')}));
   await page.route('**/map-tile-cache.js*',async route=>{
    const code=await readFile(resolve(root,'map-tile-cache.js'),'utf8');
    // Exercise restoration from disk, not only the hot memory cache.

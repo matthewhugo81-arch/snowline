@@ -29,14 +29,15 @@ def run():
         css=re.sub(r"@import[^\n]*\n", '', (ROOT/'styles.css').read_text(encoding='utf-8')) + (ROOT/'chart-zoom.css').read_text(encoding='utf-8')
         page.set_content(html)
         page.add_style_tag(content=css)
-        sources={name:(ROOT/name).read_text(encoding='utf-8') for name in ['app.js','data.js','average.js','cache.js','point-forecasts.js','mogreps-point.js','mogreps-client.js','forecast-service.js','point-snapshots.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js','chart-panels.js','chart-image-export.js']}
+        sources={name:(ROOT/name).read_text(encoding='utf-8') for name in ['app.js','data.js','average.js','cache.js','point-forecasts.js','mogreps-point.js','mogreps-client.js','mogreps-transport.js','forecast-service.js','point-snapshots.js','export.js','dataset-dialog.js','chart-window.js','chart-zoom.js','chart-panels.js','chart-image-export.js']}
         sources['app.js'] += '\nwindow.__inspectionMilliseconds=[];const measuredInspection=renderInspection;renderInspection=function(){const start=performance.now();try{return measuredInspection();}finally{window.__inspectionMilliseconds.push(performance.now()-start);}};'
         page.evaluate(r'''async (sources)=>{
           Date.now=()=>Date.UTC(2026,9,12,19);
           window.__forecastRequests=[];
+          let holdNative=true;window.__releaseNative=null;
           window.fetch=async url=>{
             // Native-source outage is intentional in this shared-cache regression fixture.
-            if(url.includes('/mogreps/latest.json')) return new Response('{}',{status:503});
+            if(url.includes('/mogreps/latest.json')) {if(holdNative)await new Promise(resolve=>window.__releaseNative=()=>{holdNative=false;resolve();});return new Response('{}',{status:503});}
             if(url.includes('/v1/elevation?')) return new Response(JSON.stringify({elevation:[200]}));
             if(!url.startsWith('https://snowline-forecast-cache.matthewhugo81.workers.dev/forecast?')) throw Error('Unexpected external request: '+url);
             window.__forecastRequests.push(url);
@@ -60,7 +61,14 @@ def run():
           }
           await import(moduleURL('app.js'));
         }''',sources)
+        page.wait_for_function("document.querySelectorAll('.plot svg').length === 15 && typeof window.__releaseNative === 'function'")
+        check('Stop loading stays available while the native feed is pending',page.locator('#stop-loading').is_visible() and page.locator('#refresh').is_disabled())
+        page.locator('#stop-loading').click()
+        check('Stopping preserves received charts and restores Refresh',page.locator('.plot svg').count()==15 and page.locator('#refresh').is_enabled() and 'Loading stopped' in page.locator('#status').inner_text())
+        page.evaluate('window.__releaseNative()')
+        page.locator('#refresh').click()
         page.wait_for_function("document.querySelector('#refresh').disabled === false && document.querySelectorAll('.plot svg').length === 15")
+        check('Refresh recovers after cancellation without repeating cached forecasts','Loading stopped' not in page.locator('#status').inner_text() and page.locator('#stop-loading').is_hidden())
         check('All fourteen variable charts and agreement chart load', page.locator('.plot svg').count()==15)
         check('Direction plots hourly dots without connecting paths',page.locator('#plot-wind_direction_10m .direction-dot').count()>100 and page.locator('#plot-wind_direction_10m path').count()==0)
         check('Direction compass runs north clockwise to north',page.locator('#plot-wind_direction_10m text').all_text_contents()[:9]==['N','NE','E','SE','S','SW','W','NW','N'])

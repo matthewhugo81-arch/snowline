@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Avoid checking data while the publisher is rebuilding it
+      - name: Defer generated-feed recovery while the publisher is rebuilding it
         id: publisher
         env:
           GH_TOKEN: ${{ github.token }}
@@ -31,7 +31,7 @@ jobs:
           active=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" --jq '[.workflow_runs[] | select(.name == "Publish Snowline and ensemble maps" and .status != "completed")] | length')
           if [ "$active" -gt 0 ]; then
             echo 'skip=true' >> "$GITHUB_OUTPUT"
-            echo '::notice::Publisher is still running; health will be checked after publication completes.'
+            echo '::notice::Publisher is still running; generated-feed recovery checks will wait. Native feed health will still run.'
           fi
       - name: Check all five generated feeds, later hours, archives and publication age
         id: ensembles
@@ -60,9 +60,26 @@ jobs:
             gh workflow run publish-maps.yml --repo "$GITHUB_REPOSITORY" --ref main
             echo 'Requested publication for a missing run/hour, archive repair or overdue source check.'
           fi
-      - name: Check all offered models, including ensemble binary transport
-        if: steps.publisher.outputs.skip != 'true'
-        run: node scripts/check_map_feeds.mjs health-output/map-feeds.json
+      # The prefix intentionally excludes the commit SHA. Code deployments must
+      # not reset an ongoing incident or repeat its failure notification.
+      - name: Restore map feed incident history
+        id: feed-state
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: .health-state/
+          key: snowline-map-feed-health-state-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: snowline-map-feed-health-state-v1-
+      - name: Check all offered models, transport and persistent initialization age
+        if: always()
+        run: node scripts/check_map_feeds.mjs health-output/map-feeds.json --state .health-state/map-feed-state.json
+      - name: Save map feed incident history, including new failures
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .health-state/
+          key: snowline-map-feed-health-state-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Report official-source failures or missing cycles
         if: always() && steps.publisher.outputs.skip != 'true'
         run: |
@@ -105,7 +122,7 @@ jobs:
               raise SystemExit('; '.join(problems))
           PY
       - uses: actions/upload-artifact@v4
-        if: always() && steps.publisher.outputs.skip != 'true'
+        if: always()
         with:
           name: map-feed-health
           path: health-output/
