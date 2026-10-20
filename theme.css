@@ -75,7 +75,7 @@
 :root[data-theme="dark"] :is(.forecast-table caption, .forecast-table tbody th) { background:var(--surface); }
 :root[data-theme="dark"] :is(.forecast-table thead th, .forecast-table .average-column, .map-start-controls, .mobile-map-toolbar) { background:var(--surface-raised); }
 :root[data-theme="dark"] #status.error { color:#ffab9f; }
-:root[data-theme="dark"] :is(.map-panel-label, .zoom-readout, .grid-note) { background:#142437f0; color:var(--ink); border-color:var(--line); }
+:root[data-theme="dark"] :is(.map-panel-label, .grid-note) { background:#142437f0; color:var(--ink); border-color:var(--line); }
 :root[data-theme="dark"] .map-error { background:#3c2d20; color:#f3cf98; border-color:#84613c; }
 :root[data-theme="dark"] .map-canvas { background:var(--surface-raised); }
 :root[data-theme="dark"] #mobile-return-map { background:#31556e; color:#f4f8fc; border-color:#526f87; }

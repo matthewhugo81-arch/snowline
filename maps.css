@@ -88,7 +88,6 @@
 .maplibregl-ctrl button{padding:0}
 .maplibregl-ctrl-attrib-button{background-color:white}
 .maplibregl-canvas:focus-visible{outline:3px solid #007e84;outline-offset:-3px}
-.zoom-readout{position:absolute;left:8px;bottom:30px;background:#fffe;color:#102235;padding:3px 5px;font-size:10px;border-radius:3px;pointer-events:none;z-index:2}
 .event-analysis{background:white;border:1px solid var(--line);border-radius:10px;padding:24px;margin-top:20px}
 .event-analysis[hidden]{display:none}
 .event-analysis form{display:flex;gap:15px;flex-wrap:wrap;align-items:end}

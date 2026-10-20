@@ -656,7 +656,7 @@ try{
    await page.waitForFunction(()=>document.getElementById('animation-status').textContent.startsWith('Ready'));
    await page.evaluate(()=>window.fixtureDelay=80);
    assert.equal(await page.locator('.map-error:visible').count(),0);
-   assert.notEqual(await page.locator('#zoom-a').textContent(),await page.locator('#zoom-b').textContent());
+   assert.notEqual(await page.evaluate(()=>window.fixturePanels.a.map.getZoom().toFixed(1)),await page.evaluate(()=>window.fixturePanels.b.map.getZoom().toFixed(1)));
    await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:60000});
    const cachedGFSRequests=await page.evaluate(()=>window.fixtureRequests.length);
    for(const [index,time]of [[1,'Sat 10 Oct, 01:00 UTC'],[48,'Mon 12 Oct, 00:00 UTC'],[17,'Sat 10 Oct, 17:00 UTC']]){
