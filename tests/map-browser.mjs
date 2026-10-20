@@ -848,7 +848,7 @@ try{
    await page.locator('#map-model').selectOption('ecmwf_ifs');
    await page.waitForFunction(()=>document.querySelector('#map-variable option[value="temperature_2m_max"]'));
    const pressureKeys=await page.locator('#map-variable option').evaluateAll(options=>options.map(o=>o.value).filter(k=>/^(temperature|wind_speed|relative_humidity|geopotential_height)_\d+hPa$/.test(k)));
-   assert.deepEqual(pressureKeys,['temperature_1000hPa','temperature_850hPa','temperature_500hPa','temperature_250hPa','wind_speed_1000hPa','wind_speed_500hPa','wind_speed_300hPa','wind_speed_200hPa','relative_humidity_1000hPa','relative_humidity_700hPa','relative_humidity_300hPa','geopotential_height_500hPa','geopotential_height_300hPa','geopotential_height_200hPa']);
+   assert.deepEqual(pressureKeys,['temperature','wind_speed','relative_humidity','geopotential_height'].flatMap(kind=>[1000,925,850,700,500,400,300,250,200,100,50,10].map(level=>kind+'_'+level+'hPa')),'Every pressure level supplied by the fixture is available for comparison');
    for(const statistic of ['max','min']){
     await page.locator('#map-variable').selectOption('temperature_2m_'+statistic);
     await page.waitForFunction(word=>document.getElementById('panel-label-a').textContent.includes(word),statistic==='max'?'maximum':'minimum');

@@ -20,6 +20,8 @@ def configure():
     fields = [(f'{kind}_{level}hPa', SPECS[kind]) for kind, levels in LEVELS.items() for level in levels]
     native.CONFIG['gem'] = {
         **native.CONFIG['gem'], 'domain': 'snowline_gem_upper',
+        # Upper pressure levels switch to six-hourly after T+168.
+        'forecast_hours': list(range(0,169,3))+list(range(174,241,6)),
         'method':'Native regional subset; temperature converted K to °C, height in m, relative humidity in %, earth-relative wind components in m/s.',
         'fields': [key for key, _ in fields],
         'variables': [spec[0] for _, spec in fields],

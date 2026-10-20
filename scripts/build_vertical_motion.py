@@ -57,7 +57,7 @@ def fetch(url):
 
 def expected_hours(model,run):
  # GDPS pressure-level omega is three-hourly even while surface files are hourly.
- if model=='gem': return list(range(0,241,3))
+ if model=='gem': return CONFIG[model].get('forecast_hours',list(range(0,241,3)))
  return list(range(79))+list(range(81,121,3)) if run.hour%6==0 else list(range(31))+[36,42,48]
 
 class Source:

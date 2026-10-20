@@ -94,6 +94,14 @@ class VerticalMotionTests(unittest.TestCase):
   self.assertEqual(len(b.expected_hours('icon-eu',RUN)),93)
   self.assertEqual(b.expected_hours('icon-eu',RUN+timedelta(hours=3))[-4:],[30,36,42,48])
 
+ def test_upper_gem_cadence_matches_available_high_level_files(self):
+  import build_gem_upper as upper
+  with patch.dict(b.CONFIG, {'gem': dict(b.CONFIG['gem'])}):
+   upper.configure()
+   hours=b.expected_hours('gem',RUN)
+   self.assertEqual(len(hours),69)
+   self.assertEqual(hours[-13:],[168,174,180,186,192,198,204,210,216,222,228,234,240])
+
  def test_partial_archive_survives_a_later_source_outage(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder)
