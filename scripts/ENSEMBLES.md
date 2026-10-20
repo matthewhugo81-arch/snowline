@@ -123,3 +123,53 @@ and serve `.om.png` paths from their matching `.om` files with `image/png` MIME.
 `--hours` is only for a scratch validation output and must not be used for the
 production deployment. The browser renderer, comparison, contours, grid values
 and full-forecast tile cache all use the same OM paths as other model layers.
+
+### Compact ensemble reads (20 October 2026)
+
+The core GEFS/ECMWF statistical files, their extra-field bundles and MOGREPS-G
+use a separate 64 KiB native block cache, bounded to 16 MiB. The general spatial
+reader retains its existing 256 KiB blocks and 32 MiB limit. These compact
+ensemble files otherwise fetched large blocks of unrelated fields when reading
+the file directory and a small regional grid. The smaller blocks apply at both
+Snowline publication origins; other feeds, including native HGEFS and
+MOGREPS-UK, retain their existing transport. File URLs, run identities, native
+grid cells, statistics and rendering are unchanged. Existing rendered tiles
+remain reusable, so this transport update does not discard the image cache.
+
+Cold native reads of 500 hPa height mean plus MSLP mean were compared using the
+bundled decoder and the same published file/cells for each pair:
+
+| Model and extent | Previous bytes (KiB) | New bytes (KiB) |
+| --- | ---: | ---: |
+| GEFS, UK | 512 | 256 |
+| GEFS, North Atlantic | 512 | 256 |
+| ECMWF ENS, UK | 768 | 320 |
+| ECMWF ENS, North Atlantic | 768 | 384 |
+| MOGREPS-G, UK | 768 | 256 |
+| MOGREPS-G, North Atlantic | 768 | 256 |
+
+SHA-256 checks of the decoded arrays matched before and after the change for
+all six comparisons. Repeating the same reads through the new cache required
+no further network requests. These are transfer-size measurements from the
+20 October samples, not guaranteed wall-clock speedups: some fields use more,
+smaller HTTP requests. The 64 KiB choice balances transfer size against request
+latency; 32 KiB added further round trips in the ECMWF comparisons.
+
+`tests/ensemble-transport.test.mjs` covers source/run isolation, the unchanged
+normal-model cache, concurrent ENS/native reads, callbacks, cancellation and
+errors. Browser performance checks must retain the real OM transport: the
+general map-control browser fixture substitutes synthetic weather data and
+therefore cannot establish real ENS loading throughput.
+
+Live Chromium comparisons used fresh contexts, the same published run and view,
+and an override of this transport module only (terrain disabled). Initial 2 m
+mean/MSLP transfers fell from 708,118 to 315,098 bytes for GEFS 20 October 12Z,
+and from 787,423 to 328,668 bytes for ECMWF ENS 20 October 00Z. In a GEFS 500 hPa
+North Atlantic ten-second sample, 22 versus 24 of 105 frames were prepared while
+cumulative native transfers fell from 13,850,081 to 7,789,228 bytes. ECMWF
+background throughput remained around 10–11 frames per ten seconds; this is a
+download-efficiency improvement, not a promise of instantly loading a full run.
+Cached returns made no new native requests for the revisited forecast. Desktop
+and 390 × 844 mobile checks retained geography, contours and correct run/valid
+labels without JavaScript errors. Network/CDN caching and software rendering
+affect elapsed-time comparisons, so the byte reductions are the stronger result.

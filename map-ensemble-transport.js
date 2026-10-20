@@ -10,7 +10,21 @@ export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-da
  if(installed.has(reader))return;
  installed.add(reader);
  const original=reader.withReader.bind(reader);
- reader.withReader=(url,callback)=>original(own(url)&&url.endsWith('.om')?url+'.png':url,callback);
+ // These compact statistical files store their directory at the end. A
+ // 256 KiB read for that small directory also downloads unrelated fields;
+ // the next native-grid read can waste another block. Keep the normal large
+ // model cache unchanged and use smaller, bounded blocks for measured ENS
+ // feeds. Both caches retain the renderer's URL/version-aware block keys.
+ const compact=/^(?:snowline_gefs_ensemble|snowline_ecmwf_ensemble|snowline_gefs_extra_v2|snowline_ecmwf_extra_v2|snowline_mogreps_global)\//;
+ const pool=reader.backendPool;
+ const ensembleCache=OM.LruBlockCache&&typeof pool?.withReader==='function'?new OM.LruBlockCache(64*1024,256):null;
+ reader.withReader=(url,callback)=>{
+  const path=url.startsWith(base)?url.slice(base.length):url.startsWith(companion)?url.slice(companion.length):null;
+  const binary=own(url)&&url.endsWith('.om')?url+'.png':url;
+  return ensembleCache&&path&&compact.test(path)&&/\.om(?:\.png)?$/.test(url)
+   ?pool.withReader(binary,ensembleCache,callback)
+   :original(binary,callback);
+ };
  // Ensemble scalar speeds and their spread have no direction. Bypass the
  // general speed/direction pairing only for these verified companion fields.
  // Prefetch already tolerates absent secondary variables and warms the speed.

@@ -49,3 +49,55 @@ test('companion MOGREPS winds remain scalar and use the binary-safe transport su
   assert.equal(calls.pop(),url+'.png');
  }
 });
+
+test('compact ENS reads retain exact file identity and share a bounded cache without changing other feeds',async()=>{
+ const calls=[],caches=[],normalCache={name:'native-model-cache'},base='https://site.test/ensemble-data/';
+ const companion='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/';
+ const reader={cache:normalCache,
+  withReader(url,callback){calls.push({url,cache:this.cache});return callback(url);},
+  backendPool:{withReader(url,cache,callback){calls.push({url,cache});return callback(url);}}
+ };
+ const OM={getProtocolInstance:()=>({omFileReader:reader}),LruBlockCache:class{constructor(size,count){this.size=size;this.count=count;caches.push(this);}}};
+ installEnsembleTransport(OM,{},base);installEnsembleTransport(OM,{},base);
+ assert.equal(caches.length,1);assert.equal(caches[0].size,65536);assert.ok(caches[0].size*caches[0].count<=16*1024*1024);
+ for(const prefix of [base,companion])for(const domain of ['snowline_gefs_ensemble','snowline_ecmwf_ensemble','snowline_gefs_extra_v2','snowline_ecmwf_extra_v2','snowline_mogreps_global']){
+  for(const run of ['0000Z','1200Z']){
+   const url=prefix+domain+'/2026/10/20/'+run+'/2026-10-21T0000.om';
+   assert.equal(await reader.withReader(url,value=>value),url+'.png');
+   assert.deepEqual(calls.pop(),{url:url+'.png',cache:caches[0]});
+  }
+ }
+ for(const [url,transport] of [
+  [base+'snowline_mogreps_uk/run/frame.om',base+'snowline_mogreps_uk/run/frame.om.png'],
+  [base+'snowline_gem_upper/run/frame.om',base+'snowline_gem_upper/run/frame.om.png'],
+  [base+'snowline_gefs_ensemble_other/run/frame.om',base+'snowline_gefs_ensemble_other/run/frame.om.png'],
+  [base+'snowline_gefs_ensemble/latest.json',base+'snowline_gefs_ensemble/latest.json'],
+  ['https://other.test/snowline_gefs_ensemble/frame.om','https://other.test/snowline_gefs_ensemble/frame.om'],
+  ['https://openmeteo.s3.amazonaws.com/data_spatial/ncep_gfs013/frame.om','https://openmeteo.s3.amazonaws.com/data_spatial/ncep_gfs013/frame.om']
+ ]){
+  assert.equal(await reader.withReader(url,value=>value),transport);
+  assert.deepEqual(calls.pop(),{url:transport,cache:normalCache});
+ }
+ assert.equal(reader.cache,normalCache);
+});
+
+test('overlapping ENS and native reads keep their own caches and preserve scalar cancellation/errors',async()=>{
+ const base='https://site.test/ensemble-data/',normalCache={},calls=[];let release;
+ const normalFile={},ensFile={};
+ const reader={cache:normalCache,
+  withReader(url,callback){calls.push({url,cache:this.cache});return callback(normalFile);},
+  backendPool:{withReader(url,cache,callback){calls.push({url,cache});return callback(ensFile);}},
+  readSimpleVariable(file,key,ranges,signal){assert.equal(file,ensFile);return new Promise((resolve,reject)=>{
+   release=()=>resolve({key,ranges});signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+  });},
+  readVariable(){assert.fail('The ensemble scalar must not read a direction');}
+ };
+ const OM={getProtocolInstance:()=>({omFileReader:reader}),LruBlockCache:class{}};
+ installEnsembleTransport(OM,{},base);
+ const controller=new AbortController(),ranges=[{start:1,end:3},{start:2,end:4}];
+ const pending=reader.readVariable(base+'snowline_ecmwf_extra_v2/run/frame.om','wind_speed_850hPa_mean',ranges,controller.signal);
+ assert.equal(await reader.withReader('https://native.test/frame.om',file=>file),normalFile);
+ assert.equal(calls[1].cache,normalCache);assert.notEqual(calls[0].cache,normalCache);assert.equal(reader.cache,normalCache);
+ const rejected=assert.rejects(pending,{name:'AbortError'});controller.abort();await rejected;release();
+ await assert.rejects(reader.withReader(base+'snowline_gefs_ensemble/run/frame.om',async()=>{throw Error('Native read failed');}),/Native read failed/);
+});
