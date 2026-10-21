@@ -41,6 +41,35 @@ test('formats the initialization date and cycle in UTC, not the forecast valid t
   assert.equal(formatModelRun(run('2026-01-01T00:30:00+01:00')), '31 Dec · 2330Z');
 });
 
+test('completed-only labels ignore incoming and pinned older runs, then advance on completion', async t => {
+ let meta=run('2026-10-21T06:00:00Z');
+ const {menu,root,first}=setup(t,{completedOnly:(_model,m)=>m?.completed===true,loadModel:async()=>meta});
+ await menu.refresh();
+ assert.equal(first(),'IFS 9 km (21 Oct · 06Z)');
+ const selected=root.elements['map-model-b'].value;
+ meta=run('2026-10-21T12:00:00Z',false);
+ await menu.refresh();
+ root.emit('snowline-model-run-verified',{detail:{model:ifs.id,meta}});
+ assert.equal(first(),'IFS 9 km (21 Oct · 06Z)');
+ meta={...meta,completed:true,publicationStatus:{label:'check overdue'}};
+ root.emit('snowline-model-run-verified',{detail:{model:ifs.id,meta}});
+ assert.equal(first(),'IFS 9 km (21 Oct · 12Z)');
+ root.emit('snowline-model-run-verified',{detail:{model:ifs.id,meta:run('2026-10-21T00:00:00Z')}});
+ assert.equal(first(),'IFS 9 km (21 Oct · 12Z)');
+ assert.equal(root.elements['map-model-b'].value,selected);
+ assert.match(root.elements['map-model'].options[0].title,/use Run · UTC/);
+});
+
+test('completed-only menus never advertise an incoming run when no complete run is verified',async t=>{
+ let completed=false;
+ const {menu,first}=setup(t,{completedOnly:(_model,m)=>m?.completed===true,
+  loadModel:async()=>run('2026-10-21T12:00:00Z',completed)});
+ await menu.refresh();
+ assert.equal(first(),'IFS 9 km (no completed run verified)');
+ completed=true;await menu.refresh();
+ assert.equal(first(),'IFS 9 km (21 Oct · 12Z)');
+});
+
 test('never invents a cycle from missing or malformed metadata', () => {
   for (const meta of [null, {}, {reference_time: null}, {reference_time: 0}, {reference_time: 'invalid'}]) {
     assert.equal(formatModelRun(meta), null);
