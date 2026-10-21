@@ -22,6 +22,7 @@ from omfiles import OmFileWriter
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from ensemble_height_anomaly import ANOMALY, REFERENCE, add_anomalies
 
 VERSION = 1
 FIELDS = {
@@ -258,7 +259,10 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=128, *, ar
     for offset in range(1 if archive else 8):
         candidate = run - timedelta(hours=offset * config['cycle'])
         if (previous and previous.get('format_version') == VERSION and iso(candidate) == previous['reference_time']
-                and previous.get('variables') == VARIABLES and len(previous.get('valid_times', [])) == len(config['hours'])
+                and set(VARIABLES).issubset(previous.get('variables', []))
+                and previous.get('anomaly_reference') == REFERENCE
+                and previous.get('variable_valid_times', {}).get(ANOMALY) == previous.get('valid_times')
+                and len(previous.get('valid_times', [])) == len(config['hours'])
                 and all(frame_path(root, config['domain'], datetime.fromisoformat(previous['reference_time']), h).exists() for h in config['hours'])):
             print(f'{model}: latest run already prepared ({previous["reference_time"]})', flush=True)
             return previous
@@ -309,6 +313,7 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=128, *, ar
             return previous
         raise ValueError('No verified ensemble frames could be prepared')
     prepared = [h for h, _ in paths]
+    anomaly_hours = add_anomalies(paths, source.run, config['step'], VARIABLES)
     preceding = (previous['reference_time'] if previous['reference_time'] != iso(source.run)
                  else previous.get('previous_reference_time')) if previous else None
     meta = dict(format_version=VERSION, reference_time=iso(source.run), completed=prepared == config['hours'],
@@ -317,6 +322,11 @@ def build_model(model, root, now, workers, hours=None, max_new_frames=128, *, ar
                 generated_at=iso(datetime.now(timezone.utc) if archive else now), source='NOAA GEFS' if model == 'gefs' else 'ECMWF IFS ENS',
                 grid_resolution=config['step'], statistic='Ensemble mean and standard deviation',
                 source_url='https://www.nco.ncep.noaa.gov/pmb/products/gens/' if model == 'gefs' else 'https://www.ecmwf.int/en/forecasts/datasets/open-data')
+    if anomaly_hours:
+        meta['variables'] = VARIABLES + [ANOMALY]
+        meta['anomaly_reference'] = REFERENCE
+        meta['variable_valid_times'] = {key: meta['valid_times'] for key in VARIABLES}
+        meta['variable_valid_times'][ANOMALY] = [iso(source.run + timedelta(hours=h)) for h in anomaly_hours]
     if preceding:
         meta['previous_reference_time'] = preceding
     text = json.dumps(meta, indent=2) + '\n'
