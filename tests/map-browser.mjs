@@ -608,6 +608,7 @@ try{
    await page.waitForFunction(()=>document.getElementById('grid-note-a').textContent.includes('precipitation · mm/h'));
    await page.locator('#map-grid-a').uncheck();
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
+   await page.waitForFunction(()=>!document.getElementById('map-variable-b').disabled&&document.getElementById('panel-label-b').textContent.includes('Cloud, precipitation & MSLP')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#map-variable-b').inputValue(),composite,'New comparison panels start with the combined weather chart');
    await page.locator('#map-variable-b').selectOption('precipitation',{force:true});
    await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Precipitation')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
