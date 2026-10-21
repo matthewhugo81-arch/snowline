@@ -14,11 +14,11 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
-def semantic_json(value):
+def semantic_json(value, ignored=('generated_at',)):
     if isinstance(value, dict):
-        return {k: semantic_json(v) for k, v in value.items() if k != 'generated_at'}
+        return {k: semantic_json(v, ignored) for k, v in value.items() if k not in ignored}
     if isinstance(value, list):
-        return [semantic_json(v) for v in value]
+        return [semantic_json(v, ignored) for v in value]
     return value
 
 
@@ -43,8 +43,9 @@ def inventory(root):
         if relative == 'ensemble-data/health.json':
             continue
         digest.update(relative.encode() + b'\0')
-        if relative.startswith('ensemble-data/') and path.suffix == '.json':
-            digest.update(json.dumps(semantic_json(json.loads(path.read_text())), sort_keys=True, separators=(',', ':')).encode())
+        if relative.startswith(('ensemble-data/', 'mogreps/')) and path.suffix == '.json':
+            ignored = ('generated_at', 'generated') if relative.startswith('mogreps/') else ('generated_at',)
+            digest.update(json.dumps(semantic_json(json.loads(path.read_text()), ignored), sort_keys=True, separators=(',', ':')).encode())
         else:
             with path.open('rb') as stream:
                 for block in iter(lambda: stream.read(1024 * 1024), b''):
