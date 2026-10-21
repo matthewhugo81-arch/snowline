@@ -3,10 +3,10 @@ on:
   workflow_call:
   push:
     branches: [main]
-    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/map-interactions-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
   pull_request:
     branches: [main]
-    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
+    paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/map-interactions-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,6 +35,8 @@ jobs:
         run: node tests/run-selector-browser.mjs
       - name: Check three-model comparison, twelve-hour steps and sidebar collapse
         run: MAP_THREE_PANELS_ONLY=1 node tests/map-browser.mjs
+      - name: Check pan reuse, 143-frame loading and independent model, run and rainfall panels
+        run: node tests/map-interactions-browser.mjs
       - name: Check desktop and phone controls with delayed synthetic weather transport
         run: node tests/map-browser.mjs
       - name: Check chart styles and image exports

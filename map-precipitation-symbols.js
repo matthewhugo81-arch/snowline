@@ -26,7 +26,6 @@ export function precipitationSymbols(values,hours,recipe){
  return Number.isFinite(category)?[glyph(categoryKind[category]??'other',amount)]:[];
 }
 const latAt=(pixel,world)=>Math.atan(Math.sinh(Math.PI*(1-2*pixel/world)))*180/Math.PI;
-const pixelAtLat=(lat,world)=>(1-Math.asinh(Math.tan(Math.max(-85.05112878,Math.min(85.05112878,lat))*Math.PI/180))/Math.PI)/2*world;
 // Keep the original global 16 px lattice and nearest-native-cell sampling.
 // A larger halo covers both glyph overhang and all direct collision neighbours.
 export async function precipitationSymbolProtocol(params,controller,OM,settings){
@@ -39,11 +38,9 @@ export async function precipitationSymbolProtocol(params,controller,OM,settings)
  const {domain,hours}=precipitationFileInfo(file),config=settings.domainOptions.find(d=>d.value===domain)?.grid;if(!config)throw Error('Unknown symbol grid.');
  const left=tx*512,top=ty*512,halo=SYMBOL_HALO;
  const bounds=[(left-halo)/world*360-180,latAt(top+512+halo,world),(left+512+halo)/world*360-180,latAt(top-halo,world)];
- const native=OM.GridFactory.create(config).getBounds(),view=OM.currentBounds;
- // Pad the viewport in projected pixels too; a fixed half-degree pad can omit
- // collision neighbours at low zoom, producing tile-edge differences on pan.
- const expandedView=view?[view[0]-halo/world*360,latAt(pixelAtLat(view[1],world)+halo,world),view[2]+halo/world*360,latAt(pixelAtLat(view[3],world)-halo,world)]:bounds;
- const clip=[Math.max(bounds[0],native[0],expandedView[0]),Math.max(bounds[1],native[1],expandedView[1]),Math.min(bounds[2],native[2],expandedView[2]),Math.min(bounds[3],native[3],expandedView[3])];
+ const native=OM.GridFactory.create(config).getBounds();
+ // Tile and collision halo are stable across panels and camera movements.
+ const clip=[Math.max(bounds[0],native[0]),Math.max(bounds[1],native[1]),Math.min(bounds[2],native[2]),Math.min(bounds[3],native[3])];
  const canvas=new OffscreenCanvas(512,512),ctx=canvas.getContext('2d');
  if(clip[0]<clip[2]&&clip[1]<clip[3]){
   const ranges=OM.getRanges(config,clip),grid=OM.GridFactory.create(config,ranges),reader=OM.getProtocolInstance(settings).omFileReader,arrays={};

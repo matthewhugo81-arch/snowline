@@ -20,12 +20,12 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,preci
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261020-layout-playback';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261020-rapid-navigation';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261020-selection-priority';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-stable-tiles';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261021-stable-tiles';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
-import {createViewRefresh,layoutForecastBounds} from './map-view-refresh.js?v=20261020-layout-playback';
+import {createViewRefresh,layoutForecastBounds,forecastViewKey} from './map-view-refresh.js?v=20261021-stable-tiles';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-run-selector';
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
@@ -36,7 +36,7 @@ import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-run
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261020-compact-controls';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
-import * as OM from './vendor/index.mjs?v=20261018-rates';
+import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261020-run-selector';
 import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261021-run-menu';
@@ -47,7 +47,7 @@ import {isJetWind,is850Temperature,temperatureContourLevels,isSurfaceWind,SURFAC
 import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261020-ifs-coverage';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261014-interaction-audit';
-import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
+import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261021-stable-tiles';
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
@@ -101,7 +101,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
  }
  return result;
 },{persistent:true,onLimit:()=>updatePreloadStatus()});
-imageryCache.setContext(JSON.stringify(UK));
+imageryCache.setContext('complete-geographic-tiles');
 maplibregl.addProtocol('om',(params,controller)=>imageryCache.protocol(params,controller));
 window.addEventListener('pagehide',()=>imageryCache.release());
 window.addEventListener('pageshow',event=>{if(event.persisted){imageryCache.context=null;viewportBounds();for(const panel of Object.values(panels))panel.frameCache?.suspend();setTime();}});
@@ -144,12 +144,10 @@ function viewportBounds(){
  }));
  const bounds=[Math.min(...boundsByPanel.map(b=>b[0])),Math.min(...boundsByPanel.map(b=>b[1])),Math.max(...boundsByPanel.map(b=>b[2])),Math.max(...boundsByPanel.map(b=>b[3]))];
  OM.updateCurrentBounds(bounds);
- // Renderer clipping depends on the view as well as the URL/zoom. Never reuse a
- // partially clipped tile in a different view, even if its tile coordinates match.
- if(imageryCache.setContext(JSON.stringify(OM.currentBounds??bounds))){
-  for(const panel of Object.values(panels))panel.frameCache?.invalidateView();
-  updatePreloadStatus();
- }
+ // Pixels depend on run/style/tile coordinates, never a shared viewport.
+ // Keep this bound only for point/grid-value reads.
+ imageryCache.setContext('complete-geographic-tiles');
+ for(const [,panel]of visible)panel.frameCache?.setView(forecastViewKey(panel.map));
 }
 let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:'temperature_2m',field:'temperature_2m',fieldB:'precipitation',interval:null,times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
@@ -186,7 +184,7 @@ function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false});
  map.touchZoomRotate.disableRotation();
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');fitArea(map);
- const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',event=>{if(briefingActive||event.snowlineLayoutResize)return;++timeGeneration;panel.frameCache?.invalidateView();viewportBounds();scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive||event.snowlineLayoutResize)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;for(const item of Object.values(panels))item.frameCache?.suspend();clearGridValues(panel);});
+ const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',event=>{if(briefingActive||event.snowlineLayoutResize)return;++timeGeneration;viewportBounds();scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive||event.snowlineLayoutResize)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;panel.frameCache?.moveStart();clearGridValues(panel);});
  // Geography starts with the map, independently of model metadata or frames.
  panel.coastline=coastlineController(map,{onState:()=>queueMicrotask(()=>updateOutlineStatus(panel))});
  // One resize owner avoids duplicate movement events invalidating the buffer.
@@ -334,7 +332,7 @@ function updatePreloadStatus(){
  const outlineFailed=choices.some(({key})=>panels[key]?.coastline.state.status==='error');
  $('retry-preload').hidden=!failedSelection&&!outlineFailed&&(!failed||imageryCache.limited);
  $('retry-preload').textContent=outlineFailed||failedSelection?.outline?'Retry map outline':failedSelection?'Retry selected frame':'Retry background loading';
- if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(complete?'all frames loaded':loaded+'/'+total+' frames loaded');
+ if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?'storage limited; selected and nearby frames available':complete?'all frames loaded':loaded+'/'+total+' frames loaded');
 }
 function orderForecastBasemap(panel){
  if(panel.styleOrdered)return;
@@ -368,7 +366,7 @@ function panelCache(panel,model,field){
  panel.cacheTimes=state.times;panel.cacheMeta=meta;panel.frameDescriptors=descriptors;
  const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.symbolURL?[symbolOverlay(descriptor.symbolURL)]:[]),...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
  panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
- panel.frames=panel.frameCache.frames;return panel.frameCache;
+ panel.frameCache.setView(forecastViewKey(panel.map));panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
  if(panel.restyling||!panel.frameCache)return;
@@ -386,6 +384,10 @@ async function prepareSelection(index,valid=()=>true){
  imageryCache.setForeground(choices.flatMap(({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
   return url?[url,...cache.decorate(url).map(group=>group.source.url)]:[];
+ }));
+ imageryCache.setSequence(choices.flatMap(({key})=>{
+  const panel=panels[key],cache=panel.frameCache;
+  return panel.frameURLs.filter(Boolean).flatMap(url=>[url,...cache.decorate(url).map(group=>group.source.url)]);
  }));
  const prepared=await Promise.all(choices.map(async({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
@@ -482,6 +484,8 @@ async function loadTime(outlineSignal){
   pauseAnimation();
   for(const {key}of panelSelections(state)){
    const panel=panels[key];
+   const selected=panelSelection(state,key);
+   if(!error.outline&&panel.loaded&&panel.displayedTime===time&&panel.displayedModel===selected.model&&panel.displayedField===selected.field)continue;
    $('map-error-'+key).textContent=error.outline?'The map outline could not load. Use Retry map outline to restore the coastline.':panel.loaded&&panel.displayedTime?'Unable to load the requested frame. Showing the forecast labelled '+stamp(panel.displayedTime)+' UTC. Retry or choose another time.':'Unable to load this forecast frame. Retry or check latest runs.';
    $('map-error-'+key).hidden=false;
   }
@@ -593,8 +597,8 @@ function setLegend(){
  }
  for(const {key,field}of panelSelections(state))$('map-contours-'+key).disabled=!!fields.find(f=>f.key===field)?.categorical;
 }
-function populateVariables(){
- for(const {key,model,field} of panelSelections(state)){
+function populateVariables(onlyKey){
+ for(const {key,model,field} of panelSelections(state).filter(item=>!onlyKey||item.key===onlyKey)){
   const available=availableFields(fields,[state.metas[model]]),select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
   for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
   if(state.metas[model]?.variables.includes('precipitation')){
@@ -714,13 +718,44 @@ async function configure(force=false){
  }catch(error){if(generation===state.generation){state.times=[];refreshStartingTime('Forecast unavailable');for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
  finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;$('map-variable-c').disabled=!state.fieldC;}}
 }
+// A panel selection resolves independently. Keep the shared timeline and the
+// other panels' sources, labels and prepared frames throughout the request.
+async function configurePanel(key,model,follow){
+ const panel=panels[key],suffix=key==='a'?'':'-'+key,property='model'+(key==='a'?'':key.toUpperCase());
+ const selection=panel.selectionGeneration=(panel.selectionGeneration??0)+1;
+ pauseAnimation();++timeGeneration;++state.generation;panel.configuring=true;
+ $('reload-maps').disabled=true;$('map-variable'+suffix).disabled=true;$('map-run'+suffix).disabled=true;
+ failedSelection=null;
+ $('animation-status').textContent='Checking Panel '+(['a','b','c'].indexOf(key)+1)+' model run…';
+ status($('animation-status').textContent);
+ try{
+  const result=await mapRunCatalogue.select(follow?sourceModel(model):model,metadataLoader(false));
+  if(selection!==panel.selectionGeneration)return;
+  requestedTime=Date.parse(state.times[state.index])||requestedTime;
+  state[property]=result.key;followLatest[key]=follow;
+  state.metas={...state.metas,[result.key]:result.meta};
+  $('map-model'+suffix).value=sourceModel(result.key);
+  updateRunMenus([result]);extendCatalogue(fields,[result.meta],OM,settings);populateVariables(key);
+  document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(result.key),meta:result.latest}}));
+  showRunUpdates();refreshTimeline();await setTime();
+ }catch(error){
+  if(selection!==panel.selectionGeneration)return;
+  $('map-model'+suffix).value=sourceModel(state[property]);
+  $('map-run'+suffix).value=state[property];
+  $('map-error-'+key).textContent='Unable to change this panel: '+error.message;
+  $('map-error-'+key).hidden=false;status(error.message);
+  $('animation-status').textContent='Unable to change this panel';
+ }finally{
+  if(selection===panel.selectionGeneration){
+   panel.configuring=false;$('map-variable'+suffix).disabled=!panelSelection(state,key).field;$('map-run'+suffix).disabled=false;
+   $('reload-maps').disabled=Object.values(panels).some(p=>p.configuring);
+  }
+ }
+}
 for(const [key,property]of [['a','model'],['b','modelB'],['c','modelC']]){
  const suffix=key==='a'?'':'-'+key;
- $('map-model'+suffix).addEventListener('change',e=>{state[property]=e.target.value;followLatest[key]=true;configure();});
- $('map-run'+suffix).addEventListener('change',e=>{
-  requestedTime=Date.parse(state.times[state.index])||requestedTime;
-  state[property]=e.target.value;followLatest[key]=e.target.value===e.target.dataset.preferredRun;configure();
- });
+ $('map-model'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,true));
+ $('map-run'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,e.target.value===e.target.dataset.preferredRun));
 }
 for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
  pauseAnimation();failedSelection=null;state[property]=e.target.value;

@@ -17,3 +17,10 @@ export function layoutForecastBounds(map,{width,height}){
  const eastNorth=map.unproject([cx+halfWidth,cy-halfHeight]);
  return [westSouth.lng,westSouth.lat,eastNorth.lng,eastNorth.lat];
 }
+
+// MapLibre requests whole raster/vector tiles. A small drag inside the same
+// tile coverage needs no new sequence; newly exposed tiles belong to this map.
+export function forecastViewKey(map){
+ return JSON.stringify([true,false].map(roundZoom=>map.coveringTiles({tileSize:512,minzoom:0,maxzoom:10,roundZoom,reparseOverscaled:!roundZoom})
+  .map(({canonical:{x,y,z}})=>`${z}/${x}/${y}`).sort()));
+}
