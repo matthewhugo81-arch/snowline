@@ -19,7 +19,7 @@ export function modelOptionLabel(model, result) {
   return `${model.name} (${label})`;
 }
 
-export function installModelRunMenu({models, loadModel, loadJSON, root = document, refreshMs = 60000, concurrency = 3, showRuns = true}) {
+export function installModelRunMenu({models, loadModel, loadJSON, root = document, refreshMs = 60000, concurrency = 3, showRuns = true, completedOnly = null}) {
   const selects = new Set();
   const knownModels = new Map(models.map(model => [model.id, model]));
   const results = new Map();
@@ -46,11 +46,13 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
         if (!model) continue;
         const result = results.get(model.id);
         if(model.id===UKV_PREVIOUS)option.disabled=!result?.meta;
-        const text = showRuns||select.id==='previous-model'?modelOptionLabel(model,result):model.name;
+        const completeLabel = `${model.name} (${formatModelRun(result?.meta) ?? (result?.error ? 'no completed run verified' : 'checking…')})`;
+        const text = completedOnly ? completeLabel : showRuns||select.id==='previous-model'?modelOptionLabel(model,result):model.name;
         if (option.textContent !== text) option.textContent = text;
         const run = formatModelRun(result?.meta);
         option.title = run
-          ? `Published initialization (UTC): ${new Date(result.meta.reference_time).toISOString()}.` +
+          ? (completedOnly ? 'Newest verified completed run; use Run · UTC to choose the displayed run. ' : '') +
+            `Published initialization (UTC): ${new Date(result.meta.reference_time).toISOString()}.` +
             (result.error ? ' Latest-run check failed; showing the last verified initialization.' :
               result.meta.completed === false ? ' Forecast hours are still arriving.' : '') +
             (result.meta.sourceWarnings?.length ? ' ' + result.meta.sourceWarnings.join(' ') : '')
@@ -79,6 +81,7 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
         try {
           const incoming = await loadModel(model.id, load);
           if (!formatModelRun(incoming)) throw new Error('No verified initialization in model metadata');
+          if (completedOnly && !completedOnly(model.id, incoming)) throw new Error('No completed run could be verified');
           const previous = results.get(model.id)?.meta;
           const older = previous && Date.parse(incoming.reference_time) < Date.parse(previous.reference_time);
           let meta = older ? previous : incoming;
@@ -126,6 +129,7 @@ export function installModelRunMenu({models, loadModel, loadJSON, root = documen
   const verifiedRun = event => {
     const {model, meta} = event.detail ?? {};
     if (!knownModels.has(model) || !formatModelRun(meta)) return;
+    if (completedOnly && !completedOnly(model, meta)) return;
     const previous = results.get(model)?.meta;
     if (previous && Date.parse(meta.reference_time) < Date.parse(previous.reference_time)) return;
     const value = previous?.completed === true && Date.parse(meta.reference_time) === Date.parse(previous.reference_time)

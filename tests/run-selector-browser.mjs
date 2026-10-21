@@ -56,6 +56,10 @@ try{
    const ready=()=>page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid')&&document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:45000});
    const tick=()=>page.evaluate(async()=>{window.fixtureClock+=61000;sessionStorage.setItem('fixture-clock',String(window.fixtureClock));await Promise.all(window.fixtureRefreshers.map(fn=>fn()));});
    const selectRun=async(selector,h)=>{await page.locator(selector).selectOption(choice(id,h));await ready();};
+   const assertCompletedLabel=async(selector,h)=>{
+    const suffix='(20 Oct · '+String(h).padStart(2,'0')+'Z)';
+    await page.waitForFunction(({selector,suffix})=>document.querySelector(selector)?.selectedOptions[0]?.textContent.endsWith(suffix),{selector,suffix},{timeout:15000});
+   };
    const assertRunOptions=async(selector,hours,selected,preferred)=>{
     const result=await page.locator(selector).evaluate(select=>({value:select.value,preferred:select.dataset.preferredRun,options:[...select.options].map(option=>({value:option.value,text:option.textContent}))}));
     const expected=hours.map(hour=>({value:choice(id,hour),text:'20 Oct · '+String(hour).padStart(2,'0')+'Z · '+(runs.get(hour).completed?'Complete':'Updating')+(hour===newestHour?' · newest':'')}));
@@ -85,6 +89,7 @@ try{
     await page.goto('http://127.0.0.1:'+server.address().port+'/maps.html?model='+id+'&time='+ref(8));await ready();
     assert.equal(await page.locator('#map-model').inputValue(),id);
     await assertRunOptions('#map-run',[6,0],0,0);
+    await assertCompletedLabel('#map-model',0);
     await assertMapRun('a',0);
     assert.equal(await page.locator('#map-model option[value="ukmo_uk_deterministic_2km"]').count(),1);
     assert.equal(await page.locator('#map-model option[value$="_previous"]').count(),0);
@@ -92,6 +97,7 @@ try{
     publish(6,false,12);await tick();await ready();await assertMapRun('a',0);
     await assertRunOptions('#map-run',[6,0],0,0);
     await selectRun('#map-run',6);assert.match(await page.locator('#panel-label-a').textContent(),/0600Z · updating/);
+    await assertCompletedLabel('#map-model',0);
     publish(6,false,16);await tick();await ready();await assertRunOptions('#map-run',[6,0],6,0);
     assert.ok(Number(await page.locator('#map-time').getAttribute('max'))>=5);
     await selectRun('#map-run',0);await assertMapRun('a',0);
@@ -112,6 +118,7 @@ try{
     // selecting the now-older 00Z deliberately pins only this comparison panel.
     await selectRun('#map-run-b',0);await assertRunOptions('#map-run-b',[6,0],0,6);
     await assertMapRun('a',6);await assertMapRun('b',0);
+    await assertCompletedLabel('#map-model',6);await assertCompletedLabel('#map-model-b',6);
     await page.locator('#map-start-time').selectOption(ref(24));await ready();
     publish(12,false,5);await tick();await ready();await assertMapRun('a',6);await assertMapRun('b',0);
     await assertRunOptions('#map-run',[12,6],6,6);await assertRunOptions('#map-run-b',[12,6,0],0,6);
