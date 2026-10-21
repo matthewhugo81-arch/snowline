@@ -828,6 +828,10 @@ try{
    assert.equal(await page.locator('#map-forecast-interval').inputValue(),'3');
    assert.equal(await page.locator('#map-forecast-interval').isDisabled(),false);
    assert.equal(await page.locator('#map-time').getAttribute('max'),'16','Instantaneous companion retains initialization beside the 16 interval-field frames');
+   // Playback may have reached 03 UTC before the earlier pause click. Select
+   // initialization explicitly before checking its deliberately absent interval.
+   await page.locator('#map-start-time').selectOption('2026-10-10T00:00:00.000Z');
+   await page.waitForFunction(()=>document.getElementById('map-time').value==='0'&&document.getElementById('legend-interval-a').textContent==='Period unavailable'&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    assert.equal(await page.locator('#legend-interval-a').textContent(),'Period unavailable','Initialization has no snowfall interval');
    await page.locator('#map-start-time').selectOption('2026-10-10T03:00:00.000Z');
    await bothAt('Sat 10 Oct, 03:00 UTC');
