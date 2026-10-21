@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {MODELS,valueAt,agreement,forecastURL} from '../data.js';
 import {mogrepsMean,nativeSeriesPath} from '../mogreps-point.js';
 import {loadPointForecasts} from '../point-forecasts.js';
-import {createMogrepsRaw,applyMogrepsStep} from '../mogreps-client.js';
+import {createMogrepsRaw,applyMogrepsStep,mogrepsDisplayLead} from '../mogreps-client.js';
 import {MAP_MODELS} from '../map-models.js';
 import {MOGREPS_GLOBAL,MOGREPS_GLOBAL_DOMAIN,MOGREPS_GLOBAL_FIELDS,MOGREPS_GLOBAL_PERIOD_FIELDS,verifiedMogrepsGlobal} from '../map-mogreps-global.js';
 import {loadSpatialModel,loadSpatialRun,fieldDataURL,fieldIntervalHours} from '../map-sources.js';
@@ -15,6 +15,12 @@ const model=MODELS.find(m=>m.api==='mogreps');
 const run=Date.UTC(2026,9,19,6)/1000;
 const time=h=>new Date((run+h*3600)*1000).toISOString().replace('.000Z','Z');
 const manifest={schema:1,run,runId:'20261019T0600Z',intervalHours:3,members:[0,...Array.from({length:17},(_,i)=>18+i)],leads:Array.from({length:83},(_,i)=>3*i)};
+test('a seven-day point request includes the age of the model cycle',()=>{
+ assert.equal(mogrepsDisplayLead(run,168,run*1000),168);
+ assert.equal(mogrepsDisplayLead(run,168,(run+13*3600)*1000),183);
+ assert.equal(mogrepsDisplayLead(run,168,(run+72*3600)*1000),240);
+ assert.equal(mogrepsDisplayLead(run,246,(run+13*3600)*1000),246);
+});
 function rawPoint(){
  const raw=createMogrepsRaw(manifest);
  for(const lead of [0,3,9])applyMogrepsStep(raw,manifest,{schema:1,run,time:run+lead*3600,intervalHours:3,members:manifest.members,latitude:53.90625,longitude:-2.109375,

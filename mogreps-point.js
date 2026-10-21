@@ -25,7 +25,7 @@ export function mogrepsMean(raw, model, now=Date.now()){
 }
 export async function fetchMogrepsPoint(location,model,signal,onProgress=()=>{}){
  const raw=await fetchMogreps({lat:location.latitude,lon:location.longitude},signal,
-  (data,done,total)=>onProgress(mogrepsMean(data,model),done,total),{maxLead:168});
+  (data,done,total)=>onProgress(mogrepsMean(data,model),done,total),{horizonHours:168});
  return mogrepsMean(raw,model);
 }
 export function nativeSeriesPath(series,times,key,x,y){

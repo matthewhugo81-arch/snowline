@@ -27,11 +27,15 @@ export function applyMogrepsStep(raw,manifest,step,lead) {
   else if (!missing.includes(lead)) missing.push(lead);
   raw.missingVariables=raw.missingVariableSteps.pressure_msl.length?['pressure_msl']:[];
 }
-export async function fetchMogreps(location,signal,onProgress=()=>{}, {maxLead=246}={}) {
+export function mogrepsDisplayLead(run,horizonHours,now=Date.now()) {
+  return Math.min(246,Math.ceil((Math.max(0,now/1000-run)/3600+horizonHours)/3)*3);
+}
+export async function fetchMogreps(location,signal,onProgress=()=>{}, {maxLead=246,horizonHours}={}) {
   const transport=mogrepsTransport({signal});
   try {
   const manifest=await transport.request('https://matthewhugo81-arch.github.io/snowline-ensembles/mogreps/latest.json',{cache:'no-cache'}),raw=createMogrepsRaw(manifest);
   if(Date.now()/1000-manifest.run>72*3600)throw Error('The last Met Office run has expired. Please retry later.');
+  if(Number.isFinite(horizonHours))maxLead=mogrepsDisplayLead(manifest.run,horizonHours);
   const leads=manifest.leads.filter(lead=>lead<=maxLead);
   raw.total=leads.length;
   let next=0,finished=0,lastRender=0;
