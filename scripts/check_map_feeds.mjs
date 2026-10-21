@@ -8,6 +8,7 @@ import {UKV} from '../ukv-run-selection.js';
 import {ACCUMULATION_HOURS,accumulationKey,accumulationSource} from '../map-accumulation.js';
 import {ENSEMBLE_DOMAINS} from '../map-ensemble.js';
 import {discoverPreviousRuns} from '../map-previous-run-data.js';
+import {feedFreshness} from '../map-feed-freshness.js';
 const timings=[],cache=new Map(),output=process.argv[2]??'map-feed-health.json';
 const deployed=url=>url.startsWith('file:')&&url.includes('/ensemble-data/')?'https://matthewhugo81-arch.github.io/snowline/ensemble-data/'+url.split('/ensemble-data/')[1]:url;
 async function get(url){
@@ -51,6 +52,8 @@ async function worker(){while(index<models.length){
   if(ageHours<-.1)record.warnings.push('Initialization is in the future.');
   // Conservative review thresholds, not promises of upstream publication times.
   const threshold=model.id===UKV||model.id===UKV+'_nowcast'?6:model.regional?12:24;
+  record.freshness=feedFreshness(model,ageHours);
+  if(record.freshness.state==='overdue')record.warnings.push('Source freshness is overdue; readability does not establish a current run.');
   if(ageHours>threshold)record.warnings.push('Initialization age exceeds the '+threshold+' h review threshold.');
   if(elapsed>10000)record.warnings.push('Metadata check took over 10 seconds.');
   if(['precipitation','pressure_msl_mean','temperature_850hPa_mean','precipitation_probability'].some(key=>meta.variables.includes(key))){try{record.sample=await sample(meta);if(record.sample?.ms>10000)record.warnings.push('Forecast byte-range check took over 10 seconds.');}catch(e){record.warnings.push('Forecast byte-range check failed: '+e.message);}}
@@ -75,9 +78,8 @@ const lines=['## Snowline map feed health',report.checkedAt,'',report.scope,'','
 for(const result of results){const problems=result.error??result.warnings?.join(' ')??'';lines.push(`| ${result.name} | ${result.reference_time??'unverified'} | ${result.horizonHours??'—'} h | ${result.metadataMs??'—'} ms | ${problems||'OK'} |`);if(problems)console.warn('::warning title=Map feed review::'+result.name+': '+problems);}
 if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,lines.join('\n')+'\n');
 console.log(lines.join('\n'));
-// Source publication age and expected missing hours remain review warnings.
-// Only fail this transport job on unverified model metadata, impossible
-// initialization timestamps, or a genuinely unreadable forecast byte range.
+// A review-age warning is distinct from sustained overdue freshness.
+// Fail on overdue/invalid timestamps, unverified metadata or unreadable frames.
 // Official ensemble run/horizon freshness is checked separately in Python.
-const isCritical=r=>r.error||r.warnings?.some(w=>w==='Initialization is in the future.'||w.startsWith('Forecast byte-range check failed:'));
+const isCritical=r=>r.error||['overdue','invalid'].includes(r.freshness?.state)||r.warnings?.some(w=>w==='Initialization is in the future.'||w.startsWith('Forecast byte-range check failed:'));
 if(results.some(isCritical))process.exitCode=1;

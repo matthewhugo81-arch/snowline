@@ -104,7 +104,13 @@ export class ForecastTileCache{
   });
   state.queue=write.catch(()=>{});return write;
  }
- fresh(created){return Number.isFinite(created)&&created>0&&Date.now()>=created&&Date.now()-created<this.maxAge;}
+ fresh(created,url=''){
+  // Immutable archive commits cannot be corrected in place. Retain their
+  // prepared pixels for the run-retention window, avoiding another native
+  // download/decode on next-day comparisons. Mutable feeds keep the short TTL.
+  const immutable=/^om:\/\/https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/snowline_ecmwf_ensemble\//.test(url);
+  return Number.isFinite(created)&&created>0&&Date.now()>=created&&Date.now()-created<(immutable?48*3600000:this.maxAge);
+ }
  remember(key,result,durable,persisting=false,created=Date.now()){
   const bytes=result.data instanceof ArrayBuffer?result.data.byteLength:new TextEncoder().encode(JSON.stringify(result.data)).length;
   const old=this.memory.get(key);if(old)this.bytes-=old.bytes;
@@ -169,7 +175,7 @@ export class ForecastTileCache{
  }
  async resolve(params,controller,generation,disk,job){
   const key=JSON.stringify([params.type,params.url]),cached=this.memory.get(key);
-  if(cached&&(!this.persistent||this.fresh(cached.created))){this.memory.delete(key);this.memory.set(key,cached);return cached.result;}
+  if(cached&&(!this.persistent||this.fresh(cached.created,params.url))){this.memory.delete(key);this.memory.set(key,cached);return cached.result;}
   if(cached){this.memory.delete(key);this.bytes-=cached.bytes;}
   // CacheStorage keys are local lookup keys. No request is sent to this URL.
   const request='https://snowline-cache.invalid/tile?key='+encodeURIComponent(key);
@@ -180,7 +186,7 @@ export class ForecastTileCache{
    await this.writes.get(key)?.promise;
    const response=await store?.match(request);
    const created=Number(response?.headers.get('x-snowline-created'));
-   if(response&&(!this.persistent||this.fresh(created))){
+   if(response&&(!this.persistent||this.fresh(created,params.url))){
     const result={data:response.headers.get('x-snowline-type')==='json'?await response.json():await response.arrayBuffer()};
     if(controller.signal.aborted||generation!==this.generation)throw abort();
     this.remember(key,result,true,false,created);return result;

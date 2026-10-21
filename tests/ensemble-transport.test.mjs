@@ -42,11 +42,14 @@ test('companion MOGREPS winds remain scalar and use the binary-safe transport su
   readSimpleVariable(file,key){return {key,directions:undefined};},
   readVariable(){throw Error('Must not request a fabricated direction field');}
  };
- installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{});
- const url='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/snowline_mogreps_global/run/frame.om';
+ const base='https://site.test/ensemble-data/';
+ installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{},base);
+ for(const root of [base,'https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/'])for(const run of ['2026/10/20/0000Z','2026/10/19/1800Z']){
+ const url=root+'snowline_mogreps_global/'+run+'/frame.om';
  for(const key of ['wind_speed_300hPa_mean','wind_speed_200hPa_spread']){
   assert.deepEqual(await reader.readVariable(url,key),{key,directions:undefined});
   assert.equal(calls.pop(),url+'.png');
+ }
  }
 });
 
@@ -100,4 +103,11 @@ test('overlapping ENS and native reads keep their own caches and preserve scalar
  assert.equal(calls[1].cache,normalCache);assert.notEqual(calls[0].cache,normalCache);assert.equal(reader.cache,normalCache);
  const rejected=assert.rejects(pending,{name:'AbortError'});controller.abort();await rejected;release();
  await assert.rejects(reader.withReader(base+'snowline_gefs_ensemble/run/frame.om',async()=>{throw Error('Native read failed');}),/Native read failed/);
+});
+test('immutable archived IFS URLs preserve range-capable binary transport',async()=>{
+ const calls=[],reader={withReader(url,fn){calls.push(url);return fn({});}};
+ installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{});
+ const url='https://raw.githubusercontent.com/matthewhugo81-arch/snowline/'+'a'.repeat(40)+'/ensemble-data/snowline_ecmwf_ensemble/run/frame.om';
+ await reader.withReader(url,()=>{});assert.equal(calls.pop(),url+'.png');
+ const unknown=url.replace('a'.repeat(40),'main');await reader.withReader(unknown,()=>{});assert.equal(calls.pop(),unknown);
 });

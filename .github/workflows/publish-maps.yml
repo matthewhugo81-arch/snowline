@@ -6,20 +6,38 @@ on:
     - cron: '2-57/5 * * * *'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 concurrency:
   group: snowline-pages
   cancel-in-progress: false
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      validate: ${{ steps.revision.outputs.validate }}
+    steps:
+      - name: Check the exact deployed application revision
+        id: revision
+        env:
+          SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          deployed=$(curl --fail --silent --show-error --retry 2 --max-time 20 "https://matthewhugo81-arch.github.io/snowline/site-revision.txt?check=$GITHUB_RUN_ID" || true)
+          if [ "$deployed" = "$SOURCE_REVISION" ]; then echo 'validate=false' >> "$GITHUB_OUTPUT"; else echo 'validate=true' >> "$GITHUB_OUTPUT"; fi
+  browser:
+    needs: release
+    if: needs.release.outputs.validate == 'true'
+    uses: ./.github/workflows/map-browser-tests.yml
   build:
+    needs: [release, browser]
+    if: always() && needs.release.result == 'success' && (needs.browser.result == 'success' || needs.browser.result == 'skipped')
+    outputs:
+      changed: ${{ steps.publication.outputs.changed }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -37,6 +55,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_generated*.py'
           python -m unittest discover -s tests -p 'test_mogreps*.py'
           python -m unittest discover -s tests -p 'test_vertical*.py'
+          python -m unittest discover -s tests -p 'test_publication*.py'
       - uses: actions/cache@v4
         with:
           path: point-data
@@ -69,14 +88,14 @@ jobs:
           wait "$vertical_gem" || failed=1
           wait "$vertical_icon" || failed=1
           exit "$failed"
-      - name: Prepare optional ensemble fields within a five-minute budget
+      - name: Prepare optional ensemble fields within a two-minute budget
         shell: bash
         run: |
           # Preserve completed core maps when the optional upstream is throttled.
           # Per-frame writes are atomic and cached, so later builds resume work.
-          timeout --kill-after=15s 300s python scripts/build_ensemble_extras.py --model gefs --workers 4 &
+          timeout --kill-after=15s 120s python scripts/build_ensemble_extras.py --model gefs --workers 4 &
           extra_gefs=$!
-          timeout --kill-after=15s 300s python scripts/build_ensemble_extras.py --model ecmwf --workers 4 &
+          timeout --kill-after=15s 120s python scripts/build_ensemble_extras.py --model ecmwf --workers 4 &
           extra_ecmwf=$!
           wait "$extra_gefs" || echo '::warning::Optional GEFS fields deferred; retaining last verified publication.'
           wait "$extra_ecmwf" || echo '::warning::Optional ECMWF fields deferred; retaining last verified publication.'
@@ -105,12 +124,24 @@ jobs:
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           git rev-parse HEAD > _site/site-revision.txt
           touch _site/.nojekyll
+      - name: Publish verified historical IFS grids outside the Pages size budget
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          python scripts/publish_map_archive.py _site
+      - name: Measure unpacked size and skip unchanged publication
+        id: publication
+        run: python scripts/publication_manifest.py _site --live-url https://matthewhugo81-arch.github.io/snowline/publication.json
       - uses: actions/configure-pages@v5
+        if: steps.publication.outputs.changed == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.publication.outputs.changed == 'true'
         with:
           path: _site
   deploy:
     needs: build
+    if: needs.build.outputs.changed == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

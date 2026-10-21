@@ -34,3 +34,13 @@ test('extra native heights and clouds do not expand the shared menus',()=>{
  assert.equal(fields.length,6);
  assert.deepEqual(availableFields(fields,[meta]),[]);
 });
+test('archived IFS routing accepts only immutable snapshots in the owned data repository',async()=>{
+ const archive_base='https://raw.githubusercontent.com/matthewhugo81-arch/snowline/'+'a'.repeat(40)+'/ensemble-data/';
+ const data={format_version:1,reference_time:reference,completed:true,variables:['pressure_msl_mean'],valid_times:[time],archive_base};
+ const load=async url=>{if(url.includes('/snowline_ecmwf_ensemble/'))return data;throw Error('optional field unavailable');};
+ const meta=await loadSpatialRun('snowline_ecmwf_ensemble',reference,load);
+ assert.equal(fieldDataURL(meta,'pressure_msl_mean',time),archive_base+'snowline_ecmwf_ensemble/2026/10/20/0000Z/2026-10-20T1200.om');
+ for(const invalid of ['https://evil.test/','https://raw.githubusercontent.com/matthewhugo81-arch/snowline/main/ensemble-data/']){
+  await assert.rejects(loadSpatialRun('snowline_ecmwf_ensemble',reference,async()=>({...data,archive_base:invalid})),/Unverified archive/);
+ }
+});
