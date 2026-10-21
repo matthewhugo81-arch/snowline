@@ -97,6 +97,10 @@ try{
    return route.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{error:true})});
   });
   await page.goto(origin+'/maps.html'+(process.env.MAP_THREE_PANELS_ONLY?'?time=2026-10-10T00:00:00Z':''));
+   await page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-variable').inputValue(),'cloud_precipitation_mslp','Fresh maps default to cloud, precipitation and MSLP');
+   await page.locator('#map-variable').selectOption('temperature_2m',{force:true});
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
   try{
    if(!process.env.MAP_THREE_PANELS_ONLY&&!process.env.MAP_LAYOUT_ONLY){
     const atIndex=index=>page.waitForFunction(index=>{
@@ -166,6 +170,10 @@ try{
     console.log(JSON.stringify({viewport,keyboardNavigationPassed:true}));
     if(process.env.MAP_KEYBOARD_ONLY)continue;
     await page.goto(origin+'/maps.html');briefingRequests=0;
+   await page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-variable').inputValue(),'cloud_precipitation_mslp','Fresh maps default to cloud, precipitation and MSLP');
+   await page.locator('#map-variable').selectOption('temperature_2m',{force:true});
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    }
    if(process.env.MAP_LAYOUT_ONLY||process.env.MAP_THREE_PANELS_ONLY){
     const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
@@ -239,6 +247,10 @@ try{
     console.log(JSON.stringify({viewport,layoutKeepsPlaybackAndImagery:true}));
     if(process.env.MAP_LAYOUT_ONLY)continue;
     await page.goto(origin+'/maps.html?time=2026-10-10T00:00:00Z');
+   await page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
+   assert.equal(await page.locator('#map-variable').inputValue(),'cloud_precipitation_mslp','Fresh maps default to cloud, precipitation and MSLP');
+   await page.locator('#map-variable').selectOption('temperature_2m',{force:true});
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('2 m air temperature')&&document.getElementById('animation-status').textContent.startsWith('Ready'));
    }
    if(process.env.MAP_THREE_PANELS_ONLY){
    const ready=()=>page.waitForFunction(()=>!document.getElementById('reload-maps').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'));
@@ -299,7 +311,8 @@ try{
    if(viewport.width<=650&&!(await page.locator('#compare-maps').isVisible()))await page.locator('#mobile-map-settings').click();
    await page.locator('#compare-maps').check();await ready();
    await checkPanelMenus(2);
-   assert.equal(await page.locator('#map-variable-b').inputValue(),'precipitation','The existing second-panel default is retained');
+   assert.equal(await page.locator('#map-variable-b').inputValue(),'cloud_precipitation_mslp','Comparison panels also default to the combined weather chart');
+   await page.locator('#map-variable-b').selectOption('precipitation');await ready();
    await page.locator('#map-comparison-count').selectOption('3');await ready();
    await page.locator('#map-model-b').selectOption('ecmwf_ifs');await ready();
    await page.locator('#map-model-c').selectOption('icon_global');await ready();

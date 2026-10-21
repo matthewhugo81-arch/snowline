@@ -87,6 +87,9 @@ try{
    const openBriefing=()=>page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    try{
     await page.goto('http://127.0.0.1:'+server.address().port+'/maps.html?model='+id+'&time='+ref(8));await ready();
+    assert.equal(await page.locator('#map-variable').inputValue(),'cloud_precipitation_mslp','Fresh maps default to cloud, precipitation and MSLP');
+    // Run-growth checks below include the instantaneous initialization frame.
+    await page.locator('#map-variable').selectOption('temperature_2m',{force:true});await ready();
     assert.equal(await page.locator('#map-model').inputValue(),id);
     await assertRunOptions('#map-run',[6,0],0,0);
     await assertCompletedLabel('#map-model',0);
