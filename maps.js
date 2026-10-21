@@ -149,7 +149,7 @@ function viewportBounds(){
  imageryCache.setContext('complete-geographic-tiles');
  for(const [,panel]of visible)panel.frameCache?.setView(forecastViewKey(panel.map));
 }
-let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:'temperature_2m',field:'temperature_2m',fieldB:'precipitation',interval:null,times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
+let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:WEATHER_COMPOSITE,field:WEATHER_COMPOSITE,fieldB:WEATHER_COMPOSITE,interval:null,times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(params.get('model')==='ukmo_uk_deterministic_2km_nowcast')params.set('model','ukmo_uk_deterministic_2km');
