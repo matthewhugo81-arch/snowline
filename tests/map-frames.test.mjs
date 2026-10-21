@@ -66,10 +66,11 @@ test('zoom history is bounded and expires without extending the age of copied co
 });
 
 test('storage eviction prevents restoring optimistic zoom readiness',async()=>{
- let allowed=true;
- const map=new FakeMap(),cache=new ForecastFrames(map,'zoom',{canPreload:()=>allowed});
- cache.setView('wide');await loaded(cache,map,'now');cache.setView('close');allowed=false;
- cache.setView('wide');assert.equal(cache.preloaded.size,0);cache.clear();
+ let allowed=true,revision=0;
+ const map=new FakeMap(),cache=new ForecastFrames(map,'zoom',{canPreload:()=>allowed,cacheRevision:()=>revision});
+ cache.setView('wide');await loaded(cache,map,'now');cache.setView('close');await loaded(cache,map,'now');allowed=false;revision++;
+ cache.setView('wide');assert.equal(cache.preloaded.size,0);
+ allowed=true;cache.setView('close');assert.equal(cache.preloaded.size,0,'Freeing capacity cannot revive evicted zoom history');cache.clear();
 });
 
 test('an unpublished slot hides the previous image and can return to it without relabelling stale imagery',async()=>{

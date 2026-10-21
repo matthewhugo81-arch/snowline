@@ -22,8 +22,8 @@ export function fullSequence(urls,index){return [...new Set([...urls.slice(index
 // A frame owns its raster AND enabled vector overlays. They are prepared behind
 // the opaque basemap, then promoted together; we never blend forecast times.
 export class ForecastFrames{
- constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true,isActive=()=>true,maxAttempts=3,prefetch,preloadConcurrency=2}={}){
-  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload,isActive,maxAttempts,prefetch,preloadConcurrency});
+ constructor(map,prefix,{timeout=25000,delay=180,decorate=()=>[],rasterBefore,overlayBefore,onProgress=()=>{},canPreload=()=>true,cacheRevision=()=>0,isActive=()=>true,maxAttempts=3,prefetch,preloadConcurrency=2}={}){
+  Object.assign(this,{map,prefix,timeout,delay,decorate,rasterBefore,overlayBefore,onProgress,canPreload,cacheRevision,isActive,maxAttempts,prefetch,preloadConcurrency});
   this.prefix=prefix+'-'+(++cacheSequence);
   this.frames=new Map();this.sequence=0;this.current=null;this.epoch=0;this.queue=[];this.keep=new Set();
   this.preloaded=new Set();this.failures=new Set();this.failureAttempts=new Map();this.retired=new Set();
@@ -150,17 +150,17 @@ export class ForecastFrames{
   if(key===this.viewKey)return false;
   const previous=this.viewKey;this.viewKey=key;
   if(previous!==undefined)this.stop();
-  const now=Date.now();
+  const now=Date.now(),revision=this.cacheRevision();
   // Readiness belongs to geographic coverage, not to the latest camera event.
   // Keep a bounded history so zooming back restores the prepared sequence.
-  for(const [view,entry]of this.views)if(now-entry.created>=this.viewMaxAge)this.views.delete(view);
-  if(previous===undefined)this.views.set(key,{loaded:this.preloaded,created:now});
+  for(const [view,entry]of this.views)if(now-entry.created>=this.viewMaxAge||entry.revision!==revision)this.views.delete(view);
+  if(previous===undefined)this.views.set(key,{loaded:this.preloaded,created:now,revision});
   else{
    const loaded=new Set();let created=now;
    if(this.canPreload())for(const [view,entry]of this.views)if(coversView(view,key)){
     created=Math.min(created,entry.created);for(const url of entry.loaded)loaded.add(url);
    }
-   this.preloaded=loaded;this.views.delete(key);this.views.set(key,{loaded,created});
+   this.preloaded=loaded;this.views.delete(key);this.views.set(key,{loaded,created,revision});
    this.retryFailures();
    // Existing sources still wait for MapLibre's render of the new view before
    // display. Restored background readiness never bypasses that pixel check.
@@ -170,7 +170,7 @@ export class ForecastFrames{
   this.onProgress();return true;
  }
  cachedFrames(){return new Set([...this.preloaded,...[...this.views.values()].flatMap(entry=>[...entry.loaded])]);}
- forgetViews(){this.views.clear();this.preloaded.clear();if(this.viewKey!==undefined)this.views.set(this.viewKey,{loaded:this.preloaded,created:Date.now()});}
+ forgetViews(){this.views.clear();this.preloaded.clear();if(this.viewKey!==undefined)this.views.set(this.viewKey,{loaded:this.preloaded,created:Date.now(),revision:this.cacheRevision()});}
  suspend(exceptURL){
   this.stop(exceptURL);
   this.forgetViews();this.retryFailures();this.onProgress();

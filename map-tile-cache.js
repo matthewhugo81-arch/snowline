@@ -37,7 +37,7 @@ export class ForecastTileCache{
   Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge,concurrency,backgroundConcurrency});
   this.renderQueue=[];this.rendering=new Set();this.foreground=null;
   this.diskStates=new WeakMap();
-  this.contexts=new Map();this.contextSequence=0;
+  this.contexts=new Map();this.contextSequence=0;this.retentionRevision=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
   // Run/field/style URLs and complete tile coordinates isolate pixels. A revision
   // invalidates releases; a rolling per-entry lifetime bounds source corrections
@@ -74,7 +74,7 @@ export class ForecastTileCache{
   this.contexts.clear();this.context=null;
   this.disk=null;this.name=null;
  }
- limit(){if(!this.limited){this.limited=true;this.onLimit();}}
+ limit(){this.retentionRevision++;if(!this.limited){this.limited=true;this.onLimit();}}
  setSequence(urls){
   const next=[...new Set(urls)].sort();
   if(JSON.stringify(next)===JSON.stringify(this.sequenceURLs))return;
