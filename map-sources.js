@@ -205,6 +205,10 @@ export async function loadSpatialRun(model,referenceTime,load){
   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(data))throw Error('Unverified MOGREPS-G archive.');
+ if(data.archive_base){
+  if(domain!=='snowline_ecmwf_ensemble'||!/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/$/.test(data.archive_base))throw Error('Unverified archive storage location');
+  baseURL=data.archive_base;
+ }
  let primary={...data,domain,baseURL,runFamily:family};const warnings=[];
  const other=await Promise.all((companions[model]??[]).map(async companion=>{
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}

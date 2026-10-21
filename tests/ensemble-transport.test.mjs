@@ -104,3 +104,10 @@ test('overlapping ENS and native reads keep their own caches and preserve scalar
  const rejected=assert.rejects(pending,{name:'AbortError'});controller.abort();await rejected;release();
  await assert.rejects(reader.withReader(base+'snowline_gefs_ensemble/run/frame.om',async()=>{throw Error('Native read failed');}),/Native read failed/);
 });
+test('immutable archived IFS URLs preserve range-capable binary transport',async()=>{
+ const calls=[],reader={withReader(url,fn){calls.push(url);return fn({});}};
+ installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{});
+ const url='https://raw.githubusercontent.com/matthewhugo81-arch/snowline/'+'a'.repeat(40)+'/ensemble-data/snowline_ecmwf_ensemble/run/frame.om';
+ await reader.withReader(url,()=>{});assert.equal(calls.pop(),url+'.png');
+ const unknown=url.replace('a'.repeat(40),'main');await reader.withReader(unknown,()=>{});assert.equal(calls.pop(),unknown);
+});

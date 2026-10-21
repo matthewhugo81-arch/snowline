@@ -5,7 +5,8 @@
 const installed=new WeakSet();
 export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-data/',import.meta.url).href){
  const companion='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/';
- const own=url=>url.startsWith(base)||url.startsWith(companion);
+ const archive=url=>url.match(/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/(snowline_ecmwf_ensemble\/.*)$/)?.[1];
+ const own=url=>url.startsWith(base)||url.startsWith(companion)||!!archive(url);
  const reader=OM.getProtocolInstance(settings).omFileReader;
  if(installed.has(reader))return;
  installed.add(reader);
@@ -19,7 +20,7 @@ export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-da
  const pool=reader.backendPool;
  const ensembleCache=OM.LruBlockCache&&typeof pool?.withReader==='function'?new OM.LruBlockCache(64*1024,256):null;
  reader.withReader=(url,callback)=>{
-  const path=url.startsWith(base)?url.slice(base.length):url.startsWith(companion)?url.slice(companion.length):null;
+  const path=url.startsWith(base)?url.slice(base.length):url.startsWith(companion)?url.slice(companion.length):archive(url);
   const binary=own(url)&&url.endsWith('.om')?url+'.png':url;
   return ensembleCache&&path&&compact.test(path)&&/\.om(?:\.png)?$/.test(url)
    ?pool.withReader(binary,ensembleCache,callback)

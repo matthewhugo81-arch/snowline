@@ -1,5 +1,5 @@
 import {VARIABLES} from './data.js?v=20261019-mogreps-uk';
-import {fetchMogreps, MOGREPS_VARIABLES} from './mogreps-client.js?v=20261019-mogreps-uk';
+import {fetchMogreps, MOGREPS_VARIABLES} from './mogreps-client.js?v=20261021-reliable-pressure';
 
 export const MOGREPS_POINT='mogreps_global_ensemble_mean';
 const hour=3600000;
@@ -25,7 +25,7 @@ export function mogrepsMean(raw, model, now=Date.now()){
 }
 export async function fetchMogrepsPoint(location,model,signal,onProgress=()=>{}){
  const raw=await fetchMogreps({lat:location.latitude,lon:location.longitude},signal,
-  (data,done,total)=>onProgress(mogrepsMean(data,model),done,total));
+  (data,done,total)=>onProgress(mogrepsMean(data,model),done,total),{maxLead:168});
  return mogrepsMean(raw,model);
 }
 export function nativeSeriesPath(series,times,key,x,y){

@@ -1,6 +1,6 @@
 """Measure the unpacked site and compare content with the last actual deployment.
 
-Changing a check timestamp does not make the forecast new. Hourly health refreshes
+Changing a check timestamp does not make the forecast new. Quarter-hourly health refreshes
 are explicit; model times, field inventories and all binary bytes remain hashed.
 """
 import argparse
@@ -39,7 +39,7 @@ def inventory(root):
         group = '/'.join(parts[:6]) if parts[0] == 'ensemble-data' and len(parts) > 6 else '/'.join(parts[:2]) if parts[0] == 'ensemble-data' else parts[0]
         groups[group]['bytes'] += size
         groups[group]['files'] += 1
-        # Independent health evidence is refreshed once per hour below.
+        # Independent health evidence is refreshed every fifteen minutes below.
         if relative == 'ensemble-data/health.json':
             continue
         digest.update(relative.encode() + b'\0')
@@ -63,7 +63,7 @@ def main():
     now = datetime.now(timezone.utc)
     report = inventory(args.root)
     report.update(version=1, sourceRevision=os.environ.get('GITHUB_SHA', 'local'),
-                  preparedAt=now.isoformat(), healthHour=now.strftime('%Y-%m-%dT%H'),
+                  preparedAt=now.isoformat(), healthWindow=int(now.timestamp()) // 900,
                   workflowRun=os.environ.get('GITHUB_RUN_ID'))
     text = json.dumps(report, indent=2) + '\n'
     # Include the manifest itself in the budget.
@@ -87,7 +87,7 @@ def main():
         except HTTPError as error:
             if error.code != 404:
                 raise
-    changed = not previous or any(previous.get(key) != report[key] for key in ('version', 'sourceRevision', 'contentSha256', 'healthHour'))
+    changed = not previous or any(previous.get(key) != report[key] for key in ('version', 'sourceRevision', 'contentSha256', 'healthWindow'))
     (args.root / 'publication.json').write_text(text)
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
