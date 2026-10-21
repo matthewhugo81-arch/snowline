@@ -3,6 +3,8 @@ import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-
 // Keep colour changes request-local so comparison panels cannot recolour each other.
 export const WEATHER_COMPOSITE='cloud_precipitation_mslp';
 export const COMPOSITE_FIELDS=['cloud_cover','precipitation','pressure_msl'];
+// Cloud and rain remain usable while the matching pressure feed catches up.
+export const COMPOSITE_REQUIRED_FIELDS=['cloud_cover','precipitation'];
 export function compositeMeta(meta){
  if(!meta?.sources)return meta;
  const reference=Date.parse(meta.reference_time);
@@ -10,7 +12,7 @@ export function compositeMeta(meta){
 }
 export function compositeField(precipitationScale){
  return {key:WEATHER_COMPOSITE,name:'Cloud, precipitation & MSLP',unit:'mm/h',...precipitationScale,
-  note:'Satellite-style modelled total cloud cover, not satellite observations: dark = clear, white = overcast. Coloured shading is the mean TOTAL precipitation rate in mm/h, including the water equivalent of snow, over the stated native interval. Longer intervals show an average, not hourly detail. Below 0.5 mm/h the cloud remains visible; this does not imply zero precipitation. MSLP isobars every 4 hPa. All components use the same model run and valid time. Optional contours, grid values and clicked values refer to precipitation in mm/h. Use accumulation layers for period totals.'};
+  note:'Satellite-style modelled total cloud cover, not satellite observations: dark = clear, white = overcast. Coloured shading is the mean TOTAL precipitation rate in mm/h, including the water equivalent of snow, over the stated native interval. Longer intervals show an average, not hourly detail. Below 0.5 mm/h the cloud remains visible; this does not imply zero precipitation. MSLP isobars every 4 hPa when matching pressure is available; cloud and rain remain visible while pressure is unavailable. All components use the same model run and valid time. Optional contours, grid values and clicked values refer to precipitation in mm/h. Use accumulation layers for period totals.'};
 }
 export function compositeSettings(settings){
  const cloud=settings.colorScales.cloud_cover,rain=settings.colorScales.precipitation;

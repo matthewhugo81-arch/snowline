@@ -230,8 +230,8 @@ function pressureNote(){
   if(model.startsWith('snowline_')&&!missing&&!warnings.length)$('mslp-note-'+key).textContent='Ensemble-mean MSLP isobars every 4 hPa.';
   if(sourceModel(model)==='gfs_global'&&!missing)$('mslp-note-'+key).textContent+=' Uses the GFS 0.25° grid from the same run.';
   $('map-mslp-'+key).disabled=missing||composite;
-  $('map-mslp-'+key).checked=composite||state.overlays[key].isobars;
-  $('map-mslp-'+key).title=composite?'MSLP is included in this combined layer.':'';
+  $('map-mslp-'+key).checked=!missing&&(composite||state.overlays[key].isobars);
+  $('map-mslp-'+key).title=missing?'MSLP is unavailable at this time; cloud and precipitation remain available.':composite?'MSLP is included in this combined layer.':'';
  }
 }
 const emptyGrid=()=>({type:'FeatureCollection',features:[]});
@@ -611,7 +611,7 @@ function populateVariables(onlyKey){
    if(group){for(const k of ACCUMULATION_KEYS.filter(k=>!supported.includes(k))){const o=document.createElement('option');o.value=k;o.disabled=true;o.textContent=accumulationHours(k)+' h total — incomplete window in this run';group.append(o);}
     const sorted=[...group.children].sort((a,b)=>accumulationHours(a.value)-accumulationHours(b.value));group.replaceChildren(...sorted);}
   }
-  const selected=available.some(f=>f.key===field)?field:available.find(f=>f.key==='temperature_2m')?.key??available[0]?.key;
+  const selected=available.some(f=>f.key===field)?field:available.find(f=>f.key===WEATHER_COMPOSITE)?.key??available.find(f=>f.key==='temperature_2m')?.key??available[0]?.key;
   state['field'+(key==='a'?'':key.toUpperCase())]=selected;select.value=selected??'';
  }
 }

@@ -1,7 +1,7 @@
 import {productField} from './map-ensemble-products.js';
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
-import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
+import {WEATHER_COMPOSITE,COMPOSITE_REQUIRED_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {ensembleField,ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {canDeriveDewPoint,DERIVED_DEW_POINT} from './map-dew-point.js';
@@ -53,7 +53,7 @@ export const PRECIPITATION_PROBABILITY_SCALE = {
 export function sourceVariable(meta,key){
  if(accumulationHours(key))return accumulationSource(meta,key)?key:null;
  if(key===THETA_SYMBOLS)return canThetaSymbols(meta)?'wet_bulb_potential_temperature_850hPa_derived':null;
- if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
+ if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_REQUIRED_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
  if(SURFACE_DERIVED_KEYS.includes(key)&&!vars.includes(key))return surfaceDerivedVariable(meta,key);

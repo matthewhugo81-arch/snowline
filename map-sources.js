@@ -1,6 +1,6 @@
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {accumulationHours,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
-import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
+import {WEATHER_COMPOSITE,COMPOSITE_REQUIRED_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261021-harmonie-pressure';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
 import {sourceVariable} from './map-catalogue.js?v=20261020-ifs-coverage';
@@ -84,7 +84,7 @@ export function combineSources(primary,other=[]){
 export function fieldSource(meta,key,time){
  if(accumulationHours(key))return accumulationSource(meta,key,time);
  if(key===THETA_SYMBOLS){const selected=compositeMeta(meta);return THETA_SYMBOL_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'wet_bulb_potential_temperature_850hPa',time):null;}
- if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'precipitation',time):null;}
+ if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_REQUIRED_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'precipitation',time):null;}
  return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&fieldPublishedAt(source,key,time))))??null;
 }
 export function hasFieldTime(meta,key,time){return !!fieldSource(meta,key,time);}

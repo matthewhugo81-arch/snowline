@@ -27,7 +27,7 @@ test('every chart in the main catalogue is available in sequence and three match
 test('a pressure overlay never removes standalone charts or forecast hours',()=>{
  const m=meta('dwd_icon_eu',['cloud_cover','precipitation','temperature_2m','temperature_850hPa','relative_humidity_850hPa']);
  const fields=catalogue([m]),presets=briefingPresets(m,fields);
- assert.ok(!presets.some(p=>p.key===WEATHER_COMPOSITE));
+ assert.ok(presets.some(p=>p.key===WEATHER_COMPOSITE));
  for(const key of ['temperature_2m','cloud_cover','precipitation','wet_bulb_potential_temperature_850hPa']){
   const p=presets.find(p=>p.key===key);assert.ok(p);assert.deepEqual(p.required,[key]);
   assert.ok(briefingTimes(m,p,{},'native').includes(time(1)));
@@ -35,7 +35,7 @@ test('a pressure overlay never removes standalone charts or forecast hours',()=>
 });
 test('IFS feeds retain their own supported fields; theta-w needs same-grid T850 and RH850',()=>{
  // The operational 9 km feed supplies surface fields; pressure-level fields
- // belong to IFS 0.25°. No implicit model substitution is allowed.
+ // belong to IFS 0.25Â°. No implicit model substitution is allowed.
  const nine=meta('ecmwf_ifs',weather),quarter=meta('ecmwf_ifs025',[...weather,'temperature_850hPa','relative_humidity_850hPa']);
  const fields=catalogue([nine,quarter]);
  for(const m of [nine,quarter])assert.deepEqual(briefingPresets(m,fields).map(p=>p.key),availableFields(fields,[m]).map(f=>f.key));
