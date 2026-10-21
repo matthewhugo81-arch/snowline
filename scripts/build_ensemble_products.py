@@ -10,8 +10,10 @@ from pathlib import Path
 import shutil
 import time
 import numpy as np
-from omfiles import OmFileWriter
+# Load the GRIB runtime before the OM writer, matching the working core builder.
+# The reverse native-library load order crashes during Linux process teardown.
 import build_ensembles as core
+from omfiles import OmFileWriter
 from build_ensemble_extras import atomic_json
 from build_mogreps_snow import uk_nearest_indices
 from ensemble_product_sources import GlobalGRIB, MetOffice
