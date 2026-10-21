@@ -6,10 +6,16 @@ on:
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
+    inputs:
+      model:
+        description: Model to rebuild (all for the normal publication)
+        type: choice
+        default: all
+        options: [all, ecmwf, gefs, mogreps_uk, mogreps_g]
 permissions:
   contents: write
 concurrency:
-  group: ensemble-products
+  group: ensemble-products${{ inputs.model && inputs.model != 'all' && format('-{0}', inputs.model) || '' }}
   cancel-in-progress: false
 jobs:
   calculate:
@@ -18,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        model: [ecmwf, gefs, mogreps_uk, mogreps_g]
+        model: ${{ fromJSON(inputs.model && inputs.model != 'all' && format('["{0}"]', inputs.model) || '["ecmwf","gefs","mogreps_uk","mogreps_g"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
