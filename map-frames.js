@@ -129,7 +129,7 @@ export class ForecastFrames{
   for(const id of frame.layers){const first=this.firstLayer();if(first!==id)this.map.moveLayer(id,first);}
  }
  pause(){
-  clearTimeout(this.timer);this.epoch++;this.queue=[];
+  clearTimeout(this.timer);this.priorityWait?.abort();this.epoch++;this.queue=[];
   this.cancelPrefetches();
   for(const frame of this.frames.values())frame.pauseTimeout?.();
  }
@@ -211,11 +211,11 @@ export class ForecastFrames{
  // Navigation changes priority, not the model/run/view of existing downloads.
  // Keep their bounded jobs alive while pausing dispatch of more distant work.
  focus(url,keep=this.keep){
-  clearTimeout(this.timer);this.epoch++;this.queue=[];this.keep=keep;
+  clearTimeout(this.timer);this.priorityWait?.abort();this.epoch++;this.queue=[];this.keep=keep;
   for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.url!==url&&!keep.has(frame.url))this.discard(frame);
  }
  stop(exceptURL,keep=new Set()){
-  clearTimeout(this.timer);this.epoch++;this.queue=[];
+  clearTimeout(this.timer);this.priorityWait?.abort();this.epoch++;this.queue=[];
   this.cancelPrefetches(new Set([...keep,exceptURL]));
   for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.pending&&frame.url!==exceptURL&&!keep.has(frame.url))this.discard(frame);
  }
@@ -225,9 +225,17 @@ export class ForecastFrames{
  preload(url){
   const existing=this.prefetches.get(url);if(existing)return existing.promise;
   const job={controller:new AbortController()};this.prefetches.set(url,job);
-  let timedOut=false;
-  const timer=setTimeout(()=>{timedOut=true;job.controller.abort();},this.timeout);
-  job.promise=Promise.resolve().then(()=>this.prefetch(url,job.controller)).then(()=>{
+  let timedOut=false,timer;
+  // Multi-panel/ensemble charts share a bounded tile queue. A frame which is
+  // still receiving tiles is making progress, even if the whole job takes more
+  // than one timeout. Keep a hard deadline as well as an inactivity watchdog.
+  const deadline=Date.now()+Math.max(this.timeout,Math.min(this.timeout*4,120000));
+  const progress=()=>{
+   clearTimeout(timer);if(job.controller.signal.aborted)return;
+   timer=setTimeout(()=>{timedOut=true;job.controller.abort();},Math.max(0,Math.min(this.timeout,deadline-Date.now())));
+  };
+  progress();
+  job.promise=Promise.resolve().then(()=>this.prefetch(url,job.controller,progress)).then(()=>{
    if(job.controller.signal.aborted)return false;
    this.preloaded.add(url);this.failures.delete(url);this.failureAttempts.delete(url);return true;
   },error=>{
@@ -238,13 +246,14 @@ export class ForecastFrames{
   }).finally(()=>{clearTimeout(timer);job.controller.abort();if(this.prefetches.get(url)===job)this.prefetches.delete(url);this.onProgress();});
   return job.promise;
  }
- warm({keep,upcoming,all=[],delay=this.delay}){
-  clearTimeout(this.timer);const epoch=++this.epoch;
+ warm({keep,upcoming,all=[],priority=[],waitForRemainder=()=>Promise.resolve(),delay=this.delay}){
+  clearTimeout(this.timer);this.priorityWait?.abort();const epoch=++this.epoch;
+  this.priorityWait=new AbortController();const signal=this.priorityWait.signal;
   this.cancelPrefetches(new Set([...keep,...all]));
   // A ready step must not restart useful distant downloads. Rejoin existing
   // jobs first so each keeps its slot across queue generations; do not launch
   // another full batch beside it. Cold navigation pauses new dispatch only.
-  this.keep=keep;this.queue=[...new Set([...this.prefetches.keys(),...upcoming.filter(url=>this.canRetry(url)),...all.filter(url=>!this.preloaded.has(url)&&this.canRetry(url))])];
+  this.keep=keep;this.queue=[...new Set([...this.prefetches.keys(),...upcoming.filter(url=>this.canRetry(url)),...[...priority,...all].filter(url=>!this.preloaded.has(url)&&this.canRetry(url))])];
   // Crucially, do NOT stop/cancel pending frames that are still in the window.
   for(const frame of [...this.frames.values()])if(frame!==this.current&&!keep.has(frame.url))this.discard(frame);
   if(!this.queue.length||!this.isActive())return;
@@ -282,7 +291,14 @@ export class ForecastFrames{
      }
     };
     const workers=queue=>Array.from({length:this.preloadConcurrency},()=>worker(queue));
-    void Promise.all(workers(nearby)).then(()=>Promise.all(workers(distant)));
+    const first=new Set(priority),preferred=distant.filter(url=>first.has(url)),remainder=distant.filter(url=>!first.has(url));
+    void (async()=>{
+     await Promise.all(workers(nearby));
+     await Promise.all(workers(preferred));
+     if(epoch!==this.epoch||!this.isActive())return;
+     await waitForRemainder(signal);
+     await Promise.all(workers(remainder));
+    })();
    },delay);
    return;
   }

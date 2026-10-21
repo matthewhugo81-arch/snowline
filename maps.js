@@ -20,14 +20,15 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,preci
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261020-layout-playback';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-zoom-cache';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-period';
 import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261021-zoom-cache';
-import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
+import {createFramePrefetch} from './map-prefetch.js?v=20261021-period';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
 import {createViewRefresh,layoutForecastBounds,forecastViewKey} from './map-view-refresh.js?v=20261021-stable-tiles';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-run-selector';
+import {forecastPeriodHours,forecastPeriodURLs,ForecastPeriodPriority} from './map-forecast-period.js?v=20261021-period';
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261020-ifs-coverage';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
@@ -149,7 +150,7 @@ function viewportBounds(){
  imageryCache.setContext('complete-geographic-tiles');
  for(const [,panel]of visible)panel.frameCache?.setView(forecastViewKey(panel.map));
 }
-let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:'temperature_2m',field:'temperature_2m',fieldB:'precipitation',interval:null,times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
+let state={model:'ukmo_uk_deterministic_2km',modelB:'ukmo_uk_deterministic_2km',modelC:'icon_global',comparisonCount:2,compare:false,fieldC:'temperature_2m',field:'temperature_2m',fieldB:'precipitation',interval:null,period:0,times:[],index:0,metas:{},generation:0,location:null,opacity:.8,overlays:createPanelOverlays()};
 $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
 const params=new URLSearchParams(location.search);const initialTime=Date.parse(params.get('time'));let requestedTime=Number.isFinite(initialTime)?initialTime:Date.now();
 if(params.get('model')==='ukmo_uk_deterministic_2km_nowcast')params.set('model','ukmo_uk_deterministic_2km');
@@ -319,6 +320,7 @@ function frameBudget(){
  return {loop:true,direction:navigationDirection,...(state.compare?{ahead:2,behind:1}:matchMedia('(max-width:650px)').matches?{ahead:3,behind:1}:{ahead:4,behind:2})};
 }
 function updatePreloadStatus(){
+ periodPriority.progress();
  const choices=panelSelections(state),total=choices.reduce((sum,{model,field})=>sum+state.times.filter(time=>hasFieldTime(state.metas[model],field,time)).length,0);
  let loaded=0,failed=0,cached=0;
  for(const {key}of choices){const panel=panels[key],saved=panel?.frameCache?.cachedFrames();for(const url of panel?.frameURLs??[]){if(saved?.has(url))cached++;if(panel.frameCache?.preloaded.has(url))loaded++;else if(panel.frameCache?.failures.has(url))failed++;}}
@@ -327,13 +329,18 @@ function updatePreloadStatus(){
  if(total)message='Loading imagery · '+loaded+'/'+total+' frames'+(failed?' · '+failed+' unavailable':'');
  if(cached>loaded)message=cached+'/'+total+' frames cached · '+loaded+'/'+total+' ready for this view'+(failed?' · '+failed+' unavailable':'');
  if(complete)message='All '+total+' frames loaded';
- if(choices.some(({field})=>accumulationHours(field)))message='Accumulations · selected period first; nearby totals cached'+(failed?' · '+failed+' unavailable':'');
+ if(!state.period&&choices.some(({field})=>accumulationHours(field)))message='Accumulations · selected period first; nearby totals cached'+(failed?' · '+failed+' unavailable':'');
  if(imageryCache.limited)message='Storage limited · nearby frames cached';
- const progress=$('preload-status');progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.cached=String(cached);progress.dataset.total=String(total);
+ let priorityLoaded=0,priorityTotal=0;
+ if(state.period){
+  for(const {key}of choices){const panel=panels[key];if(!panel)continue;for(const url of periodURLs(panel)){priorityTotal++;if(panel.frameCache?.preloaded.has(url))priorityLoaded++;}}
+  message='First '+state.period+' h: '+priorityLoaded+'/'+priorityTotal+' ready · '+message;
+ }
+ const progress=$('preload-status');progress.dataset.priorityLoaded=String(priorityLoaded);progress.dataset.priorityTotal=String(priorityTotal);progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.cached=String(cached);progress.dataset.total=String(total);
  const outlineFailed=choices.some(({key})=>panels[key]?.coastline.state.status==='error');
  $('retry-preload').hidden=!failedSelection&&!outlineFailed&&(!failed||imageryCache.limited);
  $('retry-preload').textContent=outlineFailed||failedSelection?.outline?'Retry map outline':failedSelection?'Retry selected frame':'Retry background loading';
- if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?'storage limited; selected and nearby frames available':complete?'all frames loaded':cached>loaded?cached+'/'+total+' cached · '+loaded+'/'+total+' ready for view':loaded+'/'+total+' frames loaded');
+ if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(state.period&&priorityLoaded<priorityTotal?'first '+state.period+' h '+priorityLoaded+'/'+priorityTotal+' · ':'')+(imageryCache.limited?'storage limited; selected and nearby frames available':complete?'all frames loaded':cached>loaded?cached+'/'+total+' cached · '+loaded+'/'+total+' ready for view':loaded+'/'+total+' frames loaded');
 }
 function orderForecastBasemap(panel){
  if(panel.styleOrdered)return;
@@ -369,11 +376,22 @@ function panelCache(panel,model,field){
  panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
  panel.frameCache.setView(forecastViewKey(panel.map));panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
+function periodURLs(panel){
+ const {model}=panelSelection(state,panel.key);
+ return forecastPeriodURLs(panel.frameURLs??[],state.times,state.metas[model]?.reference_time,state.period);
+}
+const periodPriority=new ForecastPeriodPriority(()=>panelSelections(state).map(({key})=>({cache:panels[key]?.frameCache,urls:panels[key]?periodURLs(panels[key]):[]})));
 function warmUpcoming(panel){
  if(panel.restyling||!panel.frameCache)return;
  const accumulation=accumulationHours(panelSelection(state,panel.key).field);
  const window=frameWindow(panel.frameURLs,state.index,accumulation?{ahead:1,behind:1,loop:false}:frameBudget());
- panel.frameCache.warm({...window,all:accumulation?window.upcoming:fullSequence(panel.frameURLs,state.index),delay:accumulation?250:0});
+ const priority=periodURLs(panel);
+ if(state.period){
+  const wanted=new Set([panel.frameURLs[state.index],...priority]);
+  window.keep=new Set([...window.keep].filter(url=>wanted.has(url)));
+  window.upcoming=window.upcoming.filter(url=>wanted.has(url));
+ }
+ panel.frameCache.warm({...window,priority,waitForRemainder:signal=>periodPriority.wait(signal),all:accumulation&&!state.period?window.upcoming:fullSequence(panel.frameURLs,state.index),delay:accumulation?250:0});
 }
 async function prepareSelection(index,valid=()=>true){
  const choices=panelSelections(state),time=state.times[index],metas=state.metas;
@@ -758,6 +776,12 @@ for(const [key,property]of [['a','model'],['b','modelB'],['c','modelC']]){
  $('map-model'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,true));
  $('map-run'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,e.target.value===e.target.dataset.preferredRun));
 }
+$('map-forecast-period').addEventListener('change',()=>{
+ state.period=forecastPeriodHours($('map-forecast-period').value);
+ $('forecast-period-note').textContent=state.period?'Load available charts from each run’s initialization to +'+state.period+' h first, then the rest. The full timeline stays available.':'Load the full run, starting near the selected time.';
+ for(const {key}of panelSelections(state))warmUpcoming(panels[key]);
+ updatePreloadStatus();
+});
 for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
  pauseAnimation();failedSelection=null;state[property]=e.target.value;
  try{refreshTimeline();setTime();}
