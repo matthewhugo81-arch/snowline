@@ -10,6 +10,27 @@ const variables=['geopotential_height_500hPa','temperature_850hPa','pressure_msl
 const time=h=>new Date(Date.UTC(2026,9,11,h)).toISOString();
 const fixture={domain:'snowline_gefs_ensemble',completed:true,reference_time:time(0),variables,valid_times:[0,3,6,12,18,24].map(time)};
 
+test('all three ensembles share the anomaly scale and expose only published anomaly hours',()=>{
+ const key='geopotential_height_500hPa_anomaly_mean';
+ let sharedScale;
+ for(const domain of ENSEMBLE_DOMAINS){
+  const meta={...fixture,domain:domain.value,variables:[...variables,key],
+   variable_valid_times:Object.fromEntries([...variables.map(v=>[v,fixture.valid_times]),[key,[time(3),time(6)]]])};
+  const fields=[],settings={colorScales:{}};
+  extendCatalogue(fields,[meta],OM,settings);
+  assert.ok(availableFields(fields,[meta]).some(f=>f.key===key));
+  const scale=settings.colorScales[key];
+  if(sharedScale)assert.deepEqual(scale,sharedScale);else sharedScale=scale;
+  assert.equal(scale.unit,'m');
+  assert.deepEqual(scale.breakpoints,[-300,-200,-150,-100,-50,0,50,100,150,200,300]);
+  assert.equal(hasFieldTime(meta,key,time(0)),false);
+  assert.equal(hasFieldTime(meta,key,time(3)),true);
+  assert.equal(hasFieldTime(meta,variables[0],time(0)),true);
+  assert.equal(fieldDataURL(meta,key,time(12)),null);
+  assert.equal(availableFields(fields,[fixture]).some(f=>f.key===key),false);
+ }
+});
+
 test('official statistics have six distinct, physically meaningful scales',()=>{
  const fields=[],settings={colorScales:{}};
  assert.deepEqual(extendCatalogue(fields,[fixture],OM,settings),[]);

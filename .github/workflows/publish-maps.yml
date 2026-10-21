@@ -77,6 +77,13 @@ jobs:
           path: ensemble-data
           key: ensemble-grids-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ensemble-grids-v1-
+      - uses: actions/cache@v4
+        with:
+          path: climatology-cache
+          key: noaa-500hpa-daily-1991-2020-v1
+      - name: Prepare the shared MOGREPS, EC ENS and GEFS anomaly baseline
+        continue-on-error: true
+        run: python scripts/mogreps_climatology_cache.py
       - name: Prepare ensemble and MOGREPS snowfall feeds concurrently
         shell: bash
         run: |

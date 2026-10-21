@@ -18,7 +18,7 @@ export function ensembleField(key){
  if(key==='geopotential_height_500hPa_anomaly_mean')return {key,name:'500 hPa height anomaly · ensemble mean (1991–2020)',unit:'m',group:'Ensemble mean',ensembleStatistic:'mean',
   stops:[-300,-200,-150,-100,-50,0,50,100,150,200,300],colors:['#302080','#244bb8','#3687d0','#76b7de','#c7e3f1','#ffffff','#fee2b5','#f8b86c','#ed7844','#ce3836','#841e48'],
   contourValues:[-300,-200,-100,0,100,200,300],contourLabel:'100 m',
-  note:'MOGREPS-G 18-member mean 500 hPa height minus NOAA NCEP/NCAR Reanalysis 1 daily 1991–2020 climatology, in metres. The baseline is bilinearly interpolated to the native forecast grid; forecast cells are not smoothed. This is an anomaly from climatology, not ensemble spread or a model-bias-corrected anomaly.'};
+  note:'Ensemble-mean 500 hPa height minus NOAA NCEP/NCAR Reanalysis 1 daily 1991–2020 climatology, in metres. MOGREPS-G, ECMWF ENS and GEFS use the same baseline and colour scale. The baseline is bilinearly interpolated to the native forecast grid; forecast cells are not smoothed. This is an anomaly from climatology, not ensemble spread or a model-bias-corrected anomaly.'};
  const extra=extraEnsembleField(key);if(extra)return /^wind_speed_(300|200)hPa_mean$/.test(key)?{...extra,...JET_WIND_SCALE,contourValues:JET_WIND_SCALE.stops.slice(1),contourLabel:'15 mph from 60 to 180 mph'}:extra;
  const match=key.match(/^(.*)_(mean|spread)$/),d=definitions[match?.[1]];
  if(!d)return null;
