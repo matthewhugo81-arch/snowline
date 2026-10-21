@@ -39,6 +39,9 @@ jobs:
         run: python scripts/build_ensemble_products.py --model "$MODEL" --check-runtime
       - name: Verify member-first calculations
         run: python -m unittest discover -s tests -p 'test_ensemble_products.py'
+      - name: Verify installed HadUK-Grid reference
+        if: matrix.model == 'mogreps_uk'
+        run: python -m unittest discover -s tests -p 'test_temperature_climatology.py'
       - name: Restore retained optional products
         env:
           MODEL: ${{ matrix.model }}

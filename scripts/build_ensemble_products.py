@@ -69,6 +69,9 @@ def build(model,root,cache,run=None,max_hour=120,budget=1500,climatology=None):
         from temperature_climatology import read_normals
         normal=read_normals(climatology)
         targets += [(h,kind,24) for h in range(24,end_limit+1) if (run+timedelta(hours=h)).hour==9 for kind in ('min','max')]
+    # Publish near-term extrema alongside probabilities, not after the entire
+    # probability horizon. Completed tasks are reused on the next build.
+    targets.sort(key=lambda task:task[0])
     started=time.monotonic();failures=[]
     for h,kind,period in targets:
         if time.monotonic()-started>budget:break

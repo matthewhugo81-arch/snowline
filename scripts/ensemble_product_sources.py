@@ -1,5 +1,6 @@
 """Strict native member adapters for optional ensemble products."""
 from datetime import timedelta
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 import json
@@ -203,8 +204,12 @@ class MetOffice:
         arrays=[];identities=[]
         for cycle in self.cycles:
             lag=int((self.run-cycle).total_seconds()/3600);records=[];ids=None
-            for h in range(start+1,end+1):
-                a,members=self.read(cycle,h+lag,kind)
+            # Bounded downloads keep the fuller ensemble affordable. NetCDF
+            # decoding remains protected by LOCK; results retain hourly order.
+            hours=range(start+1,end+1)
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                readings=list(pool.map(lambda h:self.read(cycle,h+lag,kind),hours))
+            for h,(a,members) in zip(hours,readings):
                 if not self.uk and kind in ('rain','snow'):
                     conv,conv_members=self.read(cycle,h+lag,kind+'_conv')
                     if conv_members!=members:raise ValueError('Convective members differ')

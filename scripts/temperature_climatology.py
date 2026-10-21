@@ -26,6 +26,9 @@ def prepare(folder,output):
             if v.shape[0]!=12 or v.units not in ('degC','degree_Celsius','degrees_Celsius','degrees C','Celsius') or str(getattr(d,'lta_period','')) not in ('1991-2020','1991 to 2020'):
                 raise ValueError('Unverified climatology period, units or month count')
             if v.dimensions[-2:]!=('projection_y_coordinate','projection_x_coordinate'):raise ValueError('Unexpected HadUK grid')
+            if not np.array_equal(d['month_number'][:],np.arange(1,13)):raise ValueError('Expected January through December normals')
+            expected=f'time: {"minimum" if kind=="min" else "maximum"} within days time: mean over days time: mean over years'
+            if v.cell_methods!=expected:raise ValueError('Expected monthly normals of daily extrema')
             xs=np.asarray(d['projection_x_coordinate'][:]);ys=np.asarray(d['projection_y_coordinate'][:])
             if not np.allclose(np.diff(xs),1000) or not np.allclose(np.diff(ys),1000):raise ValueError('Expected 1 km HadUK cells')
             ix=np.rint((east-xs[0])/1000).astype(int);iy=np.rint((north-ys[0])/1000).astype(int)
@@ -35,6 +38,10 @@ def prepare(folder,output):
             result[kind]=np.where(inside,mapped,np.nan)
             if not np.isfinite(result[kind]).any():raise ValueError('Empty UK climatology')
         provenance[kind]=dict(file=file.name,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
+    # Independently interpolated source extrema can cross at isolated cells.
+    # Exclude inconsistent/missing pairs instead of inventing corrected normals.
+    valid=np.isfinite(result['min'])&np.isfinite(result['max'])&(result['min']<=result['max'])
+    for kind in result:result[kind]=np.where(valid,result[kind],np.nan)
     output=Path(output);output.parent.mkdir(parents=True,exist_ok=True)
     np.savez_compressed(output,**result,period='1991-2020',statistic='monthly extrema normals',provenance=json.dumps(provenance))
 

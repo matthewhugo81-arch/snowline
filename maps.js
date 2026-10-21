@@ -6,7 +6,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity} from './map-validity.js?v=20261021-ensemble-probabilities';
+import {forecastValidity} from './map-validity.js?v=20261021-haduk-anomalies';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -14,7 +14,7 @@ import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261021-ensemble-probabilities';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261021-haduk-anomalies';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
@@ -35,7 +35,7 @@ import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-unit
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261021-harmonie-pressure';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261021-ensemble-probabilities';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261021-haduk-anomalies';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
@@ -603,7 +603,7 @@ function setLegend(){
 function populateVariables(onlyKey){
  for(const {key,model,field} of panelSelections(state).filter(item=>!onlyKey||item.key===onlyKey)){
   const available=availableFields(fields,[state.metas[model],...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]);for(const f of productChoices(sourceModel(model)))if(!available.some(a=>a.key===f.key))available.push(f);const select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
-  for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;if(f.group==='Temperature anomalies'&&!state.metas[model]?.variables.includes(f.key)){option.disabled=true;option.textContent+=' — awaiting reference data';}groups.get(group).append(option);}
+  for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
   if(state.metas[model]?.variables.includes('precipitation')){
    const supported=ACCUMULATION_KEYS.filter(k=>accumulationSource(state.metas[model],k));
    let group=groups.get('Accumulated precipitation');
@@ -783,7 +783,7 @@ for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],
   try{
    const meta=await loadProducts(sourceModel(selection.model),metadataLoader(false),followLatest[key]?null:state.metas[selection.model]?.reference_time);
    if(generation!==panels[key].selectionGeneration)return;
-   if(!meta.variables.includes(chosen))throw Error(chosen.includes('anomaly')?'Temperature anomalies await the verified HadUK-Grid minimum/maximum climatology.':'This probability is not yet published for this run.');
+   if(!meta.variables.includes(chosen))throw Error(chosen.includes('anomaly')?'This temperature anomaly is not yet published for this run. Try the latest run or another forecast period.':'This probability is not yet published for this run.');
    // Product identity is separate so another panel on the same model keeps its sources.
    const normalKey=selectedRunKey(selection.model,meta);
    state['model'+(key==='a'?'':key.toUpperCase())]=normalKey;

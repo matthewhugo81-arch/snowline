@@ -13,6 +13,10 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enabl
 const reference='2026-10-21T12:00:00Z',time='2026-10-22T00:00:00Z',UK='ukmo_uk_ensemble_2km',key='ens_gust_gt50kt_12h',rain='ens_rain_ge10mm_12h',snow='ens_snow_ge1mm_12h';
 const native={completed:true,reference_time:reference,variables:['temperature_2m','precipitation'],valid_times:Array.from({length:25},(_,h)=>new Date(Date.parse(reference)+h*3600000).toISOString())};
 const product={format_version:1,domain:'snowline_mogreps_uk_products',completed:true,reference_time:reference,member_count:18,source_cycles:Array.from({length:6},(_,i)=>new Date(Date.parse(reference)-i*3600000).toISOString()),variables:[key,rain,snow],valid_times:[time],variable_valid_times:Object.fromEntries([key,rain,snow].map(k=>[k,[time]])),variable_intervals:Object.fromEntries([key,rain,snow].map(k=>[k,{[time]:{hours:12,start:reference,end:time}}]))};
+const anomalyTime='2026-10-23T09:00:00Z',anomalies=['ens_temperature_min_anomaly','ens_temperature_max_anomaly'];
+product.valid_times.push(anomalyTime);
+product.anomaly_reference={dataset:'HadUK-Grid',period:'1991-2020',statistic:'monthly normal of daily minimum/maximum',forecast_window:'24 hours ending 09 UTC'};
+for(const k of anomalies){product.variables.push(k);product.variable_valid_times[k]=[anomalyTime];product.variable_intervals[k]={[anomalyTime]:{hours:24,start:'2026-10-22T09:00:00Z',end:anomalyTime}};}
 try{
  for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
   const page=await browser.newPage({viewport}),errors=[],requests=[];
@@ -31,7 +35,17 @@ try{
   assert.equal(requests.filter(u=>u.includes('/ensemble-products/')).length,0,'Ordinary startup has no product requests');
   await page.locator('#map-model').selectOption(UK);await ready();
   assert.equal(requests.filter(u=>u.includes('/ensemble-products/')).length,0,'Selecting MOGREPS alone does not load products');
-  assert.equal(await page.locator('#map-variable optgroup[label="Temperature anomalies"] option:disabled').count(),2);
+  assert.equal(await page.locator('#map-variable optgroup[label="Temperature anomalies"] option:disabled').count(),0);
+  // Anomalies must work as the first optional layer, without a probability detour.
+  for(const anomaly of anomalies){
+   await page.locator('#map-variable').selectOption(anomaly);await ready();
+   assert.equal(await page.locator('#map-variable').inputValue(),anomaly);
+   assert.match(await page.locator('#panel-label-a').textContent(),/09:00 to 23 Oct 09:00 UTC/);
+   assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
+  }
+  await page.locator('#reload-maps').click();await ready();
+  assert.equal(await page.locator('#map-variable').inputValue(),anomalies[1]);
+  await page.locator('#map-variable').selectOption('temperature_2m');await ready();
   await page.locator('#compare-maps').check();await ready();
   await page.locator('#map-model-b').selectOption(UK);await ready();
   const otherBefore=await page.evaluate(()=>({url:window.productPanels.b.url,time:window.productPanels.b.displayedTime}));
@@ -50,7 +64,7 @@ try{
   await page.locator('#map-variable').selectOption('temperature_2m');await ready();
   assert.ok(!(await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({viewport,ordinaryStartupProductRequests:0,probabilitySwitching:true,pendingAnomaliesDisabled:true,refreshAndReload:true,returnToOrdinaryChart:true,otherPanelWasLoaded:!!otherBefore.url}));
+  console.log(JSON.stringify({viewport,ordinaryStartupProductRequests:0,probabilitySwitching:true,directAnomalySelection:true,refreshAndReload:true,returnToOrdinaryChart:true,otherPanelWasLoaded:!!otherBefore.url}));
   await page.close();
  }
 }finally{await browser.close();await new Promise(r=>server.close(r));}
