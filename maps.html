@@ -2,9 +2,13 @@
 import {installModelRunMenu} from './map-model-run-menu.js?v=20261021-complete-labels';
 import {MAP_MODELS} from './map-models.js?v=20261020-run-selector';
 import {mapRunCatalogue,completedModelRun} from './map-run-selection.js?v=20261021-run-menu';
+import {loadSpatialModel} from './map-sources.js?v=20261020-run-selector';
 import {cachedJSON} from './cache.js?v=20261010-ukv-families';
 installModelRunMenu({models: MAP_MODELS, completedOnly: completedModelRun,
-  loadModel: async (model, load) => (await mapRunCatalogue.select(model, load)).meta,
+  loadModel: async (model, load) => {
+    const latest = await loadSpatialModel(model, load);
+    return completedModelRun(model, latest) ? latest : (await mapRunCatalogue.select(model, load)).meta;
+  },
   loadJSON: (url, {force}) => cachedJSON(url, {kind: 'metadata', ttl: 15000, force})});
 </script><link rel="stylesheet" href="map-image-export.css?v=20261012-chart-style"><link rel="stylesheet" href="map-previous-runs.css?v=20261013-compact-valid-time"><link rel="stylesheet" href="theme.css?v=20261019-mogreps-uk"></head><body class="map-page">
 <header><div class="map-heading"><a class="brand" href="./"><span class="mark" aria-hidden="true">✳</span> Snowline</a><span class="header-divider" aria-hidden="true">|</span><h1>UK Model Maps</h1></div><nav class="page-nav" aria-label="Main navigation"><a id="nav-charts" href="./">Location charts</a><a href="maps.html?v=20261020-run-selector" aria-current="page">UK maps</a></nav><label class="theme-control">Theme <select data-theme-select aria-label="Colour theme" disabled><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></header>
