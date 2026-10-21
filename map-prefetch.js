@@ -19,12 +19,13 @@ export function forecastTileRequests(map,source,metadata){
  return [...requests.values()];
 }
 export function createFramePrefetch(map,cache,decorate){
- return async(url,controller)=>{
+ return async(url,controller,progress=()=>{})=>{
   const sources=[{type:'raster',url,maxzoom:10},...decorate(url).map(group=>group.source)];
   await Promise.all(sources.map(async source=>{
    const {data}=await cache.protocol({url:source.url,type:'json'},controller,{background:true});
    if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');
-   await Promise.all(forecastTileRequests(map,source,data).map(params=>cache.prefetch(params,controller)));
+   progress();
+   await Promise.all(forecastTileRequests(map,source,data).map(async params=>{await cache.prefetch(params,controller);progress();}));
   }));
  };
 }

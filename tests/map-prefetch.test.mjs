@@ -6,6 +6,21 @@ import {ForecastTileCache} from '../map-tile-cache.js';
 import {FakeMap,loaded} from './frame-fake.mjs';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 
+test('multi-tile frames keep progressing beyond one timeout without restarting completed work',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date']});
+ let advance,complete,signal;const cache=new ForecastFrames(new FakeMap(),'a',{timeout:100,prefetch:(url,controller,progress)=>new Promise(resolve=>{advance=progress;complete=resolve;signal=controller.signal;})});
+ const job=cache.preload('large-ensemble');await flush();
+ for(let i=0;i<3;i++){t.mock.timers.tick(90);advance();assert.equal(signal.aborted,false);}
+ complete();assert.equal(await job,true);assert.ok(cache.preloaded.has('large-ensemble'));assert.equal(cache.failures.size,0);cache.clear();
+});
+
+test('a trickling frame still reaches a hard deadline and cannot occupy a slot forever',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date']});
+ let advance;const cache=new ForecastFrames(new FakeMap(),'a',{timeout:100,prefetch:(url,controller,progress)=>new Promise((resolve,reject)=>{advance=progress;controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));})});
+ const job=cache.preload('trickle');await flush();for(let i=0;i<4;i++){t.mock.timers.tick(90);advance();}t.mock.timers.tick(40);
+ assert.equal(await job,false);assert.equal(cache.failureAttempts.get('trickle'),1);assert.equal(cache.prefetches.size,0);cache.clear();
+});
+
 test('advancing playback prepares the new nearby frame before unfinished distant downloads',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});
  const map=new FakeMap(),jobs=new Map(),started=[];
