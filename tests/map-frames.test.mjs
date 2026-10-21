@@ -36,6 +36,43 @@ test('pan retains source identities and cached frames; only new tile coverage ch
  assert.equal(map.sourceAdds,2,'MapLibre adds tiles to existing sources instead of rebuilding frames');cache.clear();
 });
 
+test('returning to a prepared zoom restores all frames, including a smaller covered extent',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'zoom');
+ const wide=JSON.stringify([['4/7/5','4/8/5'],['4/7/5','4/8/5']]),close=JSON.stringify([['5/15/10'],['5/15/10']]);
+ cache.setView(wide);
+ for(const url of ['now','next','later'])await loaded(cache,map,url);
+ const current=cache.frames.get('now');cache.show(current,.8,'linear');
+ cache.moveStart();cache.setView(close);
+ assert.equal(cache.preloaded.size,0,'New detail is not prematurely reported ready');
+ assert.equal(cache.cachedFrames().size,3,'Completed charts remain cached at their original zoom');
+ await loaded(cache,map,'now');
+ cache.setView(wide);assert.equal(cache.preloaded.size,3,'The full prepared sequence returns immediately');
+ assert.equal(cache.isReady('now'),false,'Restoring progress does not bypass the selected image render');
+ assert.equal(cache.current,current);
+ cache.setView(JSON.stringify([['4/7/5'],['4/7/5']]));assert.equal(cache.preloaded.size,3,'A subset of prepared tiles needs no downloads');
+ cache.retain(new Set(['now']));assert.deepEqual([...cache.cachedFrames()],['now']);
+ cache.setView(close);assert.deepEqual([...cache.preloaded],['now'],'Retired URLs cannot return from zoom history');cache.clear();
+});
+
+test('zoom history is bounded and expires without extending the age of copied coverage',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:1000});
+ const map=new FakeMap(),cache=new ForecastFrames(map,'zoom');cache.viewMaxAge=100;
+ const wide=JSON.stringify([['a','b'],['a','b']]),narrow=JSON.stringify([['a'],['a']]);
+ cache.setView(wide);await loaded(cache,map,'now');
+ t.mock.timers.tick(80);cache.setView(narrow);assert.equal(cache.preloaded.size,1);
+ t.mock.timers.tick(21);cache.setView(wide);assert.equal(cache.preloaded.size,0,'Subset reuse does not renew the underlying tiles');
+ for(let i=0;i<30;i++)cache.setView('view-'+i);
+ assert.equal(cache.views.size,8);cache.clear();
+});
+
+test('storage eviction prevents restoring optimistic zoom readiness',async()=>{
+ let allowed=true,revision=0;
+ const map=new FakeMap(),cache=new ForecastFrames(map,'zoom',{canPreload:()=>allowed,cacheRevision:()=>revision});
+ cache.setView('wide');await loaded(cache,map,'now');cache.setView('close');await loaded(cache,map,'now');allowed=false;revision++;
+ cache.setView('wide');assert.equal(cache.preloaded.size,0);
+ allowed=true;cache.setView('close');assert.equal(cache.preloaded.size,0,'Freeing capacity cannot revive evicted zoom history');cache.clear();
+});
+
 test('an unpublished slot hides the previous image and can return to it without relabelling stale imagery',async()=>{
  const map=new FakeMap(),cache=new ForecastFrames(map,'a');
  const frame=await loaded(cache,map,'run09/hour11');cache.show(frame,.8,'linear');cache.hide();

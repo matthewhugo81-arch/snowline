@@ -20,8 +20,8 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,preci
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261020-layout-playback';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-stable-tiles';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261021-stable-tiles';
+import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-zoom-cache';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261021-zoom-cache';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
@@ -100,7 +100,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
-},{persistent:true,onLimit:()=>updatePreloadStatus()});
+},{persistent:true,...forecastRenderBudget(navigator),onLimit:()=>updatePreloadStatus()});
 imageryCache.setContext('complete-geographic-tiles');
 maplibregl.addProtocol('om',(params,controller)=>imageryCache.protocol(params,controller));
 window.addEventListener('pagehide',()=>imageryCache.release());
@@ -320,19 +320,20 @@ function frameBudget(){
 }
 function updatePreloadStatus(){
  const choices=panelSelections(state),total=choices.reduce((sum,{model,field})=>sum+state.times.filter(time=>hasFieldTime(state.metas[model],field,time)).length,0);
- let loaded=0,failed=0;
- for(const {key}of choices){const panel=panels[key];for(const url of panel?.frameURLs??[]){if(panel.frameCache?.preloaded.has(url))loaded++;else if(panel.frameCache?.failures.has(url))failed++;}}
+ let loaded=0,failed=0,cached=0;
+ for(const {key}of choices){const panel=panels[key],saved=panel?.frameCache?.cachedFrames();for(const url of panel?.frameURLs??[]){if(saved?.has(url))cached++;if(panel.frameCache?.preloaded.has(url))loaded++;else if(panel.frameCache?.failures.has(url))failed++;}}
  const complete=total>0&&loaded===total&&!imageryCache.limited;
  let message='Checking imagery…';
  if(total)message='Loading imagery · '+loaded+'/'+total+' frames'+(failed?' · '+failed+' unavailable':'');
+ if(cached>loaded)message=cached+'/'+total+' frames cached · '+loaded+'/'+total+' ready for this view'+(failed?' · '+failed+' unavailable':'');
  if(complete)message='All '+total+' frames loaded';
  if(choices.some(({field})=>accumulationHours(field)))message='Accumulations · selected period first; nearby totals cached'+(failed?' · '+failed+' unavailable':'');
  if(imageryCache.limited)message='Storage limited · nearby frames cached';
- const progress=$('preload-status');progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.total=String(total);
+ const progress=$('preload-status');progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.cached=String(cached);progress.dataset.total=String(total);
  const outlineFailed=choices.some(({key})=>panels[key]?.coastline.state.status==='error');
  $('retry-preload').hidden=!failedSelection&&!outlineFailed&&(!failed||imageryCache.limited);
  $('retry-preload').textContent=outlineFailed||failedSelection?.outline?'Retry map outline':failedSelection?'Retry selected frame':'Retry background loading';
- if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?'storage limited; selected and nearby frames available':complete?'all frames loaded':loaded+'/'+total+' frames loaded');
+ if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?'storage limited; selected and nearby frames available':complete?'all frames loaded':cached>loaded?cached+'/'+total+' cached · '+loaded+'/'+total+' ready for view':loaded+'/'+total+' frames loaded');
 }
 function orderForecastBasemap(panel){
  if(panel.styleOrdered)return;
@@ -365,7 +366,7 @@ function panelCache(panel,model,field){
  panel.cacheKey=signature;
  panel.cacheTimes=state.times;panel.cacheMeta=meta;panel.frameDescriptors=descriptors;
  const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.symbolURL?[symbolOverlay(descriptor.symbolURL)]:[]),...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,isActive:()=>!document.hidden});
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
  panel.frameCache.setView(forecastViewKey(panel.map));panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
