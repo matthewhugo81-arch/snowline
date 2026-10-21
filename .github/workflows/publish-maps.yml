@@ -64,6 +64,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_generated*.py'
           python -m unittest discover -s tests -p 'test_mogreps*.py'
           python -m unittest discover -s tests -p 'test_vertical*.py'
+          python -m unittest discover -s tests -p 'test_harmonie*.py'
           python -m unittest discover -s tests -p 'test_publication*.py'
       - uses: actions/cache@v4
         with:
@@ -115,6 +116,9 @@ jobs:
           extra_ecmwf=$!
           wait "$extra_gefs" || echo '::warning::Optional GEFS fields deferred; retaining last verified publication.'
           wait "$extra_ecmwf" || echo '::warning::Optional ECMWF fields deferred; retaining last verified publication.'
+      - name: Restore matching native HARMONIE sea-level pressure
+        continue-on-error: true
+        run: timeout --kill-after=15s 180s python scripts/build_harmonie_pressure.py
       - name: Record source-to-publication health without changing model timestamps
         continue-on-error: true
         run: python scripts/check_generated_freshness.py --local-root ensemble-data --output ensemble-data/health.json
@@ -126,7 +130,7 @@ jobs:
           cp -a point-data _site/point-data
           mkdir -p _site/ensemble-data
           cp -a ensemble-data/snowline_gefs_ensemble ensemble-data/snowline_ecmwf_ensemble ensemble-data/snowline_mogreps_uk ensemble-data/snowline_gem_700 ensemble-data/snowline_icon_eu_700 _site/ensemble-data/
-          for extra in snowline_gefs_extra_v2 snowline_ecmwf_extra_v2; do
+          for extra in snowline_gefs_extra_v2 snowline_ecmwf_extra_v2 knmi_harmonie_arome_europe; do
             if [ -f "ensemble-data/$extra/latest.json" ]; then
               cp -a "ensemble-data/$extra" _site/ensemble-data/
             fi
