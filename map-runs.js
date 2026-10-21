@@ -27,8 +27,9 @@ export function retainRunProgress(previous,next){
  if(!previous||Date.parse(next.reference_time)>Date.parse(previous.reference_time))return next;
  if(Date.parse(next.reference_time)<Date.parse(previous.reference_time))return previous;
  const incoming=next.sources??[next],old=previous.sources??[previous];
- const sources=[...new Set([...incoming,...old].map(source=>source.domain))].map(domain=>{
-  const a=old.find(source=>source.domain===domain),b=incoming.find(source=>source.domain===domain);
+ const sourceKey=source=>source.domain+(source.harmoniePressureSupplement?'#pressure':'');
+ const sources=[...new Set([...incoming,...old].map(sourceKey))].map(domain=>{
+  const a=old.find(source=>sourceKey(source)===domain),b=incoming.find(source=>sourceKey(source)===domain);
   if(!a||!b)return b??a;
   const variableKeys=[...new Set([...Object.keys(a.variable_valid_times??{}),...Object.keys(b.variable_valid_times??{})])];
   const periods=[...new Set([...Object.keys(a.variable_intervals??{}),...Object.keys(b.variable_intervals??{})])];
@@ -36,5 +37,5 @@ export function retainRunProgress(previous,next){
    ...(variableKeys.length?{variable_valid_times:Object.fromEntries(variableKeys.map(key=>[key,forecastTimes([{valid_times:a.variable_valid_times?.[key]??[]},{valid_times:b.variable_valid_times?.[key]??[]}])]))}:{}),
    ...(periods.length?{variable_intervals:Object.fromEntries(periods.map(key=>[key,{...a.variable_intervals?.[key],...b.variable_intervals?.[key]}]))}:{})};
  });
- return {...next,sources,completed:completedSources(sources),variables:[...new Set(sources.flatMap(source=>source.variables))],valid_times:forecastTimes(sources)};
+ return {...next,sources,completed:completedSources(sources.filter(s=>!s.harmoniePressureSupplement)),variables:[...new Set(sources.flatMap(source=>source.variables))],valid_times:forecastTimes(sources)};
 }
