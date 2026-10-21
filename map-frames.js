@@ -1,4 +1,9 @@
 let cacheSequence=0;
+// A cached wider view can also serve a smaller extent at the same tile zoom.
+function coversView(saved,current){
+ if(saved===current)return true;
+ try{const a=JSON.parse(saved),b=JSON.parse(current);return b.every((tiles,i)=>tiles.every(tile=>a[i]?.includes(tile)));}catch{return false;}
+}
 // Retain a bounded window. The browser selects a smaller budget in comparison mode.
 export function frameWindow(urls,index,{ahead=2,behind=2,loop=false,direction=1}={}){
  const reverse=direction<0;
@@ -22,7 +27,7 @@ export class ForecastFrames{
   this.prefix=prefix+'-'+(++cacheSequence);
   this.frames=new Map();this.sequence=0;this.current=null;this.epoch=0;this.queue=[];this.keep=new Set();
   this.preloaded=new Set();this.failures=new Set();this.failureAttempts=new Map();this.retired=new Set();
-  this.prefetches=new Map();
+  this.prefetches=new Map();this.views=new Map();this.maxViews=8;this.viewMaxAge=3600000;
  }
  prepare(url){
   let frame=this.frames.get(url);
@@ -144,17 +149,31 @@ export class ForecastFrames{
  setView(key){
   if(key===this.viewKey)return false;
   const previous=this.viewKey;this.viewKey=key;
-  if(previous!==undefined){
-   this.stop();this.preloaded.clear();this.retryFailures();
-   // Keep sources and their complete tiles. Only coverage readiness changes.
+  if(previous!==undefined)this.stop();
+  const now=Date.now();
+  // Readiness belongs to geographic coverage, not to the latest camera event.
+  // Keep a bounded history so zooming back restores the prepared sequence.
+  for(const [view,entry]of this.views)if(now-entry.created>=this.viewMaxAge)this.views.delete(view);
+  if(previous===undefined)this.views.set(key,{loaded:this.preloaded,created:now});
+  else{
+   const loaded=new Set();let created=now;
+   if(this.canPreload())for(const [view,entry]of this.views)if(coversView(view,key)){
+    created=Math.min(created,entry.created);for(const url of entry.loaded)loaded.add(url);
+   }
+   this.preloaded=loaded;this.views.delete(key);this.views.set(key,{loaded,created});
+   this.retryFailures();
+   // Existing sources still wait for MapLibre's render of the new view before
+   // display. Restored background readiness never bypasses that pixel check.
    for(const frame of this.frames.values())frame.suspended=true;
-   this.onProgress();
   }
-  return true;
+  while(this.views.size>this.maxViews)this.views.delete(this.views.keys().next().value);
+  this.onProgress();return true;
  }
+ cachedFrames(){return new Set([...this.preloaded,...[...this.views.values()].flatMap(entry=>[...entry.loaded])]);}
+ forgetViews(){this.views.clear();this.preloaded.clear();if(this.viewKey!==undefined)this.views.set(this.viewKey,{loaded:this.preloaded,created:Date.now()});}
  suspend(exceptURL){
   this.stop(exceptURL);
-  this.preloaded.clear();this.retryFailures();this.onProgress();
+  this.forgetViews();this.retryFailures();this.onProgress();
   for(const frame of this.frames.values()){
    frame.suspended=true;
    if(frame!==this.current&&frame.url!==exceptURL)for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','none');
@@ -168,7 +187,7 @@ export class ForecastFrames{
    if(frame===this.current){this.frames.delete(frame.url);this.retired.add(frame);frame.suspended=true;}
    else this.discard(frame);
   }
-  this.preloaded.clear();this.retryFailures();this.onProgress();
+  this.forgetViews();this.retryFailures();this.onProgress();
  }
  discard(frame){
   if(!frame||(this.frames.get(frame.url)!==frame&&!this.retired.has(frame)))return;
@@ -185,7 +204,7 @@ export class ForecastFrames{
    if(frame===this.current){this.frames.delete(frame.url);this.retired.add(frame);}
    else this.discard(frame);
   }
-  for(const set of [this.preloaded,this.failures,this.keep])for(const url of set)if(!urls.has(url))set.delete(url);
+  for(const set of [this.preloaded,this.failures,this.keep,...[...this.views.values()].map(entry=>entry.loaded)])for(const url of set)if(!urls.has(url))set.delete(url);
   for(const url of this.failureAttempts.keys())if(!urls.has(url))this.failureAttempts.delete(url);
   this.queue.splice(0,this.queue.length,...this.queue.filter(url=>urls.has(url)));this.onProgress();
  }
@@ -287,5 +306,5 @@ export class ForecastFrames{
    }
   },delay);
  }
- clear(){this.stop();for(const frame of [...this.frames.values(),...this.retired])this.discard(frame);this.keep.clear();this.preloaded.clear();this.retryFailures();this.onProgress();}
+ clear(){this.stop();for(const frame of [...this.frames.values(),...this.retired])this.discard(frame);this.keep.clear();this.forgetViews();this.retryFailures();this.onProgress();}
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ForecastTileCache} from '../map-tile-cache.js';
+import {ForecastTileCache,forecastRenderBudget} from '../map-tile-cache.js';
 const params=(url,type='image')=>({url:'om://'+url,type});
 const bytes=()=>({data:new Uint8Array([10,20,30,40]).buffer});
 const storage=()=>{
@@ -12,6 +12,26 @@ const storage=()=>{
 };
 const read=(cache,url,type)=>cache.protocol(params(url,type),new AbortController());
 const saved=cache=>Promise.all([...cache.writes.values()].map(job=>job.promise));
+
+test('faster devices prepare more tiles without taking the selected chart slots',async()=>{
+ assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8}),{concurrency:8,backgroundConcurrency:6});
+ for(const device of [{},{hardwareConcurrency:4,deviceMemory:8},{hardwareConcurrency:16,deviceMemory:2}])assert.equal(forecastRenderBudget(device).backgroundConcurrency,4);
+ const started=[],jobs=new Map();
+ const cache=new ForecastTileCache(p=>new Promise(resolve=>{started.push(p.url);jobs.set(p.url,resolve);}),{storage:null,...forecastRenderBudget({hardwareConcurrency:8})});cache.setContext('tiles');
+ const work=Array.from({length:8},(_,i)=>cache.prefetch(params('background-'+i),new AbortController()));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(started.length,6);
+ const selected=[read(cache,'selected-rain'),read(cache,'selected-pressure')];
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(started.length,8);assert.ok(started.includes('om://selected-pressure'));
+ for(const resolve of jobs.values())resolve(bytes());await new Promise(resolve=>setImmediate(resolve));
+ for(const resolve of jobs.values())resolve(bytes());await Promise.all([...work,...selected]);cache.release();
+});
+
+test('background prefetch does not allocate a discarded consumer copy, foreground bytes remain owned',async()=>{
+ let calls=0;const cache=new ForecastTileCache(async()=>{calls++;return bytes();},{storage:null});cache.setContext('tiles');
+ assert.equal(await cache.prefetch(params('ready'),new AbortController()),undefined);
+ const first=await read(cache,'ready');new Uint8Array(first.data)[0]=99;
+ const second=await read(cache,'ready');assert.equal(new Uint8Array(second.data)[0],10);assert.equal(calls,1);cache.release();
+});
 
 test('143 comparison frames with 24 raster/overlay tiles each remain reusable beyond the old entry and byte ceilings',async()=>{
  let calls=0;

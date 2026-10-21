@@ -80,6 +80,23 @@ try{
   assert.equal(smallPan.panels.a.source,before.panels.a.source,'A drag retains the current weather source');
   assert.deepEqual(smallPan.panels.b,before.panels.b,'Dragging Panel 1 leaves Panel 2 intact');
   for(const request of new Set(before.requests))assert.equal(smallPan.requests.filter(r=>r===request).length,before.requests.filter(r=>r===request).length,'A small pan never re-renders a previously prepared tile');
+  const camera=await page.evaluate(()=>{const map=window.fixturePanels.a.map;return {center:map.getCenter().toArray(),zoom:map.getZoom()};});
+  const zoomStart=await page.evaluate(()=>{
+   const p=window.fixturePanels.a;p.map.jumpTo({zoom:p.map.getZoom()+1});
+   return {cached:p.frameCache.cachedFrames().size,prepared:p.frameCache.preloaded.size};
+  });
+  assert.equal(zoomStart.cached,smallPan.panels.a.loaded.length,'Zoom retains the completed-frame cache');
+  await ready();await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:120000});
+  const zoomed=await snapshot();assert.deepEqual(zoomed.panels.b,before.panels.b,'Zooming one panel leaves the other fully prepared');
+  const restored=await page.evaluate(camera=>{
+   const p=window.fixturePanels.a;p.map.jumpTo(camera);
+   return {prepared:p.frameCache.preloaded.size,cached:p.frameCache.cachedFrames().size};
+  },camera);
+  assert.equal(restored.prepared,smallPan.panels.a.loaded.length,'Returning to the original zoom immediately restores its completed sequence');
+  await ready();await page.waitForTimeout(350);
+  const zoomBack=await snapshot();
+  assert.equal(zoomBack.requests.length,zoomed.requests.length,'Returning to a prepared zoom makes no native render requests');
+  assert.equal(zoomBack.panels.a.source,before.panels.a.source);
   await page.evaluate(()=>window.fixturePanels.a.map.panBy([180,80],{duration:0}));await ready();
   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:120000});
   const largePan=await snapshot();
@@ -106,6 +123,6 @@ try{
   const run=await snapshot();for(const key of ['a','c'])assert.equal(run.panels[key].source,rain.panels[key].source,'Only the changed run replaces its source');
   assert.deepEqual(errors,[]);await mapView();await mkdir('review-output',{recursive:true});
   await page.screenshot({path:`review-output/independent-panels-${viewport.width}.png`});
-  console.log(JSON.stringify({viewport,completeFrames:143,smallPanReuse:true,largePanReuse:true,independentModelLayerRun:true}));await page.close();
+  console.log(JSON.stringify({viewport,completeFrames:143,smallPanReuse:true,largePanReuse:true,zoomReturnReuse:true,independentModelLayerRun:true}));await page.close();
  }
 }finally{await browser.close();server.close();}

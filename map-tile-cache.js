@@ -1,6 +1,11 @@
 // Keep prepared PNG/vector tiles on disk, with a small hot memory cache. MapLibre
 // can then recreate a distant frame without downloading/decoding the model again.
 const PREFIX='snowline-forecast-tiles-v1-';
+// Faster machines can prepare six tiles concurrently while two slots remain
+// available for the selected chart. Keep the existing budget on smaller devices.
+export function forecastRenderBudget({hardwareConcurrency=4,deviceMemory=4}={}){
+ return {concurrency:8,backgroundConcurrency:hardwareConcurrency>=8&&deviceMemory>=4?6:4};
+}
 const abort=()=>new DOMException('Aborted','AbortError');
 const copy=value=>({...value,data:structuredClone(value.data)});
 // The native renderer returns ImageBitmap, not encoded PNG bytes. Response(bitmap)
@@ -225,7 +230,7 @@ export class ForecastTileCache{
   if(persisting)this.persist(key,request,entry,store,generation,params.type);
   return saved;
  }
- protocol(params,consumer,{background=false}={}){
+ protocol(params,consumer,{background=false,copyResult=true}={}){
   if(consumer.signal.aborted)return Promise.reject(abort());
   // MapLibre also prepares nearby hidden frames. They must share the bounded
   // speculative budget, rather than masquerading as selected-chart requests.
@@ -248,7 +253,7 @@ export class ForecastTileCache{
      // the existing work, instead of cancelling a worker and restarting it.
      job.abortTimer=setTimeout(()=>{if(!job.users){job.controller.abort();if(this.pending.get(key)===job)this.pending.delete(key);}},this.abortDelay);
     }
-    if(error)reject(error);else resolve(copy(result));
+    if(error)reject(error);else resolve(copyResult?copy(result):undefined);
    };
    const cancel=()=>finish(abort());consumer.signal.addEventListener('abort',cancel,{once:true});
    job.promise.then(result=>finish(null,result),error=>finish(error));
@@ -257,7 +262,8 @@ export class ForecastTileCache{
  async prefetch(params,controller){
   // Use the same de-duplicated path as a foreground map. Only complete bytes
   // count as prepared; cancellation or a partial overlay never counts as ready.
-  const result=await this.protocol(params,controller,{background:true});
-  result.data?.close?.();
+  // No bytes are transferred to a renderer here. Avoid copying each PNG and
+  // vector buffer solely to discard it after background preparation.
+  await this.protocol(params,controller,{background:true,copyResult:false});
  }
 }
