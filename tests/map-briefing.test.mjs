@@ -15,7 +15,7 @@ test('composite makes dry precipitation transparent and caps cloud brightness at
 });
 test('briefing presets require all component fields, never silently substitute another chart',()=>{
  assert.deepEqual(briefingPresets(meta).map(p=>p.id),['weather','precipitation_total_6h','precipitation_total_12h','precipitation_total_18h','precipitation_total_24h','precipitation_total_36h','precipitation_total_48h','airmass','upper']);
- assert.deepEqual(briefingPresets({...meta,variables:['cloud_cover','precipitation']}),[]);
+ assert.deepEqual(briefingPresets({...meta,variables:['cloud_cover','precipitation']}).map(p=>p.id),['weather']);
  assert.deepEqual(briefingPresets({...meta,variables:['temperature_850hPa','pressure_msl']}).map(p=>p.id),['airmass']);
 });
 test('briefing sequences use common native times, honour cadence and retain regional hourly detail',()=>{
