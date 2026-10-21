@@ -1,3 +1,4 @@
+import {PRODUCT_BASE,productPath} from './map-ensemble-products.js';
 // GitHub Pages gzips .om responses, including byte ranges. A range into the
 // compressed representation cannot be decoded as an OM chunk. The deployment
 // uses a non-compressible MIME suffix for these already-compressed binary files.
@@ -6,7 +7,7 @@ const installed=new WeakSet();
 export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-data/',import.meta.url).href){
  const companion='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/';
  const archive=url=>url.match(/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/(snowline_ecmwf_ensemble\/.*)$/)?.[1];
- const own=url=>url.startsWith(base)||url.startsWith(companion)||!!archive(url);
+ const own=url=>!!productPath(url)||url.startsWith(PRODUCT_BASE)||url.startsWith(base)||url.startsWith(companion)||!!archive(url);
  const reader=OM.getProtocolInstance(settings).omFileReader;
  if(installed.has(reader))return;
  installed.add(reader);
@@ -16,11 +17,11 @@ export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-da
  // the next native-grid read can waste another block. Keep the normal large
  // model cache unchanged and use smaller, bounded blocks for measured ENS
  // feeds. Both caches retain the renderer's URL/version-aware block keys.
- const compact=/^(?:snowline_gefs_ensemble|snowline_ecmwf_ensemble|snowline_gefs_extra_v2|snowline_ecmwf_extra_v2|snowline_mogreps_global)\//;
+ const compact=/^(?:snowline_gefs_ensemble|snowline_ecmwf_ensemble|snowline_gefs_extra_v2|snowline_ecmwf_extra_v2|snowline_mogreps_global|snowline_(?:ecmwf|gefs|mogreps_uk|mogreps_g)_products)\//;
  const pool=reader.backendPool;
  const ensembleCache=OM.LruBlockCache&&typeof pool?.withReader==='function'?new OM.LruBlockCache(64*1024,256):null;
  reader.withReader=(url,callback)=>{
-  const path=url.startsWith(base)?url.slice(base.length):url.startsWith(companion)?url.slice(companion.length):archive(url);
+  const path=productPath(url)??(url.startsWith(PRODUCT_BASE)?url.slice(PRODUCT_BASE.length):url.startsWith(base)?url.slice(base.length):url.startsWith(companion)?url.slice(companion.length):archive(url));
   const binary=own(url)&&url.endsWith('.om')?url+'.png':url;
   return ensembleCache&&path&&compact.test(path)&&/\.om(?:\.png)?$/.test(url)
    ?pool.withReader(binary,ensembleCache,callback)

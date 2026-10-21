@@ -1,3 +1,4 @@
+import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js';
 import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
 import {UKMO_EARLY_DOMAINS} from './map-ukmo-early.js?v=20261021-early';
@@ -5,7 +6,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
+import {forecastValidity} from './map-validity.js?v=20261021-ensemble-probabilities';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -13,7 +14,7 @@ import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-ens-loading';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261021-ensemble-probabilities';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
@@ -34,7 +35,7 @@ import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-unit
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261021-harmonie-pressure';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261020-compact-controls';
+import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261021-ensemble-probabilities';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
@@ -60,6 +61,7 @@ function fitArea(map,duration=0){const bounds=selectedAreaBounds();if(bounds)map
 const tempColors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643'];
 const referenceColors=["#320032","#640064","#960096","#c800c8","#fa00fe","#c800fe","#9600fe","#6400fe","#3200fe","#0032fe","#0064fe","#0096fe","#00c8fe","#00e6f0","#00e6a0","#00e678","#00e650","#00f028","#00fa00","#fefe00","#fee100","#fec800","#feaf00","#fe9600","#e67d00","#e66400","#dc4b1e","#c8321e","#b4191e","#aa001e","#b40032","#c80064","#fe0096","#fe00c8","#fe00e1","#fe00fa"];
 const fields=[
+ ...PRODUCT_FIELDS,
  compositeField(PRECIPITATION_SCALE),
  {key:'pressure_msl',overlayOnly:true,name:'Mean sea-level pressure (MSLP)',unit:'hPa',note:'Atmospheric pressure reduced to mean sea level. Isobars are spaced every 4 hPa.',stops:[940,960,980,1000,1010,1020,1040,1060],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643']},
  {key:'temperature_2m',name:'2 m air temperature',unit:'°C',note:'Near-surface air temperature, not road temperature.',stops:[-1000,...Array.from({length:33},(_,i)=>-45+i*3)],colors:referenceColors.slice(0,34),temperatureBands:3},
@@ -77,7 +79,7 @@ const fields=[
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
-const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS,...UKMO_EARLY_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS,...PRODUCT_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS,...UKMO_EARLY_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
 installRangeReads(OM,settings);
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);
@@ -600,8 +602,8 @@ function setLegend(){
 }
 function populateVariables(onlyKey){
  for(const {key,model,field} of panelSelections(state).filter(item=>!onlyKey||item.key===onlyKey)){
-  const available=availableFields(fields,[state.metas[model]]),select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
-  for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
+  const available=availableFields(fields,[state.metas[model],...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]);for(const f of productChoices(sourceModel(model)))if(!available.some(a=>a.key===f.key))available.push(f);const select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
+  for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;if(f.group==='Temperature anomalies'&&!state.metas[model]?.variables.includes(f.key)){option.disabled=true;option.textContent+=' — awaiting reference data';}groups.get(group).append(option);}
   if(state.metas[model]?.variables.includes('precipitation')){
    const supported=ACCUMULATION_KEYS.filter(k=>accumulationSource(state.metas[model],k));
    let group=groups.get('Accumulated precipitation');
@@ -651,18 +653,19 @@ async function refreshLiveRuns(){
  if(document.hidden||briefingActive||checkingLiveRuns||$('reload-maps').disabled)return;
  if(!state.times.length)return configure(true);
  checkingLiveRuns=true;
- const generation=state.generation,selected=panelSelections(state);
+ const generation=state.generation,selected=panelSelections(state).filter(p=>!productField(p.field));
+ if(!selected.length){checkingLiveRuns=false;return;}
  try{
   const load=metadataLoader(true);
   // Panels can share a model and initialization while having different intent:
   // one may follow the latest complete cycle and another deliberately pin it.
   const results=await Promise.allSettled(selected.map(item=>mapRunCatalogue.select(requestedRun(item),load)));
   if(generation!==state.generation||briefingActive||document.hidden)return;
-  const next={};let changed=false,failed=false;
+  const next={...state.metas};let changed=false,failed=false;
   results.forEach((result,index)=>{
    const {key,model}=selected[index],previous=state.metas[model];
    if(result.status==='rejected'){failed=true;next[model]=previous;return;}
-   const meta=retainRunProgress(previous,result.value.meta),id=selectedRunKey(model,meta);
+   const meta=retainProductSources(retainRunProgress(previous,result.value.meta),previous),id=selectedRunKey(model,meta);
    next[id]=meta;
    state['model'+(key==='a'?'':key.toUpperCase())]=id;
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(model),meta:result.value.latest}}));
@@ -682,6 +685,15 @@ async function refreshLiveRuns(){
  finally{checkingLiveRuns=false;}
 }
 
+async function resolvePanelRun(item,load){
+ const request=requestedRun(item),model=sourceModel(item.model);
+ if(productField(item.field)&&productChoices(model).some(f=>f.key===item.field)){
+  const meta=await loadProducts(model,load,followLatest[item.key]?null:state.metas[item.model]?.reference_time);
+  if(!meta.variables.includes(item.field))throw Error('This ensemble product is not yet published for the selected run.');
+  return {meta:{...meta,normalMenuMeta:state.metas[item.model]?.normalMenuMeta??state.metas[item.model]},latest:meta,previous:null,key:selectedRunKey(model,meta)};
+ }
+ return mapRunCatalogue.select(request,load);
+}
 async function configure(force=false){
  failedSelection=null;
  pauseAnimation();++timeGeneration;
@@ -701,14 +713,14 @@ async function configure(force=false){
  try{
   const load=metadataLoader(force);
   const selected=panelSelections(state);
-  const results=await Promise.all(selected.map(async item=>({...item,...await mapRunCatalogue.select(requestedRun(item),load)})));if(generation!==state.generation)return;
+  const results=await Promise.all(selected.map(async item=>({...item,...await resolvePanelRun(item,load)})));if(generation!==state.generation)return;
   const pairs=results.map(result=>[result.key,result.meta]);
   for(let i=0;i<selected.length;i++){
    const panelKey=selected[i].key,suffix=panelKey==='a'?'':panelKey.toUpperCase();
    state['model'+suffix]=results[i].key;
    $('map-model'+(panelKey==='a'?'':'-'+panelKey)).value=sourceModel(results[i].key);
   }
-  state.metas=Object.fromEntries(pairs);const metas=pairs.map(p=>p[1]);
+  state.metas={};for(const [key,meta] of pairs){const previous=state.metas[key];state.metas[key]=meta.productOnly&&previous&&!previous.productOnly?retainProductSources(previous,meta):retainProductSources(meta,previous);}const metas=Object.values(state.metas);
   updateRunMenus(results);
   for(const result of results)document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(result.key),meta:result.latest}}));
   showRunUpdates();
@@ -730,7 +742,10 @@ async function configurePanel(key,model,follow){
  $('animation-status').textContent='Checking Panel '+(['a','b','c'].indexOf(key)+1)+' model run…';
  status($('animation-status').textContent);
  try{
-  const result=await mapRunCatalogue.select(follow?sourceModel(model):model,metadataLoader(false));
+  const requestedField=panelSelection(state,key).field;
+  const requested={key,model,field:requestedField};
+  const oldFollow=followLatest[key];followLatest[key]=follow;
+  let result;try{result=await resolvePanelRun(requested,metadataLoader(false));}catch(error){followLatest[key]=oldFollow;throw error;}
   if(selection!==panel.selectionGeneration)return;
   requestedTime=Date.parse(state.times[state.index])||requestedTime;
   state[property]=result.key;followLatest[key]=follow;
@@ -758,8 +773,35 @@ for(const [key,property]of [['a','model'],['b','modelB'],['c','modelC']]){
  $('map-model'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,true));
  $('map-run'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,e.target.value===e.target.dataset.preferredRun));
 }
-for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
- pauseAnimation();failedSelection=null;state[property]=e.target.value;
+for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',async e=>{
+ pauseAnimation();failedSelection=null;
+ const key=property==='fieldB'?'b':property==='fieldC'?'c':'a',selection=panelSelection(state,key),chosen=e.target.value;
+ if(productField(chosen)){
+  const generation=panels[key].selectionGeneration=(panels[key].selectionGeneration??0)+1;
+  ++state.generation;panels[key].configuring=true;
+  e.target.disabled=true;status('Loading published ensemble product…');
+  try{
+   const meta=await loadProducts(sourceModel(selection.model),metadataLoader(false),followLatest[key]?null:state.metas[selection.model]?.reference_time);
+   if(generation!==panels[key].selectionGeneration)return;
+   if(!meta.variables.includes(chosen))throw Error(chosen.includes('anomaly')?'Temperature anomalies await the verified HadUK-Grid minimum/maximum climatology.':'This probability is not yet published for this run.');
+   // Product identity is separate so another panel on the same model keeps its sources.
+   const normalKey=selectedRunKey(selection.model,meta);
+   state['model'+(key==='a'?'':key.toUpperCase())]=normalKey;
+   // Same-reference sources can be merged safely; all other runs stay separate.
+   const previous=state.metas[normalKey];
+   const merged=previous&&!previous.productOnly?{...previous,sources:[...(previous.sources??[previous]),meta],variables:[...new Set([...previous.variables,...meta.variables])],valid_times:[...new Set([...previous.valid_times,...meta.valid_times])].sort()}:{...meta,normalMenuMeta:previous?.normalMenuMeta??previous??state.metas[selection.model]};
+   state.metas={...state.metas,[normalKey]:merged};state[property]=chosen;
+   requestedTime=meta.variable_valid_times[chosen].map(Date.parse).reduce((best,t)=>Math.abs(t-requestedTime)<Math.abs(best-requestedTime)?t:best);
+   extendCatalogue(fields,[merged],OM,settings);populateVariables(key);showRunUpdates('Ensemble products · '+runLabel(meta));
+   const runSelect=$('map-run'+(key==='a'?'':'-'+key));if(![...runSelect.options].some(o=>o.value===normalKey)){const option=document.createElement('option');option.value=normalKey;option.textContent=runLabel(meta)+' · ensemble products';runSelect.append(option);}runSelect.value=normalKey;
+   refreshTimeline();await setTime();
+  }catch(error){e.target.value=selection.field;status(error.message);$('map-error-'+key).textContent=error.message;$('map-error-'+key).hidden=false;}
+  finally{if(generation===panels[key].selectionGeneration){e.target.disabled=false;panels[key].configuring=false;}}
+  return;
+ }
+ state[property]=chosen;
+ if(property!=='interval'&&state.metas[selection.model]?.productOnly){await configurePanel(key,sourceModel(selection.model),true);return;}
+
  try{refreshTimeline();setTime();}
  catch(error){
   status(error.message);$('map-time-label').textContent='Forecast unavailable';$('animation-status').textContent=error.message;

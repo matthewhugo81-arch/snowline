@@ -1,3 +1,4 @@
+import {productField} from './map-ensemble-products.js';
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
@@ -32,7 +33,7 @@ function menuField(key){
  if(/^vertical_motion_\d+hPa$/.test(key))return key===VERTICAL_MOTION;
  return true;
 }
-const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Ensemble probabilities','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Marine','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Ensemble probabilities','Temperature anomalies','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Marine','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
 export const PRECIPITATION_SCALE = {
@@ -82,6 +83,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
+ if(productField(key))return productField(key).group;
  if(/^ocean_|^sea_(ice|level|water)_/.test(key))return 'Marine';
  if(/^vertical_motion_\d+hPa$/.test(key))return 'Derived diagnostics';
  if(isTypeField(key)||key===THETA_SYMBOLS||key==='snowfall_probability')return 'Winter Analysis';
@@ -134,6 +136,7 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ if(productField(key))return productField(key);
  const additional={
   snow_density:{name:'Snow density',unit:'kg/m³',stops:[0,50,100,150,200,300,400,500,700],colors:['#ffffff','#e4f3ff','#bfdef3','#92bce2','#7391ce','#7d66b3','#9a4194','#8a235e','#501337'],note:'Native density of the model snowpack. The model can retain a default density in snow-free cells; use with snow depth. This is not fresh-snow density or snowfall accumulation.'},
   ocean_current_speed:{name:'Ocean current speed & direction',unit:'m/s',stops:[0,.1,.25,.5,.75,1,1.5,2,3],colors:['#ffffff','#c5e9f3','#7fcddd','#38a9bf','#2480b3','#345ca7','#69469e','#ac3d85','#e65b59'],note:'Ocean current magnitude from the native eastward and northward components. Arrows show flow direction. Ocean values only; missing land cells remain blank.'},
