@@ -69,8 +69,16 @@ class GlobalMogrepsTests(unittest.TestCase):
         manifest=self.manifest()
         records={h:list(b.INSTANT if h==0 else b.INSTANT+b.PERIOD) for h in manifest['leads']}
         self.assertFalse(b.metadata(manifest,records)['completed'])
+        self.assertTrue(b.metadata(manifest,records)['core_completed'])
+        incomplete={**records,3:[]}
+        self.assertFalse(b.metadata(manifest,incomplete)['core_completed'])
         for h in records: records[h]+=b.COMPARISON
         self.assertTrue(b.metadata(manifest,records)['completed'])
+
+    def test_missing_native_fields_take_priority_over_optional_anomaly_retries(self):
+        native=[key for key in b.COMPARISON if key!='geopotential_height_500hPa_anomaly_mean']
+        records={0:{'variables':native},3:{'variables':b.INSTANT},6:None,9:{'variables':b.COMPARISON}}
+        self.assertEqual(sorted(records,key=lambda h:b.native_comparison_ready(records[h])),[3,6,0,9])
 
     def test_om_keeps_missing_temperature_and_probability_precision(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -83,6 +91,9 @@ class GlobalMogrepsTests(unittest.TestCase):
             self.assertAlmostEqual(float(reader.get_child_by_name('temperature_500hPa_mean')[0,0]),-20.123,delta=.011)
             self.assertAlmostEqual(float(reader.get_child_by_name('precipitation_probability')[0,0]),100/18,delta=.011)
             del reader
+            with patch.object(b,'frame_values',side_effect=AssertionError('core grids requested again')), patch('mogreps_comparison_fields.comparison_values',return_value={}) as comparison:
+                b.write_frame(self.manifest(),24,path,1)
+            self.assertEqual(set(comparison.call_args.kwargs['existing']),set(b.FIELDS))
 
 
 if __name__=='__main__': unittest.main()

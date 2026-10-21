@@ -18,13 +18,22 @@ jobs:
     outputs:
       validate: ${{ steps.revision.outputs.validate }}
     steps:
+      - uses: actions/checkout@v4
       - name: Check the exact deployed application revision
         id: revision
         env:
           SOURCE_REVISION: ${{ github.sha }}
         run: |
           deployed=$(curl --fail --silent --show-error --retry 2 --max-time 20 "https://matthewhugo81-arch.github.io/snowline/site-revision.txt?check=$GITHUB_RUN_ID" || true)
-          if [ "$deployed" = "$SOURCE_REVISION" ]; then echo 'validate=false' >> "$GITHUB_OUTPUT"; else echo 'validate=true' >> "$GITHUB_OUTPUT"; fi
+          validate=true
+          if [ "$deployed" = "$SOURCE_REVISION" ]; then
+            validate=false
+          elif [[ "$deployed" =~ ^[a-f0-9]{40}$ ]] && git fetch --depth=1 origin "$deployed"; then
+            # Pipeline-only edits inherit the deployed runtime's browser proof.
+            # Any changed file delivered to browsers still requires the suite.
+            if git diff --quiet "$deployed" "$SOURCE_REVISION" -- . ':(exclude).github/**' ':(exclude)scripts/**' ':(exclude)tests/**' ':(exclude)review/**'; then validate=false; fi
+          fi
+          echo "validate=$validate" >> "$GITHUB_OUTPUT"
   browser:
     needs: release
     if: needs.release.outputs.validate == 'true'
