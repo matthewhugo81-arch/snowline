@@ -41,7 +41,9 @@ class GlobalGRIB:
             with core._grib_lock:
                 g = core.ec.codes_new_from_message(payload)
                 try:
-                    get = lambda k: core.ec.codes_get(g, k)
+                    def get(key):
+                        try:return core.ec.codes_get(g,key)
+                        except Exception as error:raise ValueError(f'Missing GRIB key {key}: {error}') from error
                     if get('dataDate') != int(self.run.strftime('%Y%m%d')) or get('dataTime') != self.run.hour * 100 or get('endStep') != hour or get('stepUnits') != 1:
                         raise ValueError('Wrong member cycle or valid time')
                     template = get('productDefinitionTemplateNumber')
@@ -67,7 +69,10 @@ class GlobalGRIB:
                     a = a[int((46-south)/step):int((63-south)/step)+1, int((-16-west)/step):int((10-west)/step)+1]
                     factor=1000 if kind in ('snow','precip') and get('units').startswith('m') else 1
                     a*=factor
-                    packing_error=max(packing_error,float(get('packingError'))*factor)
+                    # Only cumulative IFS differences need a packing-error bound.
+                    # GEFS complex packing does not expose this optional key.
+                    if self.model=='ecmwf' and kind in ('precip','snow'):
+                        packing_error=max(packing_error,float(get('packingError'))*factor)
                     arrays.append(a.astype(np.float32))
                 finally:
                     core.ec.codes_release(g)
