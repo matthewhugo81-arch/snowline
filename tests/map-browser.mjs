@@ -777,11 +777,11 @@ try{
    await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.locator('#map-model').selectOption('snowline_gefs_ensemble');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('500 hPa height'));
-   assert.equal(await page.locator('#map-variable option').count(),6);
+   assert.equal(await page.locator('#map-variable option:not([value^="ens_"])').count(),6);
    assert.equal(await page.locator('#map-mslp-a').isDisabled(),false);
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.locator('#map-model-b').selectOption('snowline_ecmwf_ensemble');
-   await page.waitForFunction(()=>document.getElementById('map-variable-b').options.length===6&&!document.getElementById('map-variable-b').disabled);
+   await page.waitForFunction(()=>[...document.getElementById('map-variable-b').options].filter(o=>!o.value.startsWith('ens_')).length===6&&!document.getElementById('map-variable-b').disabled);
    for(const field of statisticVariables){
     await page.locator('#map-variable-b').selectOption(field);
     await page.waitForFunction(field=>document.getElementById('panel-label-b').textContent.includes(field.endsWith('_spread')?'spread (SD)':'ensemble mean')&&document.getElementById('map-variable-b').value===field,field);
