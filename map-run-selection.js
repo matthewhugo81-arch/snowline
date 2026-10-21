@@ -1,5 +1,5 @@
-import {loadSpatialModel,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261020-run-selector';
-import {publishedRun,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
+import {loadSpatialModel,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261021-harmonie-pressure';
+import {publishedRun,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {runCandidates} from './map-previous-run-data.js?v=20261020-compact-controls';
 import {formatModelRun} from './map-model-run-menu.js?v=20261020-run-selector';
 import {ukvRunFamily,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
@@ -10,7 +10,7 @@ export const selectedReference=id=>id.includes('@')?id.slice(id.indexOf('@')+1):
 export const selectedRunKey=(model,meta)=>sourceModel(model)+'@'+new Date(meta.reference_time).toISOString();
 export function completedModelRun(model,meta){
  if(!publishedRun(meta))return false;
- const sources=meta.sources??[meta],reference=Date.parse(meta.reference_time);
+ const sources=(meta.sources??[meta]).filter(s=>!(model==='knmi_harmonie_arome_europe'&&s.harmoniePressureSupplement===true)),reference=Date.parse(meta.reference_time);
  if(!completedSources(sources)||!sources.every(s=>Date.parse(s.reference_time)===reference))return false;
  return model!=='gfs_global'||sources.some(s=>s.domain==='ncep_gfs025');
 }
