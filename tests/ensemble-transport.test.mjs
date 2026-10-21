@@ -42,11 +42,14 @@ test('companion MOGREPS winds remain scalar and use the binary-safe transport su
   readSimpleVariable(file,key){return {key,directions:undefined};},
   readVariable(){throw Error('Must not request a fabricated direction field');}
  };
- installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{});
- const url='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/snowline_mogreps_global/run/frame.om';
+ const base='https://site.test/ensemble-data/';
+ installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{},base);
+ for(const root of [base,'https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/'])for(const run of ['2026/10/20/0000Z','2026/10/19/1800Z']){
+ const url=root+'snowline_mogreps_global/'+run+'/frame.om';
  for(const key of ['wind_speed_300hPa_mean','wind_speed_200hPa_spread']){
   assert.deepEqual(await reader.readVariable(url,key),{key,directions:undefined});
   assert.equal(calls.pop(),url+'.png');
+ }
  }
 });
 

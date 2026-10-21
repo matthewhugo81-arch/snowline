@@ -13,13 +13,31 @@ concurrency:
   group: snowline-pages
   cancel-in-progress: false
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      validate: ${{ steps.revision.outputs.validate }}
+    steps:
+      - name: Check the exact deployed application revision
+        id: revision
+        env:
+          SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          deployed=$(curl --fail --silent --show-error --retry 2 --max-time 20 "https://matthewhugo81-arch.github.io/snowline/site-revision.txt?check=$GITHUB_RUN_ID" || true)
+          if [ "$deployed" = "$SOURCE_REVISION" ]; then echo 'validate=false' >> "$GITHUB_OUTPUT"; else echo 'validate=true' >> "$GITHUB_OUTPUT"; fi
+  browser:
+    needs: release
+    if: needs.release.outputs.validate == 'true'
+    uses: ./.github/workflows/map-browser-tests.yml
   build:
+    needs: [release, browser]
+    if: always() && needs.release.result == 'success' && (needs.browser.result == 'success' || needs.browser.result == 'skipped')
+    outputs:
+      changed: ${{ steps.publication.outputs.changed }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -37,6 +55,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_generated*.py'
           python -m unittest discover -s tests -p 'test_mogreps*.py'
           python -m unittest discover -s tests -p 'test_vertical*.py'
+          python -m unittest discover -s tests -p 'test_publication*.py'
       - uses: actions/cache@v4
         with:
           path: point-data
@@ -105,12 +124,18 @@ jobs:
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_site/ensemble-data').rglob('*.om')]"
           git rev-parse HEAD > _site/site-revision.txt
           touch _site/.nojekyll
+      - name: Measure unpacked size and skip unchanged publication
+        id: publication
+        run: python scripts/publication_manifest.py _site --live-url https://matthewhugo81-arch.github.io/snowline/publication.json
       - uses: actions/configure-pages@v5
+        if: steps.publication.outputs.changed == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.publication.outputs.changed == 'true'
         with:
           path: _site
   deploy:
     needs: build
+    if: needs.build.outputs.changed == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
