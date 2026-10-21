@@ -20,4 +20,10 @@ jobs:
           cache: pip
           cache-dependency-path: scripts/ensemble-requirements.txt
       - run: pip install -r scripts/ensemble-requirements.txt
-      - run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Test every converter family in its production process boundary
+        run: |
+          # Native GRIB, HDF5, NetCDF and OM runtimes are separate production
+          # processes. Keep the same boundaries in CI; run every test family.
+          for family in ensemble generated mogreps vertical publication; do
+            python -X faulthandler -m unittest discover -s tests -p "test_${family}*.py"
+          done
