@@ -56,6 +56,15 @@ try{
    const ready=()=>page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid')&&document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:45000});
    const tick=()=>page.evaluate(async()=>{window.fixtureClock+=61000;sessionStorage.setItem('fixture-clock',String(window.fixtureClock));await Promise.all(window.fixtureRefreshers.map(fn=>fn()));});
    const selectRun=async(selector,h)=>{await page.locator(selector).selectOption(choice(id,h));await ready();};
+   const assertRunOptions=async(selector,hours,selected,preferred)=>{
+    const result=await page.locator(selector).evaluate(select=>({value:select.value,preferred:select.dataset.preferredRun,options:[...select.options].map(option=>({value:option.value,text:option.textContent}))}));
+    const expected=hours.map(hour=>({value:choice(id,hour),text:'20 Oct · '+String(hour).padStart(2,'0')+'Z · '+(runs.get(hour).completed?'Complete':'Updating')+(hour===newestHour?' · newest':'')}));
+    assert.deepEqual(result.options,expected,'The run menu must contain each dated initialization once, with its correct completion state');
+    assert.equal(new Set(result.options.map(option=>option.value)).size,result.options.length,'Run choices must have distinct dated values');
+    assert.ok(result.options.every(option=>option.value.includes('@')&&!/Auto/i.test(option.text)),'No duplicate automatic or bare-model option may appear');
+    assert.equal(result.value,choice(id,selected),'The run menu must show the selected initialization');
+    assert.equal(result.preferred,choice(id,preferred),'The newest complete choice restores automatic following');
+   };
    const assertMapRun=async(key,hour)=>{
     const result=await page.evaluate(key=>{
      const panel=window.fixturePanels[key],frame=panel.frameCache?.current;
@@ -75,17 +84,17 @@ try{
    try{
     await page.goto('http://127.0.0.1:'+server.address().port+'/maps.html?model='+id+'&time='+ref(8));await ready();
     assert.equal(await page.locator('#map-model').inputValue(),id);
-    assert.equal(await page.locator('#map-run').inputValue(),id,'New panels follow latest complete automatically');
+    await assertRunOptions('#map-run',[6,0],0,0);
     await assertMapRun('a',0);
     assert.equal(await page.locator('#map-model option[value="ukmo_uk_deterministic_2km"]').count(),1);
     assert.equal(await page.locator('#map-model option[value$="_previous"]').count(),0);
     assert.match(await page.locator('#map-run').textContent(),/06Z · Updating/);
     publish(6,false,12);await tick();await ready();await assertMapRun('a',0);
-    assert.equal(await page.locator('#map-run').inputValue(),id,'Incoming hours must not pin or replace the complete default');
+    await assertRunOptions('#map-run',[6,0],0,0);
     await selectRun('#map-run',6);assert.match(await page.locator('#panel-label-a').textContent(),/0600Z · updating/);
-    publish(6,false,16);await tick();await ready();assert.equal(await page.locator('#map-run').inputValue(),choice(id,6));
+    publish(6,false,16);await tick();await ready();await assertRunOptions('#map-run',[6,0],6,0);
     assert.ok(Number(await page.locator('#map-time').getAttribute('max'))>=5);
-    await page.locator('#map-run').selectOption(id);await ready();await assertMapRun('a',0);
+    await selectRun('#map-run',0);await assertMapRun('a',0);
     if(viewport.width<650)await page.locator('#mobile-map-settings').click();
     await page.locator('#compare-maps').check();await ready();
     if(viewport.width<650)await page.locator('#mobile-return-map').click();
@@ -96,11 +105,16 @@ try{
     await page.locator('#map-start-time').selectOption(ref(12));await ready();
     await selectRun('#map-run-b',0);
     publish(6,true);await tick();await ready();
-    assert.equal(await page.locator('#map-run').inputValue(),id);
-    assert.equal(await page.locator('#map-run-b').inputValue(),choice(id,0),'An explicit previous-run comparison stays pinned');
+    await assertRunOptions('#map-run',[6,0],6,6);
+    await assertRunOptions('#map-run-b',[6,0],6,6);
+    await assertMapRun('a',6);await assertMapRun('b',6);
+    // Selecting the preferred 00Z above resumed following. Once 06Z completes,
+    // selecting the now-older 00Z deliberately pins only this comparison panel.
+    await selectRun('#map-run-b',0);await assertRunOptions('#map-run-b',[6,0],0,6);
     await assertMapRun('a',6);await assertMapRun('b',0);
     await page.locator('#map-start-time').selectOption(ref(24));await ready();
     publish(12,false,5);await tick();await ready();await assertMapRun('a',6);await assertMapRun('b',0);
+    await assertRunOptions('#map-run',[12,6],6,6);await assertRunOptions('#map-run-b',[12,6,0],0,6);
     // Hidden pages catch up on return without needing a reload or a menu click.
     await page.evaluate(()=>{window.fixtureHidden=true;document.dispatchEvent(new Event('visibilitychange'));});
     publish(12,true);await tick();
@@ -123,29 +137,31 @@ try{
     await tick();
     await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('1200Z')&&document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:45000});
     await assertMapRun('a',12);await assertMapRun('b',0);
+    await assertRunOptions('#map-run',[12,6],12,12);await assertRunOptions('#map-run-b',[12,6,0],0,12);
     assert.equal(await page.locator('#map-start-time').inputValue(),ref(24),'Run promotion preserves the requested valid time when available');
     offline=true;await tick();await assertMapRun('a',12);await assertMapRun('b',0);
     offline=false;await tick();await ready();
     await page.screenshot({path:`review-output/run-selector-${id}-${viewport.width}.png`,fullPage:true});
-    await page.reload();await ready();assert.equal(await page.locator('#map-run').inputValue(),id,'Fresh page resumes latest-complete following');
+    await page.reload();await ready();await assertRunOptions('#map-run',[12,6],12,12);
     await assertMapRun('a',12);
     await openBriefing();await briefingReady(12);
-    assert.equal(await page.locator('#briefing-run-select').inputValue(),id,'Briefing inherits automatic following from its map');
+    await assertRunOptions('#briefing-run-select',[12,6],12,12);
     publish(18,false,3);await tick();await briefingReady(12);
+    await assertRunOptions('#briefing-run-select',[18,12],12,12);
     publish(18,true);await tick();await briefingReady(18);
-    assert.equal(await page.locator('#briefing-run-select').inputValue(),id);
+    await assertRunOptions('#briefing-run-select',[18,12],18,18);
     const briefingSources=await page.evaluate(()=>window.fixtureShownFrames.filter(frame=>frame.panel.startsWith('briefing-frame-')).at(-1));
     assert.ok([briefingSources.url,...briefingSources.sources].every(url=>decodeURIComponent(url).includes('/2026/10/20/1800Z/')),'New briefing images and overlays must use the promoted run');
     await page.locator('#briefing-run-select').selectOption(choice(id,12));await briefingReady(12);
-    await tick();await briefingReady(12);assert.equal(await page.locator('#briefing-run-select').inputValue(),choice(id,12),'Deliberate briefing history stays pinned');
-    await page.locator('#briefing-run-select').selectOption(id);await briefingReady(18);
-    offline=true;await tick();await briefingReady(18);assert.equal(await page.locator('#briefing-run-select').inputValue(),id);
+    await tick();await briefingReady(12);await assertRunOptions('#briefing-run-select',[18,12],12,18);
+    await page.locator('#briefing-run-select').selectOption(choice(id,18));await briefingReady(18);
+    offline=true;await tick();await briefingReady(18);await assertRunOptions('#briefing-run-select',[18,12],18,18);
     offline=false;
     // Dated shared URLs are an explicit choice, unlike ordinary model links.
     await page.goto('http://127.0.0.1:'+server.address().port+'/maps.html?model='+encodeURIComponent(choice(id,0))+'&time='+ref(24));await ready();
-    await tick();await ready();assert.equal(await page.locator('#map-run').inputValue(),choice(id,0));await assertMapRun('a',0);
+    await tick();await ready();await assertRunOptions('#map-run',[18,12,0],0,18);await assertMapRun('a',0);
     await openBriefing();await briefingReady(0);
-    assert.equal(await page.locator('#briefing-run-select').inputValue(),choice(id,0),'Briefing inherits deliberate dated selections');
+    await assertRunOptions('#briefing-run-select',[18,12,0],0,18);
     assert.equal(errors.length,0,errors.join('\n'));
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Controls must fit viewport');
     console.log('PASS',id,viewport.width);

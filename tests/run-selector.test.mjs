@@ -91,23 +91,40 @@ test('completed automatic selection survives stale metadata and retries after a 
  assert.equal((await select()).meta.reference_time,ref(6),'The failed refresh does not erase the retained complete run');
  incoming=run(12);assert.equal((await select()).meta.reference_time,ref(12));
 });
-test('run selector distinguishes automatic following from deliberate dated selections',t=>{
+test('run selector lists each real dated run once while following or holding a selection',t=>{
  const original=globalThis.document;globalThis.document={createElement:()=>({value:'',textContent:''})};
  t.after(()=>{if(original===undefined)delete globalThis.document;else globalThis.document=original;});
- const select={options:[],replaceChildren(){this.options=[];},append(option){this.options.push(option);}};
+ const select={options:[],dataset:{},replaceChildren(){this.options=[];},append(option){this.options.push(option);}};
+ const values=()=>select.options.map(option=>option.value);
+ const distinctDatedChoices=()=>{
+  assert.equal(new Set(values()).size,select.options.length);
+  for(const option of select.options){assert.match(option.value,/@/);assert.doesNotMatch(option.textContent,/\bAuto\b/i);}
+ };
  const model='ecmwf_ifs',previous=run(0),pair={latest:run(6,false,2),previous};
  renderRunSelector(select,model,pair,previous,{followLatest:true});
- assert.equal(select.value,model);assert.equal(select.disabled,false);
- assert.deepEqual(select.options.map(option=>option.value),[model,selectedRunKey(model,pair.latest),selectedRunKey(model,previous)]);
- assert.match(select.options[0].textContent,/20 Oct · 00Z · Complete · Auto \(latest\)/);
- assert.match(select.title,/Automatically advances to the latest complete run/);
+ assert.equal(select.value,selectedRunKey(model,previous));assert.equal(select.disabled,false);
+ assert.equal(select.dataset.preferredRun,selectedRunKey(model,previous));
+ assert.deepEqual(values(),[selectedRunKey(model,pair.latest),selectedRunKey(model,previous)]);
+ assert.match(select.options[0].textContent,/20 Oct · 06Z · Updating/);
+ assert.match(select.options[1].textContent,/20 Oct · 00Z · Complete/);
+ assert.match(select.title,/Follows the latest complete run automatically/);distinctDatedChoices();
  pair.latest=run(6);renderRunSelector(select,model,pair,pair.latest,{followLatest:true});
- assert.match(select.options[0].textContent,/06Z · Complete · Auto/);
+ assert.equal(select.value,selectedRunKey(model,pair.latest));
+ assert.equal(select.dataset.preferredRun,selectedRunKey(model,pair.latest));
+ assert.deepEqual(values(),[selectedRunKey(model,pair.latest),selectedRunKey(model,previous)]);
+ assert.match(select.options[0].textContent,/06Z · Complete/);distinctDatedChoices();
  renderRunSelector(select,model,pair,previous);
- assert.equal(select.value,selectedRunKey(model,previous));assert.match(select.title,/selected run stays pinned/);
- assert.equal(select.options[0].value,model,'The user can resume automatic following without changing models');
+ assert.equal(select.value,selectedRunKey(model,previous));assert.match(select.title,/selected run stays fixed/);
+ assert.equal(select.dataset.preferredRun,selectedRunKey(model,pair.latest),'Choosing the real latest complete run resumes following');
+ assert.equal(select.options.length,2);distinctDatedChoices();
+ const older=run(-6);renderRunSelector(select,model,pair,older);
+ assert.equal(select.value,selectedRunKey(model,older));
+ assert.deepEqual(values(),[selectedRunKey(model,pair.latest),selectedRunKey(model,previous),selectedRunKey(model,older)]);
+ assert.equal(select.dataset.preferredRun,selectedRunKey(model,pair.latest));distinctDatedChoices();
  renderRunSelector(select,model,{latest:run(12,false,2),previous:null},run(12,false,2),{followLatest:true});
- assert.match(select.options[0].textContent,/12Z · Updating · Auto/);assert.match(select.title,/No completed run could be verified yet/);
+ assert.deepEqual(values(),[selectedRunKey(model,run(12))]);
+ assert.equal(select.value,values()[0]);assert.equal(select.dataset.preferredRun,values()[0]);
+ assert.match(select.options[0].textContent,/12Z · Updating/);assert.match(select.title,/No completed run could be verified yet/);distinctDatedChoices();
 });
 test('failed intermediate cycles and stale responses never displace the last complete run',async()=>{
  const f=fixture();await f.catalogue.select('ecmwf_ifs',async()=>({}));

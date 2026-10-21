@@ -13,7 +13,7 @@ import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-
 import {chartScales} from './map-image-export.js?v=20261020-ifs-coverage';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261020-auto-complete';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261021-run-menu';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
@@ -212,7 +212,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(refreshTimer);refreshTimer=setInterval(refreshRun,60000);refreshRun();}});
  $('background').addEventListener('change',()=>{onBackgroundChange($('background').value);renderPage();});
  $('model').addEventListener('change',()=>{rememberTime();runKey=null;configure();});
- $('run-select').addEventListener('change',()=>{rememberTime();runKey=$('run-select').value.includes('@')?$('run-select').value:null;configure();});
+ $('run-select').addEventListener('change',()=>{rememberTime();const select=$('run-select');runKey=select.value===select.dataset.preferredRun?null:select.value;configure();});
  for(const id of ['preset','interval'])$(id).addEventListener('change',()=>{
   if(!meta)return;rememberTime();
   if(id==='interval')interval=$('interval').value;

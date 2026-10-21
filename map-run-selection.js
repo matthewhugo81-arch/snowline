@@ -87,11 +87,10 @@ export function renderRunSelector(select,model,pair,selected,{followLatest=false
  const runs=[pair.latest,pair.previous,selected].filter(Boolean);
  const unique=[...new Map(runs.map(m=>[new Date(m.reference_time).toISOString(),m])).values()].sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time));
  select.replaceChildren();
- const automatic=preferredCompleteRun(model,pair),complete=completedModelRun(sourceModel(model),automatic);
- const autoOption=document.createElement('option');
- autoOption.value=sourceModel(model);
- autoOption.textContent=formatModelRun(automatic)+' · '+(complete?'Complete · Auto (latest)':'Updating · Auto (awaiting complete run)');
- select.append(autoOption);
+ const preferred=preferredCompleteRun(model,pair),complete=completedModelRun(sourceModel(model),preferred);
+ // User changes to this real dated run resume following. Rendering the menu
+ // must not change an existing panel's explicit run-selection intent.
+ select.dataset.preferredRun=selectedRunKey(model,preferred);
  for(const meta of unique){
   const option=document.createElement('option');
   option.value=selectedRunKey(model,meta);
@@ -100,9 +99,9 @@ export function renderRunSelector(select,model,pair,selected,{followLatest=false
   if(meta.reference_time===pair.latest.reference_time)option.textContent+=' · newest';
   select.append(option);
  }
- select.value=followLatest?sourceModel(model):selectedRunKey(model,selected);select.disabled=false;
+ select.value=selectedRunKey(model,selected);select.disabled=false;
  select.title=[pair.warning,followLatest?
-  'Initialization in UTC. Automatically advances to the latest complete run, retaining the previous complete run while the next updates.':
-  'Initialization in UTC. This selected run stays pinned. Choose Auto (latest) to resume automatic updates.',
-  !complete?'No completed run could be verified yet. Auto follows the available incoming run until one completes.':null].filter(Boolean).join(' ');
+  'Initialization in UTC. Follows the latest complete run automatically, retaining the previous complete run while the next updates.':
+  'Initialization in UTC. This selected run stays fixed. Choose the latest complete run to resume automatic updates.',
+  !complete?'No completed run could be verified yet. The available incoming run is shown until one completes.':null].filter(Boolean).join(' ');
 }

@@ -2,7 +2,7 @@
 
 ## Complete and incoming model runs
 
-Every model now appears once in Maps and Forecast Briefing, with a separate dated **Run** selector. New selections prefer the latest verified complete run. Incoming runs remain immediately selectable. Auto (latest) keeps the previous complete run visible during publication and advances automatically when the newer run completes; choosing a dated run pins that panel for comparison. Native archives stay on the provider; complete extra ensemble fields are retained on the existing companion publication. See [run selection, retention and measured storage](docs/model-run-selection.md).
+Every model now appears once in Maps and Forecast Briefing, with a separate dated **Run** selector. New selections prefer the latest verified complete run. Incoming runs remain immediately selectable. Each dated run appears once. The default selection keeps the previous complete run visible during publication and advances automatically when the newer run completes. Choosing an older run keeps that panel fixed for comparison; selecting the most recent complete run resumes automatic updates. Native archives stay on the provider; complete extra ensemble fields are retained on the existing companion publication. See [run selection, retention and measured storage](docs/model-run-selection.md).
 
 GEFS and ECMWF ENS maps now include additional surface and upper-air ensemble
 fields across the UK, Europe and North Atlantic map areas. Both include mean

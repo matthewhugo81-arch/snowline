@@ -38,7 +38,7 @@ import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261018-rates';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261020-run-selector';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261020-auto-complete';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261021-run-menu';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261020-run-selector';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
@@ -718,7 +718,7 @@ for(const [key,property]of [['a','model'],['b','modelB'],['c','modelC']]){
  $('map-model'+suffix).addEventListener('change',e=>{state[property]=e.target.value;followLatest[key]=true;configure();});
  $('map-run'+suffix).addEventListener('change',e=>{
   requestedTime=Date.parse(state.times[state.index])||requestedTime;
-  state[property]=e.target.value;followLatest[key]=!e.target.value.includes('@');configure();
+  state[property]=e.target.value;followLatest[key]=e.target.value===e.target.dataset.preferredRun;configure();
  });
 }
 for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
@@ -835,7 +835,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261020-auto-complete').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261021-run-menu').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

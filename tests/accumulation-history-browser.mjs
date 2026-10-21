@@ -168,7 +168,7 @@ try{
    // The completed 15Z run arrived while Briefing was open. Automatic following
    // preserves the valid time, so its T+21 slot has no complete 24-hour window.
    // This is an explicit availability gap, not a map-restoration transport error.
-   assert.equal(await page.locator('#map-run').inputValue(),UKV,'Returning to maps retains automatic latest-complete following');
+   assert.equal(await page.locator('#map-run').inputValue(),UKV+'@2026-10-12T15:00:00.000Z','Returning to maps advances the dated selection to the latest complete run');
    assert.match(await page.locator('#panel-label-a').textContent(),/1500Z.*24 h precipitation total.*unavailable/);
    assert.match(await page.locator('#panel-label-b').textContent(),/1500Z.*13 Oct.*12:00/);
    assert.equal(await page.locator('#map-start-time').inputValue(),'2026-10-13T12:00:00.000Z','Run promotion preserves the requested valid time');

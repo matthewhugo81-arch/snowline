@@ -5,20 +5,21 @@ lists the newest published initialization and its most recent verified complete
 predecessor. New selections prefer a complete run; if none can be verified, the
 incoming run remains available with an explicit notice.
 
-Maps and Forecast Briefing default to **Auto (latest)**. Minute checks keep the
-previous complete initialization visible while a newer run is updating, then
-advance automatically once the newer run is verified complete. Checks also run
+Maps and Forecast Briefing list each dated initialization once. By default, minute
+checks keep the previous complete initialization selected while a newer run is
+updating, then advance automatically once the newer run is verified complete. Checks also run
 when a hidden page becomes visible again. The selected weather layer and valid
 time are retained where the new run supplies them; otherwise the existing
 field/time availability rules apply. Frames and their UTC labels change together
 when the new frame is ready.
 
-Selecting a specific dated run deliberately pins that panel. Minute checks still
-append hours and fields to that same run and update the other choices. Select
-**Auto (latest)** again to resume automatic promotion. Choosing another forecast
-model starts in automatic mode. A dated model key in a shared URL remains an
-explicit pin. Opening Forecast Briefing carries the first panel's automatic or
-pinned choice; returning to Maps rechecks the panel runs.
+Selecting an older run deliberately pins that panel; selecting an incoming run
+allows its published hours to be inspected at that exact initialization. Minute
+checks still append hours and fields to a pinned run and update the other choices.
+Selecting the most recent complete run resumes automatic promotion. Choosing
+another forecast model also resumes automatic selection. A dated model key in
+a shared URL remains an explicit pin. Opening Forecast Briefing carries the first
+panel's automatic or pinned choice; returning to Maps rechecks the panel runs.
 
 Panels track this choice independently, including two panels showing the same
 model. Their timeline is the union of supplied valid times, with unavailable
