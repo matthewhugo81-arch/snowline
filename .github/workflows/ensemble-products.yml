@@ -1,0 +1,66 @@
+name: Publish optional ensemble probability and anomaly products
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/*products*', 'scripts/ensemble_product_sources.py', 'scripts/temperature_climatology.py', '.github/workflows/ensemble-products.yml', 'climatology/**']
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ensemble-products
+  cancel-in-progress: false
+jobs:
+  calculate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [ecmwf, gefs, mogreps_uk, mogreps_g]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/ensemble-requirements.txt
+      - run: pip install -r scripts/ensemble-requirements.txt
+      - name: Verify member-first calculations
+        run: python -m unittest discover -s tests -p 'test_ensemble_products.py'
+      - name: Restore retained optional products
+        env:
+          MODEL: ${{ matrix.model }}
+        run: |
+          if git fetch --depth=1 origin ensemble-products; then
+            mkdir -p ensemble-data
+            git archive FETCH_HEAD "ensemble-data/snowline_${MODEL}_products" | tar -x || true
+          fi
+      - name: Calculate separately from the ordinary chart publisher
+        env:
+          MODEL: ${{ matrix.model }}
+        run: python scripts/build_ensemble_products.py --model "$MODEL" --budget 1800
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: products-${{ matrix.model }}
+          path: ensemble-data/snowline_${{ matrix.model }}_products
+          if-no-files-found: warn
+          retention-days: 2
+  publish:
+    needs: calculate
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: products-*
+          path: product-artifacts
+      - name: Publish an immutable data snapshot and small revision pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          python scripts/publish_ensemble_products.py product-artifacts

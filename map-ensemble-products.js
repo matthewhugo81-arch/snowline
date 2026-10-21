@@ -1,0 +1,39 @@
+// Definitions are local and cheap. No product metadata or grids are fetched
+// until the user selects one of these layers.
+import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
+export const PRODUCT_MODELS={snowline_ecmwf_ensemble:'ecmwf',snowline_gefs_ensemble:'gefs',ukmo_uk_ensemble_2km:'mogreps_uk',snowline_mogreps_global:'mogreps_g'};
+export const PRODUCT_BASE='https://raw.githubusercontent.com/matthewhugo81-arch/snowline/ensemble-products/ensemble-data/';
+export const productPath=url=>/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/(snowline_(?:ecmwf|gefs|mogreps_uk|mogreps_g)_products\/.*)$/.exec(url)?.[1]??null;
+const probability={unit:'%',group:'Ensemble probabilities',ensembleStatistic:'probability',stops:[0,10,25,50,75,90,100],colors:['#ffffff','#b9f5bc','#55dc66','#e6ed32','#ffc328','#f57519','#e21b16'],contourValues:[10,25,50,75,90],contourLabel:'10, 25, 50, 75 and 90%'};
+export const PRODUCT_FIELDS=[];
+for(const hours of [12,24]){
+ for(const threshold of [50,60,70])PRODUCT_FIELDS.push({...probability,key:`ens_gust_gt${threshold}kt_${hours}h`,name:`Gusts >${threshold} kt · ${hours} h`,periodHours:hours,models:['ecmwf','gefs','mogreps_uk','mogreps_g'],note:`Fraction of members whose maximum gust exceeds ${threshold} knots within the stated ${hours}-hour period. ECMWF uses the available interval maxima at its output steps (some intervals cover only one hour); GEFS uses sampled gusts. MOGREPS uses complete hourly maxima. EC/GEFS may miss peaks between outputs. Raw ensemble probability, without calibration or neighbourhood smoothing.`});
+ for(const [kind,thresholds] of [['rain',[1,10,25,50]],['snow',[0.1,1,5,10]],['precip',[1,10,25,50]]])for(const threshold of thresholds)PRODUCT_FIELDS.push({...probability,key:`ens_${kind}_ge${String(threshold).replace('.','p')}mm_${hours}h`,name:`${kind==='rain'?'Rainfall':kind==='snow'?'Snowfall (water equivalent)':'Total precipitation'} ≥${threshold} mm · ${hours} h`,periodHours:hours,models:kind==='precip'?['gefs']:['ecmwf','mogreps_uk','mogreps_g'],note:`Fraction of members accumulating at least ${threshold} mm in the stated ${hours}-hour period. ${kind==='snow'?'Liquid-water equivalent of falling snow, not snow depth or settling risk.':kind==='precip'?'Includes rain and frozen precipitation.':'Liquid precipitation; ECMWF derives this from total precipitation minus snowfall water equivalent.'} All members and the entire period must be present.`});
+ for(const kind of ['rain','snow'])PRODUCT_FIELDS.push({...probability,key:`ens_${kind}_occurrence_${hours}h`,name:`${kind==='rain'?'Rain':'Snow'} occurrence · ${hours} h (GEFS)`,periodHours:hours,models:['gefs'],note:`Fraction of GEFS members with the native categorical ${kind} flag set at any native reporting interval during the stated period. This is native rain/snow occurrence, not an accumulation threshold or settling probability.`});
+}
+for(const kind of ['min','max'])PRODUCT_FIELDS.push({key:`ens_temperature_${kind}_anomaly`,name:`${kind==='min'?'Minimum':'Maximum'} temperature anomaly · 24 h`,unit:'°C',group:'Temperature anomalies',ensembleStatistic:'mean',periodHours:24,models:['mogreps_uk'],stops:[-10,-8,-6,-4,-2,0,2,4,6,8,10],colors:['#174879','#0a609c','#4395c5','#80bfd1','#ddf5fa','#ffffff','#ffffff','#fbdede','#fc9979','#ed452d','#990b0d'],contourValues:[-10,-8,-6,-4,-2,2,4,6,8,10],note:'MOGREPS-UK ensemble mean of member 24-hour extrema minus HadUK-Grid 1991–2020 monthly minimum/maximum normals. Both forecast windows end at 09 UTC. The maximum normal uses the start date; the minimum normal uses the end date. UK land only. Monthly reference, not an exact daily NCIC climatology; no model bias correction.'});
+export const productField=key=>PRODUCT_FIELDS.find(f=>f.key===key)??null;
+export const productChoices=model=>PRODUCT_FIELDS.filter(f=>f.models.includes(PRODUCT_MODELS[model.split('@')[0]]));
+export function retainProductSources(meta,previous){
+ const extras=(previous?.sources??(previous?[previous]:[])).filter(s=>s.domain?.endsWith('_products')&&Date.parse(s.reference_time)===Date.parse(meta.reference_time));
+ if(!extras.length)return meta;
+ const sources=[...(meta.sources??[meta]),...extras].filter((s,i,all)=>all.findIndex(a=>a.domain===s.domain)===i);
+ return {...meta,sources,variables:[...new Set(sources.flatMap(s=>s.variables))],valid_times:[...new Set(sources.flatMap(s=>s.valid_times))].sort()};
+}
+export const PRODUCT_DOMAINS=Object.entries(PRODUCT_MODELS).map(([,model])=>({value:`snowline_${model}_products`,label:model+' probabilities',grid:model==='mogreps_uk'?MOGREPS_SNOW_DOMAINS[0].grid:{type:'regular',nx:model==='ecmwf'?105:model==='gefs'?53:94,ny:model==='ecmwf'?69:model==='gefs'?35:93,latMin:model==='mogreps_g'?45.84375:46,lonMin:model==='mogreps_g'?-16.171875:-16,dx:model==='ecmwf'?.25:model==='gefs'?.5:.28125,dy:model==='ecmwf'?.25:model==='gefs'?.5:.1875,zoom:2},time_interval:'12_hourly',model_interval:'6_hourly'}));
+export function verifyProduct(meta,model,reference=null){
+ const name=PRODUCT_MODELS[model.split('@')[0]],count={ecmwf:51,gefs:31,mogreps_uk:18,mogreps_g:18}[name];
+ if(!name||meta?.format_version!==1||meta.domain!==`snowline_${name}_products`||meta.member_count!==count||!Number.isFinite(Date.parse(meta.reference_time))||(reference&&Date.parse(reference)!==Date.parse(meta.reference_time))||!meta.variables?.length||!meta.valid_times?.length)return false;
+ if(name==='mogreps_uk'&&(meta.source_cycles?.length!==6||meta.source_cycles.some((t,i)=>Date.parse(t)!==Date.parse(meta.reference_time)-i*3600000)))return false;
+ return meta.variables.every(k=>productChoices(model).some(f=>f.key===k)&&meta.variable_valid_times?.[k]?.length&&meta.variable_valid_times[k].every(t=>meta.valid_times.includes(t)&&Date.parse(t)>Date.parse(meta.reference_time)&&meta.variable_intervals?.[k]?.[t]?.hours===productField(k).periodHours));
+}
+export async function loadProducts(model,load,reference=null){
+ const name=PRODUCT_MODELS[model.split('@')[0]];if(!name)throw Error('Ensemble products are not available for this model.');
+ const path=reference?new Date(reference).toISOString().slice(0,16).replaceAll('-','').replace('T','').replace(':',''):null;
+ const publication=await load(PRODUCT_BASE+'publication.json');
+ if(!/^[a-f0-9]{40}$/.test(publication?.revision))throw Error('The ensemble publication is not ready.');
+ const baseURL=PRODUCT_BASE.replace('/ensemble-products/','/'+publication.revision+'/');
+ const meta=await load(baseURL+`snowline_${name}_products/`+(path?`${path.slice(0,4)}/${path.slice(4,6)}/${path.slice(6,8)}/${path.slice(8)}Z/meta.json`:'latest.json'));
+ if(!verifyProduct(meta,model,reference))throw Error('The ensemble product metadata is incomplete or does not match this run.');
+ return {...meta,baseURL,productOnly:true,ensembleNote:name==='mogreps_uk'?'18 members from six hourly MOGREPS-UK cycles, aligned to the same valid period.':'Raw member probabilities; see the selected layer description.'};
+}

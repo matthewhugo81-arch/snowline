@@ -1,3 +1,4 @@
+import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js';
 import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
 import {UKMO_EARLY_DOMAINS} from './map-ukmo-early.js?v=20261021-early';
@@ -60,6 +61,7 @@ function fitArea(map,duration=0){const bounds=selectedAreaBounds();if(bounds)map
 const tempColors=['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643'];
 const referenceColors=["#320032","#640064","#960096","#c800c8","#fa00fe","#c800fe","#9600fe","#6400fe","#3200fe","#0032fe","#0064fe","#0096fe","#00c8fe","#00e6f0","#00e6a0","#00e678","#00e650","#00f028","#00fa00","#fefe00","#fee100","#fec800","#feaf00","#fe9600","#e67d00","#e66400","#dc4b1e","#c8321e","#b4191e","#aa001e","#b40032","#c80064","#fe0096","#fe00c8","#fe00e1","#fe00fa"];
 const fields=[
+ ...PRODUCT_FIELDS,
  compositeField(PRECIPITATION_SCALE),
  {key:'pressure_msl',overlayOnly:true,name:'Mean sea-level pressure (MSLP)',unit:'hPa',note:'Atmospheric pressure reduced to mean sea level. Isobars are spaced every 4 hPa.',stops:[940,960,980,1000,1010,1020,1040,1060],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#e8f3ec','#ffdc81','#ee9755','#c74643']},
  {key:'temperature_2m',name:'2 m air temperature',unit:'°C',note:'Near-surface air temperature, not road temperature.',stops:[-1000,...Array.from({length:33},(_,i)=>-45+i*3)],colors:referenceColors.slice(0,34),temperatureBands:3},
@@ -77,7 +79,7 @@ const fields=[
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
-const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS,...UKMO_EARLY_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS,...PRODUCT_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS,...UKMO_EARLY_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
 installRangeReads(OM,settings);
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);
@@ -344,277 +346,7 @@ function panelCache(panel,model,field){
  // Changing the other panel's field can change the shared timeline too.
  // Dated URLs isolate runs. Keep the displayed complete frame during an
  // automatic cycle handover; retain() retires it only when its replacement shows.
- const signature=JSON.stringify([sourceModel(model),field,overlay.contours,overlay.isobars]);
- const reusable=panel.frameCache&&panel.cacheKey===signature;
- if(reusable&&panel.cacheTimes===state.times&&panel.cacheMeta===meta)return panel.frameCache;
- if(!reusable){panel.frameCache?.clear();orderForecastBasemap(panel);}
- const f=fields.find(item=>item.key===field),descriptors=new Map();
- panel.frameURLs=state.times.map(time=>{
-  if(!hasFieldTime(meta,field,time))return null;
-  const url=concreteURL(model,meta,time,field);
-  descriptors.set(url,{field:f,url,...verticalMotionOverlayURLs(field,key=>concreteURL(model,fieldSource(meta,field,time),time,key)),symbolURL:field===THETA_SYMBOLS?symbolURL(concreteURL(model,meta,time,'precipitation'),fieldSource(meta,'precipitation',time)):null,contours:overlay.contours,cloudURL:composite?compositeURL(concreteURL(model,meta,time,'cloud_cover')):null,isobars:composite||field===THETA_SYMBOLS||overlay.isobars,pressureURL:(composite||field===THETA_SYMBOLS||overlay.isobars)&&hasFieldTime(meta,'pressure_msl',time)?concreteURL(model,meta,time,'pressure_msl'):null});
-  return url;
- });
- if(reusable){
-  // Appending hours keeps complete, unchanged frames. If a companion overlay
-  // becomes available for an old hour, rebuild only that hour's full chart.
-  const unchanged=new Set([...descriptors].filter(([url,descriptor])=>JSON.stringify(panel.frameDescriptors.get(url))===JSON.stringify(descriptor)).map(([url])=>url));
-  panel.frameCache.retain(unchanged);
-  panel.frameDescriptors.clear();for(const [url,descriptor]of descriptors)panel.frameDescriptors.set(url,descriptor);
-  panel.cacheTimes=state.times;panel.cacheMeta=meta;return panel.frameCache;
- }
- panel.cacheKey=signature;
- panel.cacheTimes=state.times;panel.cacheMeta=meta;panel.frameDescriptors=descriptors;
- const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.symbolURL?[symbolOverlay(descriptor.symbolURL)]:[]),...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
- panel.frameCache.setView(forecastViewKey(panel.map));panel.frames=panel.frameCache.frames;return panel.frameCache;
-}
-function warmUpcoming(panel){
- if(panel.restyling||!panel.frameCache)return;
- const accumulation=accumulationHours(panelSelection(state,panel.key).field);
- const window=frameWindow(panel.frameURLs,state.index,accumulation?{ahead:1,behind:1,loop:false}:frameBudget());
- panel.frameCache.warm({...window,all:accumulation?window.upcoming:fullSequence(panel.frameURLs,state.index),delay:accumulation?250:0});
-}
-async function prepareSelection(index,valid=()=>true){
- const choices=panelSelections(state),time=state.times[index],metas=state.metas;
- if(!time)return null;
- await Promise.all(choices.map(({key})=>panels[key].ready));
- if(!valid()||metas!==state.metas||choices.some(({key,model,field})=>panels[key].restyling||model!==panelSelection(state,key).model||field!==panelSelection(state,key).field))return null;
- // Reserve native rendering capacity for every selected panel and its overlays.
- // Nearby hidden MapLibre sources use the same background budget as disk preloads.
- imageryCache.setForeground(choices.flatMap(({key,model,field})=>{
-  const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
-  return url?[url,...cache.decorate(url).map(group=>group.source.url)]:[];
- }));
- imageryCache.setSequence(choices.flatMap(({key})=>{
-  const panel=panels[key],cache=panel.frameCache;
-  return panel.frameURLs.filter(Boolean).flatMap(url=>[url,...cache.decorate(url).map(group=>group.source.url)]);
- }));
- const prepared=await Promise.all(choices.map(async({key,model,field})=>{
-  const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
-  if(!url)return state.compare?{panel,cache,frame:null,key,model,field,time}:null;
-  const frame=await cache.acquire(url,valid);
-  return frame?{panel,cache,frame,key,model,field,time}:null;
- }));
- if(prepared.some(item=>!item))return null;
- return valid()?prepared:null;
-}
-function setTime(){arrowNavigation.cancel();outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
-function stepTime(direction){
- if(!state.times.length)return;
- const shown=playing?state.times.indexOf(panels.a?.displayedTime):-1;
- const from=shown>=0?shown:state.index,index=Math.max(0,Math.min(from+direction,state.times.length-1));
- if(index===from)return;
- pauseAnimation();navigationDirection=direction;state.index=index;requestedTime=Date.parse(state.times[index]);
- // Remember every click immediately, including a reversal at either end. Keep
- // the image and its valid-time label together until the requested panels commit.
- syncArrowButtons(index);++timeGeneration;outlineWait?.abort();viewportRefresh.cancel();
- failedSelection=null;for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
- const ready=panelSelections(state).every(({key,model,field})=>!hasFieldTime(state.metas[model],field,state.times[index])||panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
- $('animation-status').textContent='Loading '+stamp(state.times[index])+' UTC…';
- return timePending=arrowNavigation.request({ready});
-}
-async function loadTime(outlineSignal){
- if(briefingActive)return false;
- prepareLegendLayout();
- // A released slider may overlap an animated zoom. Its selected time is kept;
- // moveend will load it once the final view is known, without a false failure.
- if(mapsMoving()){queueViewportRefresh();return false;}
- viewportRefresh.cancel(); // This selection already handles the settled view.
- failedSelection=null;
- if(!state.times.length)return false;
- const index=Math.max(0,Math.min(state.index,state.times.length-1));state.index=index;syncArrowButtons(index);
- const time=state.times[index],generation=++timeGeneration;
- const valid=()=>generation===timeGeneration&&state.times[index]===time&&state.index===index&&!mapsMoving();
- dismissLocation();requestedTime=Date.parse(time);
- // Advance the shared label only when each panel has its chart or an explicit gap.
- $('animation-status').textContent='Loading '+stamp(time)+' UTC…';
- for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
- try{
-  for(const {key,model,field}of panelSelections(state)){
-   const panel=panels[key];await panel.ready;if(!valid()||panel.restyling)return false;
-   const cache=panelCache(panel,model,field);
-   panel.requestedURL=panel.frameURLs[index];
-   // Give a cold selection priority without throwing away valid downloads.
-   // Only a changed model, layer or viewport cancels obsolete prefetch jobs.
-   if(!cache.isReady(panel.requestedURL))cache.focus(panel.requestedURL,frameWindow(panel.frameURLs,index,frameBudget()).keep);
-  }
-  viewportBounds();
-  const prepared=await prepareSelection(index,valid);
-  if(!valid())return false;
-  if(!prepared||prepared.some(({cache,frame})=>frame&&!cache.isReady(frame.url)))throw new Error('Forecast frame could not load.');
-  // Selected weather and static geography load in parallel. Future weather
-  // preloads never block this gate, and an empty/errored coast is not complete.
-  const coastlines=prepared.filter(({frame})=>frame).map(({panel})=>panel.coastline);
-  if(coastlines.some(coast=>!coast.isReady()))$('animation-status').textContent='Loading map outline…';
-  try{await Promise.all(coastlines.map(coast=>coast.wait({signal:outlineSignal})));}
-  catch(cause){if(cause.name==='AbortError')return false;const error=new Error('The map outline could not load. Retry map outline to restore it.',{cause});error.outline=true;throw error;}
-  if(!valid())return false;
-  if(prepared.some(({cache,frame})=>frame&&!cache.isReady(frame.url)))throw new Error('Forecast frame could not load.');
-  // Synchronous commit: images, contours, isobars and labels share one valid time.
-  for(const {panel,cache,frame,key,model,field}of prepared){
-   clearGridValues(panel);
-   if(!frame){
-    cache.hide();panel.sourceId=null;panel.url=null;panel.loaded=false;panel.weatherLayer=null;panel.imageInfo=null;panel.outlineWarning=false;
-    if(state.overlays[key].grid)$('grid-note-'+key).textContent='Grid values unavailable at this time.';
-    panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
-    const meta=state.metas[model],available=meta.valid_times.filter(t=>hasFieldTime(meta,field,t)),first=available[0],end=available.at(-1);
-    const beforeFirst=first&&Date.parse(time)<Date.parse(first);
-    const pending=meta.completed===false&&end&&Date.parse(time)>Date.parse(end);
-    const initialPrecipitation=field===WEATHER_COMPOSITE&&Date.parse(time)===Date.parse(meta.reference_time)&&
-     hasFieldTime(meta,'cloud_cover',time)&&hasFieldTime(meta,'pressure_msl',time)&&!hasFieldTime(meta,'precipitation',time);
-    $('panel-label-'+key).textContent=forecastLabel(model,field,time)+' · unavailable';
-    $('map-error-'+key).textContent=(initialPrecipitation?'This combined chart needs precipitation, which is not supplied at initialization.':pending?'Not yet published for this run.':'No forecast for this layer at the selected time.')+
-     (beforeFirst?' First available: '+stamp(first)+' UTC.':end?' Latest available: '+stamp(end)+' UTC.':'')+' Other panels continue where forecasts are available.';
-    $('map-error-'+key).hidden=false;
-    continue;
-   }
-   cache.show(frame,state.opacity,rasterResampling(fields.find(f=>f.key===field)));
-   panel.sourceId=frame.id;panel.url=frame.url;panel.loaded=true;panel.outlineWarning=false;panel.weatherLayer=frame.layer;
-   panel.displayedTime=time;panel.displayedField=field;panel.displayedModel=model;
-   $('panel-label-'+key).textContent=forecastLabel(model,field,time);$('map-error-'+key).hidden=true;
-   scheduleGridValues(panel);
-  }
-  syncTimeline(index);setLegend();pressureNote();
-  for(const {panel,key,field,frame}of prepared)if(frame)panel.imageInfo={title:$('panel-label-'+key).textContent,scales:chartScales(fields.find(f=>f.key===field),$('legend-interval-'+key).textContent)};
-  for(const {panel}of prepared)warmUpcoming(panel);
-  $('animation-status').textContent=playing?'Playing · buffered native forecast frames':'Ready';updatePreloadStatus();
-  status('Click a map for a value and local charts.');return true;
- }catch(error){
-  if(!valid())return false;
-  pauseAnimation();
-  for(const {key}of panelSelections(state)){
-   const panel=panels[key];
-   const selected=panelSelection(state,key);
-   if(!error.outline&&panel.loaded&&panel.displayedTime===time&&panel.displayedModel===selected.model&&panel.displayedField===selected.field)continue;
-   $('map-error-'+key).textContent=error.outline?'The map outline could not load. Use Retry map outline to restore the coastline.':panel.loaded&&panel.displayedTime?'Unable to load the requested frame. Showing the forecast labelled '+stamp(panel.displayedTime)+' UTC. Retry or choose another time.':'Unable to load this forecast frame. Retry or check latest runs.';
-   $('map-error-'+key).hidden=false;
-  }
-  const shown=state.times.indexOf(panels.a?.displayedTime);
-  if(shown>=0){state.index=shown;syncTimeline(shown);}
-  else{$('previous-time').disabled=index===0;$('next-time').disabled=index===state.times.length-1;}
-  failedSelection={index,time,outline:!!error.outline};
-  $('animation-status').textContent=error.outline?'Map outline unavailable · retry loading':'Frame unavailable · playback stopped';status(error.message);updatePreloadStatus();return false;
- }
-}
-function retrySelectedFrame(){
- for(const {key}of panelSelections(state))if(panels[key].coastline.state.status==='error')panels[key].coastline.retry();
- const failed=failedSelection;
- if(failed&&state.times[failed.index]===failed.time){state.index=failed.index;return setTime();}
- return timePending;
-}
-// Returning from a briefing or switching basemaps rebuilds the MapLibre style.
-// An in-flight raster request can fail during the handover. Retry the same
-// verified forecast frame once; preserve genuine persistent errors.
-async function restoreMapFrame(){
- const loaded=await setTime();
- if(loaded||briefingActive||!failedSelection)return;
- const failed=failedSelection;
- for(const {key}of panelSelections(state))panels[key].frameCache?.retryFailures();
- if(failedSelection===failed&&state.times[failed.index]===failed.time)await retrySelectedFrame();
-}
-playback=new ForecastPlayback({
- length:()=>state.times.length,index:()=>state.index,buffer:2,settle:retrySelectedFrame,
- prepare:async index=>{
-  const generation=timeGeneration;
-  const ready=panelSelections(state).every(({key,model,field})=>!hasFieldTime(state.metas[model],field,state.times[index])||panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
-  if(!ready)$('animation-status').textContent='Buffering '+stamp(state.times[index])+' UTC…';
-  return !!await prepareSelection(index,()=>generation===timeGeneration);
- },
- show:async index=>{state.index=index;return setTime();},
- onState:(phase,done,total)=>{
-  playing=['buffering','playing','next'].includes(phase);
-  $('play-map').textContent=playing?'Ⅱ Pause':'▶ Play';$('play-map').setAttribute('aria-pressed',String(playing));
-  if(phase==='buffering')$('animation-status').textContent='Preparing smooth playback · '+done+'/'+total+' frames';
-  if(phase==='ended')$('animation-status').textContent='Only one forecast frame available';
-  if(phase==='failed')$('animation-status').textContent='Buffering failed · press Play to retry';
-  if(phase==='paused')for(const {key}of panelSelections(state))scheduleGridValues(panels[key]);
- }
-});
-$('map-playback-speed')?.addEventListener('change',event=>{playback.interval=Number(event.target.value);});
-$('retry-preload').addEventListener('click',()=>{
- const outlineFailed=panelSelections(state).some(({key})=>panels[key].coastline.state.status==='error');
- for(const {key}of panelSelections(state))panels[key].frameCache?.retryFailures();
- if(failedSelection)retrySelectedFrame();
- else if(outlineFailed){for(const {key}of panelSelections(state))if(panels[key].coastline.state.status==='error')panels[key].coastline.retry();setTime();}
- else for(const {key}of panelSelections(state))warmUpcoming(panels[key]);
- updatePreloadStatus();
-});
-function prepareLegendLayout(){
- // Reserve the selected scales before fetching tiles. Changing legend height
- // after committing a frame used to resize the map and discard that very frame.
- // Keep the displayed legend text with the displayed image until commit.
- const choices=panelSelections(state),host=document.querySelector('.map-canvases');
- const composite=choices.some(({field})=>field===WEATHER_COMPOSITE);
- const winter=choices.some(({field})=>isTypeField(field)||field===THETA_SYMBOLS);
- host.classList.toggle('composite-legend',composite);host.classList.toggle('winter-legend',winter);
- for(const {key}of choices)panels[key]?.resize();
-}
-function setLegend(){
- for(const {key,model,field} of panelSelections(state)){
-  const f=fields.find(f=>f.key===field);if(!f)continue;
-  const el=name=>$(name+'-'+key),gradient=el('legend-gradient'),ticks=el('legend-ticks'),bands=el('legend-bands');
-  const legendOffset=f.legendStart??0,legendColors=f.colors.slice(legendOffset),displayBreaks=displayStops(f).slice(legendOffset),min=f.temperatureBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
-  if(panels[key].legendField!==field){
-  panels[key].legendField=field;
-  el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm/h)':['precipitation_probability','snowfall_probability'].includes(field)?'Chance (%)':f.categoryLabels?'Precipitation type & intensity':displayUnit(f);
-  gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
-  gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
-  [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
-  ticks.classList.toggle('temperature-ticks',!!f.temperatureBands);
-  if(f.bands)displayBreaks.forEach((v,i)=>{const item=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');const range=f.categoryLabels?.[i+legendOffset]??(f.categorical?String(v):i===displayBreaks.length-1?v+'+':v+'–<'+displayBreaks[i+1]);item.title=range+' '+displayUnit(f);item.setAttribute('aria-label',range+' '+displayUnit(f));swatch.style.background=legendColors[i];label.textContent=f.categoryLabels?.[i+legendOffset]??v+(i===displayBreaks.length-1&&!f.categorical?'+':'');item.append(swatch,label);bands.append(item);});
-  bands.style.gridTemplateColumns='repeat('+displayBreaks.length+',minmax(0,1fr))';
-  if(field===WEATHER_COMPOSITE){
-   gradient.hidden=false;ticks.hidden=false;gradient.style.background='linear-gradient(to right,#414141,#e6e6e6)';ticks.replaceChildren();
-   for(const text of ['Clear · 0%','Overcast · 100%']){const label=document.createElement('span');label.textContent=text;ticks.append(label);}
-   const dry=bands.firstElementChild;if(dry){dry.querySelector('i').style.background='linear-gradient(to right,#414141,#e6e6e6)';dry.title='Below 0.5 mm/h: modelled cloud remains visible, not necessarily dry';}
-  }
-  if(isTypeField(field)){bands.replaceChildren();bands.style.gridTemplateColumns='repeat('+ (field===NATIVE_PRECIPITATION_TYPE?6:4)+',minmax(0,1fr))';for(const scale of precipitationTypeScales(field===NATIVE_PRECIPITATION_TYPE)){const cell=document.createElement('div'),swatch=document.createElement('i'),label=document.createElement('span');swatch.style.background='linear-gradient(to right,'+scale.colors.flatMap((c,i)=>[c+' '+i*25+'%',c+' '+(i+1)*25+'%']).join(',')+')';label.textContent=scale.name.split(' · ')[0];cell.title=scale.labels.join(' / ')+' mm/h water equivalent';cell.append(swatch,label);bands.append(cell);}}
-  el('legend-winter').hidden=!isTypeField(field)&&field!==THETA_SYMBOLS;el('legend-winter').textContent=isTypeField(field)?'Light → dark: 0.1–<0.5 / 0.5–<2 / 2–<5 / 5+ mm/h water equivalent · below 0.1 unshaded':field===THETA_SYMBOLS?f.legendNote:'';
-  el('temperature-scale-note').textContent=isTypeField(field)?'Light → dark: 0.1–<0.5 / 0.5–<2 / 2–<5 / 5+ mm/h water equivalent':field===THETA_SYMBOLS?f.legendNote:f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
-  }
-  let note=f.note+' '+winterNote(state.metas[model],field)+(state.metas[model]?.ensembleNote?' '+state.metas[model].ensembleNote:''),interval=accumulationPeriod(field,state.times[state.index])||f.legendNote||'';
-  if(field===VERTICAL_MOTION){const sourceNote=directVerticalNote(fieldSource(state.metas[model],field,state.times[state.index]));if(sourceNote){note+=' '+sourceNote;interval+=' '+sourceNote;}}
-  if([WEATHER_COMPOSITE,...TYPE_KEYS,THETA_SYMBOLS,'precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
-   const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
-   const rate=field===WEATHER_COMPOSITE||isPrecipitationRate(field);
-   interval=hours?(rate?'Mean rate over preceding '+hours+' h':hours+' h ending at valid time'):'Period unavailable';
-   if(['precipitation_probability','snowfall_probability'].includes(field)&&hours)interval='≥'+Number((hours*.1).toFixed(2))+(field==='snowfall_probability'?' mm water / ':' mm / ')+interval;
-   note+=' '+(hours?(['precipitation_probability','snowfall_probability'].includes(field)?'Probability threshold: ':rate?'':'Accumulation: ')+interval+'.':'The model interval is unavailable.');
-  }
-  if(/^temperature_2m_(max|min)$/.test(field))interval='Native period ending at valid time · duration unspecified';
-  const ensembleInterval=ensemblePeriodLabel(state.metas[model],field,state.times[state.index]);
-  if(ensembleInterval)note+=' Reporting period: '+ensembleInterval+'.';
-  const extraSource=fieldSource(state.metas[model],field,state.times[state.index]);
-  if(extraSource?.coverage)note+=' Coverage: North Atlantic and Europe, including all four map areas. '+extraSource.member_count+' ensemble members.';
-  el('legend-interval').textContent=ensembleInterval||(f.ensembleStatistic==='spread'?'Standard deviation · higher = more disagreement':f.ensembleStatistic==='mean'?'Ensemble mean':interval);
-  el('variable-note').textContent=note;
-  el('field-availability').textContent=modelName(model)+' · '+f.name;
-  const meta=state.metas[model],source=fieldSource(meta,field);
-  if(meta&&source){const end=field===WEATHER_COMPOSITE?meta.valid_times.filter(time=>hasFieldTime(meta,field,time)).at(-1):(source.variable_valid_times?.[sourceVariable(source,field)]??source.valid_times).at(-1);el('run').textContent='Initialized '+runLabel(meta)+(end?' · layer data ends '+stamp(end)+' UTC':' · awaiting common forecast times');}
-  if(meta&&source&&meta.runFamily)el('run').textContent+=' · '+ukvCoverageText(meta,meta.runFamily);
-  const step=f.contourLabel??(field.startsWith('geopotential_height_')?(Number(field.match(/_(\d+)hPa/)?.[1])<=100?'120 m':'60 m'):f.unit==='°C'?'2°C':f.unit==='%'?'10%':field==='freezing_level_height'?'250 m':field.startsWith('wind_speed_')?'approximately 11 mph (5 m/s native)':'the positive legend thresholds');
-  el('contour-note').textContent=f.categorical?'Discrete categories: contours are disabled.':'Contours: '+step+'.';
- }
- for(const {key,field}of panelSelections(state))$('map-contours-'+key).disabled=!!fields.find(f=>f.key===field)?.categorical;
-}
-function populateVariables(onlyKey){
- for(const {key,model,field} of panelSelections(state).filter(item=>!onlyKey||item.key===onlyKey)){
-  const available=availableFields(fields,[state.metas[model]]),select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
-  for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
-  if(state.metas[model]?.variables.includes('precipitation')){
-   const supported=ACCUMULATION_KEYS.filter(k=>accumulationSource(state.metas[model],k));
-   let group=groups.get('Accumulated precipitation');
-   if(!group&&(state.metas[model].sources??[state.metas[model]]).some(source=>source.variables?.includes('precipitation')&&precipitationStepHours(source.domain,6))){group=document.createElement('optgroup');group.label='Accumulated precipitation';select.append(group);}
-   if(group){for(const k of ACCUMULATION_KEYS.filter(k=>!supported.includes(k))){const o=document.createElement('option');o.value=k;o.disabled=true;o.textContent=accumulationHours(k)+' h total — incomplete window in this run';group.append(o);}
-    const sorted=[...group.children].sort((a,b)=>accumulationHours(a.value)-accumulationHours(b.value));group.replaceChildren(...sorted);}
-  }
-  const selected=available.some(f=>f.key===field)?field:available.find(f=>f.key==='temperature_2m')?.key??available[0]?.key;
-  state['field'+(key==='a'?'':key.toUpperCase())]=selected;select.value=selected??'';
- }
-}
-function refreshTimeline(){
- const models=panelModelIds(state).map(id=>MODELS.find(model=>model.id===sourceModel(id)));
+ const signature=JSON.stringify([sourceModel(model),fi…6215 tokens truncated…els=panelModelIds(state).map(id=>MODELS.find(model=>model.id===sourceModel(id)));
  const {hours}=forecastInterval(models,state.interval,{allowRegionalSteps:true});
  state.times=panelForecastTimes(state,hours);
  $('map-forecast-interval').value=hours?String(hours):'native';
@@ -651,18 +383,19 @@ async function refreshLiveRuns(){
  if(document.hidden||briefingActive||checkingLiveRuns||$('reload-maps').disabled)return;
  if(!state.times.length)return configure(true);
  checkingLiveRuns=true;
- const generation=state.generation,selected=panelSelections(state);
+ const generation=state.generation,selected=panelSelections(state).filter(p=>!productField(p.field));
+ if(!selected.length){checkingLiveRuns=false;return;}
  try{
   const load=metadataLoader(true);
   // Panels can share a model and initialization while having different intent:
   // one may follow the latest complete cycle and another deliberately pin it.
   const results=await Promise.allSettled(selected.map(item=>mapRunCatalogue.select(requestedRun(item),load)));
   if(generation!==state.generation||briefingActive||document.hidden)return;
-  const next={};let changed=false,failed=false;
+  const next={...state.metas};let changed=false,failed=false;
   results.forEach((result,index)=>{
    const {key,model}=selected[index],previous=state.metas[model];
    if(result.status==='rejected'){failed=true;next[model]=previous;return;}
-   const meta=retainRunProgress(previous,result.value.meta),id=selectedRunKey(model,meta);
+   const meta=retainProductSources(retainRunProgress(previous,result.value.meta),previous),id=selectedRunKey(model,meta);
    next[id]=meta;
    state['model'+(key==='a'?'':key.toUpperCase())]=id;
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(model),meta:result.value.latest}}));
@@ -682,6 +415,15 @@ async function refreshLiveRuns(){
  finally{checkingLiveRuns=false;}
 }
 
+async function resolvePanelRun(item,load){
+ const request=requestedRun(item),model=sourceModel(item.model);
+ if(productField(item.field)&&productChoices(model).some(f=>f.key===item.field)){
+  const meta=await loadProducts(model,load,followLatest[item.key]?null:state.metas[item.model]?.reference_time);
+  if(!meta.variables.includes(item.field))throw Error('This ensemble product is not yet published for the selected run.');
+  return {meta:{...meta,normalMenuMeta:state.metas[item.model]?.normalMenuMeta??state.metas[item.model]},latest:meta,previous:null,key:selectedRunKey(model,meta)};
+ }
+ return mapRunCatalogue.select(request,load);
+}
 async function configure(force=false){
  failedSelection=null;
  pauseAnimation();++timeGeneration;
@@ -701,14 +443,14 @@ async function configure(force=false){
  try{
   const load=metadataLoader(force);
   const selected=panelSelections(state);
-  const results=await Promise.all(selected.map(async item=>({...item,...await mapRunCatalogue.select(requestedRun(item),load)})));if(generation!==state.generation)return;
+  const results=await Promise.all(selected.map(async item=>({...item,...await resolvePanelRun(item,load)})));if(generation!==state.generation)return;
   const pairs=results.map(result=>[result.key,result.meta]);
   for(let i=0;i<selected.length;i++){
    const panelKey=selected[i].key,suffix=panelKey==='a'?'':panelKey.toUpperCase();
    state['model'+suffix]=results[i].key;
    $('map-model'+(panelKey==='a'?'':'-'+panelKey)).value=sourceModel(results[i].key);
   }
-  state.metas=Object.fromEntries(pairs);const metas=pairs.map(p=>p[1]);
+  state.metas={};for(const [key,meta] of pairs){const previous=state.metas[key];state.metas[key]=meta.productOnly&&previous&&!previous.productOnly?retainProductSources(previous,meta):retainProductSources(meta,previous);}const metas=Object.values(state.metas);
   updateRunMenus(results);
   for(const result of results)document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(result.key),meta:result.latest}}));
   showRunUpdates();
@@ -730,7 +472,10 @@ async function configurePanel(key,model,follow){
  $('animation-status').textContent='Checking Panel '+(['a','b','c'].indexOf(key)+1)+' model run…';
  status($('animation-status').textContent);
  try{
-  const result=await mapRunCatalogue.select(follow?sourceModel(model):model,metadataLoader(false));
+  const requestedField=panelSelection(state,key).field;
+  const requested={key,model,field:requestedField};
+  const oldFollow=followLatest[key];followLatest[key]=follow;
+  let result;try{result=await resolvePanelRun(requested,metadataLoader(false));}catch(error){followLatest[key]=oldFollow;throw error;}
   if(selection!==panel.selectionGeneration)return;
   requestedTime=Date.parse(state.times[state.index])||requestedTime;
   state[property]=result.key;followLatest[key]=follow;
@@ -758,8 +503,35 @@ for(const [key,property]of [['a','model'],['b','modelB'],['c','modelC']]){
  $('map-model'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,true));
  $('map-run'+suffix).addEventListener('change',e=>configurePanel(key,e.target.value,e.target.value===e.target.dataset.preferredRun));
 }
-for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',e=>{
- pauseAnimation();failedSelection=null;state[property]=e.target.value;
+for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],['map-variable-c','fieldC'],['map-forecast-interval','interval']])$(id).addEventListener('change',async e=>{
+ pauseAnimation();failedSelection=null;
+ const key=property==='fieldB'?'b':property==='fieldC'?'c':'a',selection=panelSelection(state,key),chosen=e.target.value;
+ if(productField(chosen)){
+  const generation=panels[key].selectionGeneration=(panels[key].selectionGeneration??0)+1;
+  ++state.generation;panels[key].configuring=true;
+  e.target.disabled=true;status('Loading published ensemble product…');
+  try{
+   const meta=await loadProducts(sourceModel(selection.model),metadataLoader(false),followLatest[key]?null:state.metas[selection.model]?.reference_time);
+   if(generation!==panels[key].selectionGeneration)return;
+   if(!meta.variables.includes(chosen))throw Error(chosen.includes('anomaly')?'Temperature anomalies await the verified HadUK-Grid minimum/maximum climatology.':'This probability is not yet published for this run.');
+   // Product identity is separate so another panel on the same model keeps its sources.
+   const normalKey=selectedRunKey(selection.model,meta);
+   state['model'+(key==='a'?'':key.toUpperCase())]=normalKey;
+   // Same-reference sources can be merged safely; all other runs stay separate.
+   const previous=state.metas[normalKey];
+   const merged=previous&&!previous.productOnly?{...previous,sources:[...(previous.sources??[previous]),meta],variables:[...new Set([...previous.variables,...meta.variables])],valid_times:[...new Set([...previous.valid_times,...meta.valid_times])].sort()}:{...meta,normalMenuMeta:previous?.normalMenuMeta??previous??state.metas[selection.model]};
+   state.metas={...state.metas,[normalKey]:merged};state[property]=chosen;
+   requestedTime=meta.variable_valid_times[chosen].map(Date.parse).reduce((best,t)=>Math.abs(t-requestedTime)<Math.abs(best-requestedTime)?t:best);
+   extendCatalogue(fields,[merged],OM,settings);populateVariables(key);showRunUpdates('Ensemble products · '+runLabel(meta));
+   const runSelect=$('map-run'+(key==='a'?'':'-'+key));if(![...runSelect.options].some(o=>o.value===normalKey)){const option=document.createElement('option');option.value=normalKey;option.textContent=runLabel(meta)+' · ensemble products';runSelect.append(option);}runSelect.value=normalKey;
+   refreshTimeline();await setTime();
+  }catch(error){e.target.value=selection.field;status(error.message);$('map-error-'+key).textContent=error.message;$('map-error-'+key).hidden=false;}
+  finally{if(generation===panels[key].selectionGeneration){e.target.disabled=false;panels[key].configuring=false;}}
+  return;
+ }
+ state[property]=chosen;
+ if(property!=='interval'&&state.metas[selection.model]?.productOnly){await configurePanel(key,sourceModel(selection.model),true);return;}
+
  try{refreshTimeline();setTime();}
  catch(error){
   status(error.message);$('map-time-label').textContent='Forecast unavailable';$('animation-status').textContent=error.message;
