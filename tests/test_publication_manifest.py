@@ -7,6 +7,19 @@ from publication_manifest import inventory
 
 
 class PublicationTests(unittest.TestCase):
+    def test_point_index_poll_timestamp_does_not_trigger_upload_but_new_cycles_do(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            index=root/'mogreps'
+            index.mkdir()
+            manifest=index/'latest.json'
+            manifest.write_text('{"generated":"first","run":1,"leads":[0,3]}')
+            first=inventory(root)['contentSha256']
+            manifest.write_text('{"generated":"second","run":1,"leads":[0,3]}')
+            self.assertEqual(first,inventory(root)['contentSha256'])
+            manifest.write_text('{"generated":"second","run":2,"leads":[0,3]}')
+            self.assertNotEqual(first,inventory(root)['contentSha256'])
+
     def test_timestamps_do_not_republish_but_binary_corrections_and_hours_do(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

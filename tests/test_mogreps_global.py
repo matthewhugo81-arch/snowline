@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import zlib
+from concurrent.futures import Future
+from datetime import datetime, timezone
 import numpy as np
 from omfiles import OmFileReader
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
@@ -79,6 +81,36 @@ class GlobalMogrepsTests(unittest.TestCase):
         native=[key for key in b.COMPARISON if key!='geopotential_height_500hPa_anomaly_mean']
         records={0:{'variables':native},3:{'variables':b.INSTANT},6:None,9:{'variables':b.COMPARISON}}
         self.assertEqual(sorted(records,key=lambda h:b.native_comparison_ready(records[h])),[3,6,0,9])
+
+    def test_new_cycle_publishes_full_core_before_enrichment_resumes(self):
+        calls=[]
+        class Pool:
+            def __init__(self,**kwargs): pass
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def submit(self,fn,*args):
+                future=Future();future.set_result(fn(*args));return future
+        def frame(manifest,lead,path,workers,include_comparison):
+            calls.append((lead,include_comparison))
+            keys=b.INSTANT+(b.PERIOD if lead else [])+(b.COMPARISON if include_comparison else [])
+            path.write_bytes(b'fixture')
+            path.with_suffix('.json').write_text(json.dumps({'version':2 if include_comparison else 1,'variables':keys}))
+            return keys
+        with tempfile.TemporaryDirectory() as directory,patch.object(b,'read_json',return_value=self.manifest()), \
+             patch.object(b,'ProcessPoolExecutor',Pool),patch.object(b,'write_frame',side_effect=frame), \
+             patch.object(b,'datetime',wraps=datetime) as clock:
+            clock.now.return_value=datetime(2026,10,19,7,tzinfo=timezone.utc)
+            root=Path(directory)
+            b.build(root)
+            first=json.loads((root/b.DOMAIN/'latest.json').read_text())
+            self.assertEqual(len(calls),83)
+            self.assertTrue(all(not include for lead,include in calls))
+            self.assertTrue(first['core_completed'])
+            self.assertFalse(first['completed'])
+            calls.clear();b.build(root)
+            self.assertEqual(len(calls),24)
+            self.assertTrue(all(include for lead,include in calls))
+            self.assertEqual(len(json.loads((root/b.DOMAIN/'latest.json').read_text())['valid_times']),83)
 
     def test_om_keeps_missing_temperature_and_probability_precision(self):
         with tempfile.TemporaryDirectory() as directory:
