@@ -150,7 +150,8 @@ jobs:
           path: _site
   deploy:
     needs: build
-    if: needs.build.outputs.changed == 'true'
+    # A deliberately skipped browser job must not suppress changed data.
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
