@@ -32,7 +32,7 @@ export function mogrepsTransport({signal,deadlineMs=180000,timeoutMs=30000,maxFa
       const delay=retryDelay(response);
       cooldown=Math.max(cooldown,Date.now()+delay);
       await response.body?.cancel();
-      throw Object.assign(Error('Met Office forecast request failed (HTTP '+response.status+').'),{status:response.status,retryAfter:delay/1000});
+      throw Object.assign(Error('Met Office forecast is temporarily unavailable (HTTP '+response.status+').'),{status:response.status,retryAfter:delay/1000});
      }
      const value=await response.json();combined.throwIfAborted();failures=0;return value;
     }catch(error){
