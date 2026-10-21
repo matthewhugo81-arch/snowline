@@ -5,7 +5,8 @@
 const installed=new WeakSet();
 export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-data/',import.meta.url).href){
  const companion='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/';
- const own=url=>url.startsWith(base)||url.startsWith(companion);
+ const archive=url=>url.match(/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/(snowline_ecmwf_ensemble\/.*)$/)?.[1];
+ const own=url=>url.startsWith(base)||url.startsWith(companion)||!!archive(url);
  const reader=OM.getProtocolInstance(settings).omFileReader;
  if(installed.has(reader))return;
  installed.add(reader);
@@ -19,7 +20,7 @@ export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-da
  const pool=reader.backendPool;
  const ensembleCache=OM.LruBlockCache&&typeof pool?.withReader==='function'?new OM.LruBlockCache(64*1024,256):null;
  reader.withReader=(url,callback)=>{
-  const path=url.startsWith(base)?url.slice(base.length):url.startsWith(companion)?url.slice(companion.length):null;
+  const path=url.startsWith(base)?url.slice(base.length):url.startsWith(companion)?url.slice(companion.length):archive(url);
   const binary=own(url)&&url.endsWith('.om')?url+'.png':url;
   return ensembleCache&&path&&compact.test(path)&&/\.om(?:\.png)?$/.test(url)
    ?pool.withReader(binary,ensembleCache,callback)
@@ -31,7 +32,7 @@ export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-da
  if(typeof reader.readVariable==='function'&&typeof reader.readSimpleVariable==='function'){
   const read=reader.readVariable.bind(reader);
   reader.readVariable=(url,key,ranges=null,signal)=>
-   (((url.startsWith(base+'snowline_ecmwf_extra_v2/')||url.startsWith(companion+'snowline_ecmwf_extra_v2/'))&&/^wind_speed_(?:10m_mean|(?:250|850)hPa_(?:mean|spread))$/.test(key))||(url.startsWith(companion+'snowline_mogreps_global/')&&/^wind_speed_(?:300|200)hPa_(?:mean|spread)$/.test(key)))
+   (((url.startsWith(base+'snowline_ecmwf_extra_v2/')||url.startsWith(companion+'snowline_ecmwf_extra_v2/'))&&/^wind_speed_(?:10m_mean|(?:250|850)hPa_(?:mean|spread))$/.test(key))||((url.startsWith(base+'snowline_mogreps_global/')||url.startsWith(companion+'snowline_mogreps_global/'))&&/^wind_speed_(?:300|200)hPa_(?:mean|spread)$/.test(key)))
     ?reader.withReader(url,file=>reader.readSimpleVariable(file,key,ranges,signal))
     :read(url,key,ranges,signal);
  }

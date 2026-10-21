@@ -1,0 +1,31 @@
+name: Validate publication capacity
+on:
+  pull_request:
+    branches: [main]
+    paths: ['scripts/publication_manifest.py', 'scripts/publish_map_archive.py', 'tests/test_publication*.py', '.github/workflows/publish-maps.yml', '.github/workflows/publication-validation.yml']
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -p 'test_publication*.py'
+      - uses: actions/cache/restore@v4
+        with:
+          path: ensemble-data
+          key: inventory-read-only-${{ github.run_id }}
+          restore-keys: ensemble-grids-v1-
+      - name: Measure current runtime grids without conversion or deployment
+        run: |
+          mkdir -p _inventory/ensemble-data
+          for domain in snowline_gefs_ensemble snowline_ecmwf_ensemble snowline_mogreps_uk snowline_gem_700 snowline_icon_eu_700 snowline_gefs_extra_v2 snowline_ecmwf_extra_v2 snowline_mogreps_global; do
+            if [ -d "ensemble-data/$domain" ]; then cp -a "ensemble-data/$domain" _inventory/ensemble-data/; fi
+          done
+          python scripts/publication_manifest.py _inventory --report-only
+          python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_inventory').rglob('*.om')]"
+          python scripts/publish_map_archive.py _inventory --plan-only

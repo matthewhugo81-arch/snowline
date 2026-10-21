@@ -1,5 +1,6 @@
 name: Map playback browser tests
 on:
+  workflow_call:
   push:
     branches: [main]
     paths: ['maps.*', 'ukv-*.js', 'map-*.js', 'map-*.css', 'vendor/**', 'tests/map-browser.mjs', 'tests/accumulation-history-browser.mjs', 'tests/accumulation-periods-browser.mjs', 'tests/chart-image-browser.mjs', 'tests/ukv-retention-browser.mjs', 'tests/run-selector-browser.mjs', '.github/workflows/map-browser-tests.yml']

@@ -226,3 +226,14 @@ test('rolling lifetime reuses tiles across the hour without extending their expi
  t.mock.timers.tick(3480000);await read(second,'run/field');assert.equal(calls,2,'restoring a tile did not extend its original lifetime');await saved(second);second.release();
  const revised=create('test-v2');revised.setContext('view');await read(revised,'run/field');assert.equal(calls,3,'renderer revisions invalidate incompatible pixels');await saved(revised);revised.release();
 });
+test('immutable archived frames remain warm across next-day comparisons without another renderer call',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.UTC(2026,9,21,8)});
+ const disk=storage();let calls=0;
+ const create=()=>new ForecastTileCache(async()=>{calls++;return bytes();},{storage:disk,persistent:true,cacheVersion:'archive-test'});
+ const url='https://raw.githubusercontent.com/matthewhugo81-arch/snowline/'+'a'.repeat(40)+'/ensemble-data/snowline_ecmwf_ensemble/run/frame.om?variable=pressure';
+ const first=create();first.setContext('view');await read(first,url);await saved(first);first.release();
+ t.mock.timers.tick(24*3600000);
+ const second=create();second.setContext('view');await read(second,url);assert.equal(calls,1);
+ await read(second,url.replace('a'.repeat(40),'b'.repeat(40)));assert.equal(calls,2,'a corrected snapshot has a different identity');
+ await saved(second);second.release();
+});
