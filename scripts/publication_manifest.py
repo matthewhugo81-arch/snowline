@@ -63,7 +63,7 @@ def main():
     now = datetime.now(timezone.utc)
     report = inventory(args.root)
     report.update(version=1, sourceRevision=os.environ.get('GITHUB_SHA', 'local'),
-                  preparedAt=now.isoformat(), healthWindow=int(now.timestamp()) // 900,
+                  preparedAt=now.isoformat(), healthWindow=int(now.timestamp()) // 900 if (args.root / 'ensemble-data/health.json').is_file() else 0,
                   workflowRun=os.environ.get('GITHUB_RUN_ID'))
     text = json.dumps(report, indent=2) + '\n'
     # Include the manifest itself in the budget.

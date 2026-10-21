@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 import numpy as np
-from omfiles import OmFileWriter
+from omfiles import OmFileWriter, OmFileReader
 import requests
 
 DOMAIN = 'snowline_mogreps_global'
@@ -184,11 +184,23 @@ def atomic_json(path, value):
 
 
 def write_frame(manifest, lead, path, workers, include_comparison=True):
-    values = frame_values(manifest, lead, workers)
+    values = {}
+    if path.exists() and path.with_suffix('.json').exists():
+        record = json.loads(path.with_suffix('.json').read_text())
+        if record.get('version') in (1, 2):
+            reader = OmFileReader(str(path))
+            try:
+                values = {key: np.array(reader.get_child_by_name(key)[:], copy=True) for key in record['variables'] if key in FIELDS}
+            finally:
+                del reader
+            if any(value.shape != (GRID['ny'], GRID['nx']) for value in values.values()):
+                raise ValueError('Cached native grid shape mismatch')
+    if not all(key in values for key in INSTANT + (PERIOD if lead else [])):
+        values.update(frame_values(manifest, lead, workers))
     from mogreps_comparison_fields import comparison_values
     try:
         if include_comparison:
-            values.update(comparison_values(manifest, lead, workers))
+            values.update(comparison_values(manifest, lead, workers, existing=values))
     except Exception as error:
         print(f'::warning::MOGREPS comparison fields T+{lead} await retry: {error}', flush=True)
     if any(not np.isfinite(v).any() for v in values.values()):
@@ -211,6 +223,7 @@ def metadata(manifest, records):
     periods = {key: {times[h]: dict(start=iso(run+timedelta(hours=h-3)), end=times[h], hours=3)
                     for h in times if key in records[h]} for key in PERIOD}
     return dict(format_version=2, domain=DOMAIN, reference_time=iso(run), completed=sorted(records)==manifest['leads'] and all(all(key in records[h] for key in COMPARISON) for h in records),
+                core_completed=sorted(records)==manifest['leads'] and all(all(key in records[h] for key in INSTANT + (PERIOD if h else [])) for h in records),
                 variables=[key for key in FIELDS if variable_times[key]], valid_times=list(times.values()),
                 variable_valid_times=variable_times, variable_intervals=periods, member_count=18, member_ids=manifest['members'],
                 grid=GRID, coverage=[GRID['lonMin'], GRID['latMin'], 36.140625, 74.15625],
@@ -227,6 +240,10 @@ def initialize_frame_worker(index_root):
     import sys
     INDEX = index_root
     sys.modules['build_mogreps_global'] = sys.modules[__name__]
+
+
+def native_comparison_ready(record):
+    return bool(record and all(key in record.get('variables', []) for key in COMPARISON if key != 'geopotential_height_500hPa_anomaly_mean'))
 
 
 def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison_frames=24):
@@ -246,14 +263,21 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison
         raise ValueError('Invalid lead')
     records, failures = {}, []
     comparison_budget = comparison_frames if hours is None else len(requested)
+    cached = {}
+    for h in manifest['leads']:
+        path = folder / ((run+timedelta(hours=h)).strftime('%Y-%m-%dT%H%M')+'.om')
+        cached[h] = json.loads(path.with_suffix('.json').read_text()) if path.exists() and path.with_suffix('.json').exists() else None
+    # A failed optional anomaly must not repeatedly consume the first 24 slots
+    # while later native pressure/wind/height hours remain unpublished.
+    ordered = sorted(manifest['leads'], key=lambda h: native_comparison_ready(cached[h]))
     # HDF5 serializes threads globally; independent processes let remote metadata
     # reads overlap without one frame holding up every other forecast hour.
     with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context('spawn'),
                              initializer=initialize_frame_worker, initargs=(INDEX,)) as pool:
         jobs = {}
-        for h in manifest['leads']:
+        for h in ordered:
             path = folder / ((run+timedelta(hours=h)).strftime('%Y-%m-%dT%H%M')+'.om')
-            record = json.loads(path.with_suffix('.json').read_text()) if path.exists() and path.with_suffix('.json').exists() else None
+            record = cached[h]
             if record and record.get('version') in (1, 2):
                 records[h] = record['variables']
             if h in requested and (not record or record.get('version') != 2):
