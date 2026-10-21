@@ -10,23 +10,38 @@ from pathlib import Path
 import shutil
 import time
 import numpy as np
-# Load the GRIB runtime before the OM writer, matching the working core builder.
-# The reverse native-library load order crashes during Linux process teardown.
-import build_ensembles as core
 from omfiles import OmFileWriter
-from build_ensemble_extras import atomic_json
-from build_mogreps_snow import uk_nearest_indices
-from ensemble_product_sources import GlobalGRIB, MetOffice
+from ensemble_product_sources import GlobalGRIB, MetOffice, fetch
 from ensemble_products import threshold_fields, member_extrema_anomaly
 
 UTC=timezone.utc
 def iso(t):return t.astimezone(UTC).isoformat(timespec='seconds').replace('+00:00','Z')
 
 
+def atomic_json(path, data):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    temporary=path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(data)+'\n',encoding='utf8')
+    temporary.replace(path)
+
+
+def uk_nearest_indices():
+    # Do not load PROJ alongside GRIB libraries in the global model jobs.
+    from build_mogreps_snow import uk_nearest_indices as native_indices
+    return native_indices()
+
+
+def runtime_check(model):
+    if model in ('ecmwf','gefs'):
+        GlobalGRIB(model,datetime.now(UTC),Path('unused-runtime-check'))
+    elif model=='mogreps_uk':
+        uk_nearest_indices()
+
+
 def latest_run(model):
     domains={'gefs':'snowline_gefs_ensemble','ecmwf':'snowline_ecmwf_ensemble','mogreps_g':'snowline_mogreps_global','mogreps_uk':'ukmo_uk_ensemble_2km'}
     base='https://openmeteo.s3.amazonaws.com/data_spatial/' if model=='mogreps_uk' else 'https://matthewhugo81-arch.github.io/'+('snowline-ensembles' if model=='mogreps_g' else 'snowline')+'/ensemble-data/'
-    data=json.loads(core.fetch(base+domains[model]+'/latest.json'))
+    data=json.loads(fetch(base+domains[model]+'/latest.json'))
     run=datetime.fromisoformat(data['reference_time'].replace('Z','+00:00'))
     # A six-hour anchor keeps one full lagged set stable while it is built.
     if model=='mogreps_uk':run=run.replace(hour=run.hour//6*6)
@@ -115,5 +130,6 @@ def publish(root,folder,source,model,run,targets,has_climatology):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--max-hour',type=int,default=120);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
-    build(a.model,a.output,a.cache,datetime.fromisoformat(a.run.replace('Z','+00:00')) if a.run else None,a.max_hour,a.budget,a.climatology)
+    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--check-runtime',action='store_true');p.add_argument('--max-hour',type=int,default=120);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
+    if a.check_runtime:runtime_check(a.model)
+    else:build(a.model,a.output,a.cache,datetime.fromisoformat(a.run.replace('Z','+00:00')) if a.run else None,a.max_hour,a.budget,a.climatology)
