@@ -28,6 +28,7 @@ test('a pressure overlay never removes standalone charts or forecast hours',()=>
  const m=meta('dwd_icon_eu',['cloud_cover','precipitation','temperature_2m','temperature_850hPa','relative_humidity_850hPa']);
  const fields=catalogue([m]),presets=briefingPresets(m,fields);
  assert.ok(presets.some(p=>p.key===WEATHER_COMPOSITE));
+ assert.ok(briefingTimes(m,presets.find(p=>p.key===WEATHER_COMPOSITE),{},'native').includes(time(1)));
  for(const key of ['temperature_2m','cloud_cover','precipitation','wet_bulb_potential_temperature_850hPa']){
   const p=presets.find(p=>p.key===key);assert.ok(p);assert.deepEqual(p.required,[key]);
   assert.ok(briefingTimes(m,p,{},'native').includes(time(1)));
