@@ -68,3 +68,17 @@ test('briefing prefetch reads matching-time native inputs sequentially and respe
  assert.deepEqual(reads.map(r=>r.variable),['temperature_2m','pressure_msl']);assert.ok(reads.every(r=>r.url.includes('2026-10-15')&&r.ranges[0]==='clipped'));
  controller.abort();await assert.rejects(renderer.prepareInputs({meta,preset:{field:'temperature_2m',required:['temperature_2m']},time,clip:[],signal:controller.signal}),{name:'AbortError'});
 });
+
+test('briefing composite prefetch expands cloud/rain and only matching pressure',async()=>{
+ const renderer=Object.create(BriefingRenderer.prototype),reads=[];
+ renderer.settings={domainOptions:[{value:'ecmwf_ifs025',grid:{}}]};
+ renderer.OM={getRanges:()=>[],getProtocolInstance:()=>({omFileReader:{readVariable:async(url,variable)=>reads.push(variable)}})};
+ const time='2026-10-15T12:00:00Z',base={domain:'ecmwf_ifs025',reference_time:'2026-10-15T00:00:00Z',valid_times:[time],variables:['cloud_cover','precipitation']};
+ const preset={field:'cloud_precipitation_mslp',required:['cloud_precipitation_mslp']};
+ for(const pressure of ['absent','same','old']){
+  reads.length=0;
+  const meta=pressure==='absent'?base:{...base,sources:[base,{...base,variables:['pressure_msl'],reference_time:pressure==='old'?'2026-10-14T12:00:00Z':base.reference_time}]};
+  await renderer.prepareInputs({meta,preset,time,clip:[],signal:new AbortController().signal});
+  assert.deepEqual(reads,['cloud_cover','precipitation_hourly_rate',...(pressure==='same'?['pressure_msl']:[])]);
+ }
+});

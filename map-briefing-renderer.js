@@ -14,7 +14,7 @@ import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261020-e
 import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
 import {briefingValueLabels} from './map-briefing-values.js?v=20261020-run-selector';
 
-import {compositeSettings as briefingSettings,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
+import {compositeSettings as briefingSettings,compositeUnderlay,WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
 import {fieldSource} from './map-sources.js?v=20261020-run-selector';
@@ -76,8 +76,12 @@ export class BriefingRenderer{
  cancel(){this.frames?.clear();}
  async prepareInputs({meta,preset,time,clip,signal}){
   if(!time||accumulationHours(preset.field)||!preset.required.every(key=>hasFieldTime(meta,key,time)))return;
+  // The composite's availability key is not a native input. Prepare cloud and
+  // rain separately, plus pressure only when that same-run field is available.
+  if(preset.field===WEATHER_COMPOSITE)meta=compositeMeta(meta);
+  const inputs=preset.field===WEATHER_COMPOSITE?COMPOSITE_FIELDS.filter(key=>hasFieldTime(meta,key,time)):preset.required;
   const reader=this.OM.getProtocolInstance(this.settings).omFileReader;
-  for(const key of preset.required){
+  for(const key of inputs){
    signal.throwIfAborted();
    const source=fieldSource(meta,key,time),domain=this.settings.domainOptions.find(domain=>domain.value===source?.domain);
    if(!domain)continue;
