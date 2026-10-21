@@ -13,6 +13,7 @@ import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mo
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
 import {precipitationStepHours,precipitationExistsAt} from './map-accumulation.js?v=20261014-interaction-audit';
 import {DIRECT_VERTICAL_MODELS,verifiedDirectVertical} from './map-direct-vertical.js?v=20261020-native-levels';
+import {UKMO_NATIVE,UKMO_EARLY,verifiedUKMOEarly,completedSources,UKMO_EARLY_NOTE} from './map-ukmo-early.js?v=20261021-early';
 export const SPATIAL_BASE='https://openmeteo.s3.amazonaws.com/data_spatial/';
 const domains={ecmwf_ifs:'ecmwf_ifs',ecmwf_ifs025:'ecmwf_ifs025',ecmwf_aifs025_single:'ecmwf_aifs025_single',icon_global:'dwd_icon',icon_eu:'dwd_icon_eu',gem_global:'cmc_gem_gdps_15km',gfs_global:'ncep_gfs013',ukmo_global_deterministic_10km:'ukmo_global_deterministic_10km',ukmo_uk_deterministic_2km:'ukmo_uk_deterministic_2km',ncep_aigfs025:'ncep_aigfs025',ncep_hgefs025_ensemble_mean:'ncep_hgefs025_ensemble_mean',jma_gsm:'jma_gsm',knmi_harmonie_arome_europe:'knmi_harmonie_arome_europe',meteofrance_arpege_europe:'meteofrance_arpege_europe',meteofrance_arome_france:'meteofrance_arome_france0025'};
 // Open-Meteo splits GFS surface and pressure/upper-air fields into two grids.
@@ -77,7 +78,7 @@ export function runPath(referenceTime){
 }
 export function combineSources(primary,other=[]){
  const sources=[primary,...other.filter(meta=>Date.parse(meta.reference_time)===Date.parse(primary.reference_time))];
- return {...primary,sources,completed:sources.every(meta=>meta.completed===true),variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
+ return {...primary,sources,completed:completedSources(sources),variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
 }
 export function fieldSource(meta,key,time){
  if(accumulationHours(key))return accumulationSource(meta,key,time);
@@ -96,6 +97,11 @@ async function directVertical(model,reference,load,domain=DIRECT_VERTICAL_MODELS
  const meta=await load(baseURL+domain+'/'+runPath(reference)+'meta.json');
  if(!verifiedDirectVertical(meta,domain)||Date.parse(meta.reference_time)!==Date.parse(reference))throw Error('Unverified direct 700 hPa run');
  return {...meta,domain,baseURL};
+}
+async function ukmoEarly(load,reference){
+ const meta=await load(COMPANION_BASE+UKMO_EARLY+'/'+(reference?runPath(reference)+'meta.json':'latest.json'));
+ if(!verifiedUKMOEarly(meta,reference))throw Error('Unverified UKMO early source');
+ return {...meta,baseURL:COMPANION_BASE,sourceWarnings:[UKMO_EARLY_NOTE]};
 }
 async function ensembleExtra(model,reference,load){
  const domain=ENSEMBLE_EXTRAS[model];
@@ -124,6 +130,8 @@ export async function loadSpatialModel(model,load){
  // alone deliberately points to the last fully completed run.
  const results=await Promise.allSettled((ownEnsembles.has(domain)?['latest.json','../health.json']:['latest.json','in-progress.json']).map(path=>load(path==='../health.json'?ownBase+'health.json':base+path)));
  const published=results.filter(result=>result.status==='fulfilled').map(result=>result.value);
+ let early=null;
+ if(domain===UKMO_NATIVE){try{early=await ukmoEarly(load);}catch{/* The independent full feed remains usable. */}}
  let companionFallback=false;
  if(domain===MOGREPS_GLOBAL&&!published.some(publishedRun)){
   const retained=await load(ownBase+domain+'/latest.json');
@@ -131,13 +139,15 @@ export async function loadSpatialModel(model,load){
    published.push(retained);baseURL=ownBase;base=baseURL+domain+'/';companionFallback=true;
   }
  }
- if(!published.some(publishedRun))throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
- const latest=await chooseRun(...published);
+ if(!published.some(publishedRun)&&!early)throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
+ const latest=published.some(publishedRun)?await chooseRun(...published):early;
  const family=ukvRunFamily(model);
- let primary={...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
+ let primary=latest===early?early:{...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
+ if(early&&Date.parse(early.reference_time)>Date.parse(primary.reference_time))primary=early;
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(primary))throw Error('Unverified MOGREPS-G run metadata.');
  if(domain===MOGREPS_GLOBAL)historyBases.set(domain,baseURL);
  const warnings=[...(primary.selectionWarnings??[])];
+ if(early&&Date.parse(early.reference_time)===Date.parse(primary.reference_time))warnings.push(UKMO_EARLY_NOTE);
  if(companionFallback)warnings.push('The companion publication is being prepared or is temporarily unavailable; showing the retained MOGREPS-G run with its original timestamp.');
  if(domain===MOGREPS_GLOBAL&&(primary.variable_valid_times?.geopotential_height_500hPa_anomaly_mean?.length??0)<primary.valid_times.length)warnings.push('Additional MOGREPS-G comparison layers are being prepared. Each layer shows only its published forecast hours.');
  if(domain==='ecmwf_ifs025')warnings.push('IFS 0.25° gusts are unavailable from T+93 to T+144 h in the source feed; those gust steps are omitted. Other fields retain their full timelines.');
@@ -155,6 +165,7 @@ export async function loadSpatialModel(model,load){
    return null;
   }
  }));
+ if(early&&primary.domain!==UKMO_EARLY&&Date.parse(early.reference_time)===Date.parse(primary.reference_time))other.push(early);
  if(ENSEMBLE_EXTRAS[model]){
   try{const extra=await ensembleExtra(model,primary.reference_time,load);other.push(extra);if(!extra.completed)warnings.push('Additional ensemble fields are still being prepared for this run. Each layer shows only its verified forecast hours.');}
   catch{warnings.push('Additional ensemble fields are not yet available for this run; the published mean and spread charts remain available.');}
@@ -198,11 +209,13 @@ export async function loadSpatialRun(model,referenceTime,load){
  let data;
  try{data=await load(baseURL+domain+'/'+runPath(referenceTime)+'meta.json');}
  catch(error){
+  if(domain===UKMO_NATIVE){return combineSources(await ukmoEarly(load,referenceTime));}
   if(domain!==MOGREPS_GLOBAL)throw error;
   baseURL=ownBase;data=await load(baseURL+domain+'/'+runPath(referenceTime)+'meta.json');
  }
  if(Date.parse(data?.reference_time)===reference&&data.completed!==true&&Array.isArray(data.valid_times)&&!data.valid_times.length)
-  throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});
+  {if(domain===UKMO_NATIVE)return combineSources(await ukmoEarly(load,referenceTime));
+   throw Object.assign(Error('This archived run has no published hours yet.'),{code:'NO_PUBLISHED_HOURS'});}
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(data))throw Error('Unverified MOGREPS-G archive.');
  let primary={...data,domain,baseURL,runFamily:family};const warnings=[];
@@ -210,6 +223,9 @@ export async function loadSpatialRun(model,referenceTime,load){
   try{const meta=await load(SPATIAL_BASE+companion+'/'+runPath(referenceTime)+'meta.json');if(Date.parse(meta?.reference_time)!==reference||!publishedRun(meta))throw Error('Matching companion unavailable');return {...meta,domain:companion,baseURL:SPATIAL_BASE};}
   catch{warnings.push('Archived GFS companion fields are unavailable for '+referenceTime+'.');return null;}
  }));
+ if(domain===UKMO_NATIVE){
+  try{other.push(await ukmoEarly(load,referenceTime));warnings.push(UKMO_EARLY_NOTE);}catch{/* Optional exact-run early cache. */}
+ }
  if(ENSEMBLE_EXTRAS[model]){
   try{other.push(await ensembleExtra(model,primary.reference_time,load));}
   catch{warnings.push('Additional ensemble fields have not been retained for this run. The original mean and spread layers remain available.');}

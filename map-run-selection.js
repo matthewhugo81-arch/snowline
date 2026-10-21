@@ -3,6 +3,7 @@ import {publishedRun,retainRunProgress} from './map-runs.js?v=20261020-run-selec
 import {runCandidates} from './map-previous-run-data.js?v=20261020-compact-controls';
 import {formatModelRun} from './map-model-run-menu.js?v=20261020-run-selector';
 import {ukvRunFamily,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
+import {completedSources} from './map-ukmo-early.js?v=20261021-early';
 
 export const sourceModel=id=>id.split('@')[0].replace(/_previous$/,'');
 export const selectedReference=id=>id.includes('@')?id.slice(id.indexOf('@')+1):null;
@@ -10,7 +11,7 @@ export const selectedRunKey=(model,meta)=>sourceModel(model)+'@'+new Date(meta.r
 export function completedModelRun(model,meta){
  if(!publishedRun(meta))return false;
  const sources=meta.sources??[meta],reference=Date.parse(meta.reference_time);
- if(!sources.every(s=>s.completed===true&&Date.parse(s.reference_time)===reference))return false;
+ if(!completedSources(sources)||!sources.every(s=>Date.parse(s.reference_time)===reference))return false;
  return model!=='gfs_global'||sources.some(s=>s.domain==='ncep_gfs025');
 }
 export const preferredCompleteRun=(model,pair)=>completedModelRun(sourceModel(model),pair.latest)?pair.latest:pair.previous??pair.latest;

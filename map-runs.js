@@ -1,3 +1,4 @@
+import {completedSources} from './map-ukmo-early.js?v=20261021-early';
 export const UKV='ukmo_uk_deterministic_2km';
 export const hasTime=(meta,time)=>!!meta?.valid_times?.some(value=>Date.parse(value)===Date.parse(time));
 export const forecastTimes=metas=>[...new Map(metas.flatMap(m=>m.valid_times??[]).filter(time=>Number.isFinite(Date.parse(time))).map(time=>[Date.parse(time),time])).values()].sort((a,b)=>Date.parse(a)-Date.parse(b));
@@ -35,5 +36,5 @@ export function retainRunProgress(previous,next){
    ...(variableKeys.length?{variable_valid_times:Object.fromEntries(variableKeys.map(key=>[key,forecastTimes([{valid_times:a.variable_valid_times?.[key]??[]},{valid_times:b.variable_valid_times?.[key]??[]}])]))}:{}),
    ...(periods.length?{variable_intervals:Object.fromEntries(periods.map(key=>[key,{...a.variable_intervals?.[key],...b.variable_intervals?.[key]}]))}:{})};
  });
- return {...next,sources,completed:sources.every(source=>source.completed===true),variables:[...new Set(sources.flatMap(source=>source.variables))],valid_times:forecastTimes(sources)};
+ return {...next,sources,completed:completedSources(sources),variables:[...new Set(sources.flatMap(source=>source.variables))],valid_times:forecastTimes(sources)};
 }

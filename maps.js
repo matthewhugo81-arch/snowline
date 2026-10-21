@@ -1,5 +1,6 @@
 import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
+import {UKMO_EARLY_DOMAINS} from './map-ukmo-early.js?v=20261021-early';
 import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261020-native-levels';
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
@@ -76,7 +77,7 @@ const fields=[
  {key:'freezing_level_height',name:'Freezing level',unit:'m ASL',note:'Height of the 0°C level above sea level; not necessarily the snow level.',stops:[0,100,250,500,750,1000,1500,2500],colors:['#6148ae','#3163b5','#368fc1','#77cee1','#b7e2db','#e8f3b2','#ffdc81','#ee9755']}
 ];
 const rgba=hex=>[parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16),hex.length===9?parseInt(hex.slice(7,9),16)/255:1];
-const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
+const settings={...OM.defaultOmProtocolSettings,maxStatesWithData:16,domainOptions:[...(OM.domainOptions??[]),...ENSEMBLE_DOMAINS,...ENSEMBLE_EXTRA_DOMAINS,...MOGREPS_SNOW_DOMAINS,...DIRECT_VERTICAL_DOMAINS,...UKMO_EARLY_DOMAINS],colorScales:{...OM.defaultOmProtocolSettings.colorScales,...Object.fromEntries(fields.map(f=>[f.key,{type:'breakpoint',unit:f.unit,breakpoints:f.stops,colors:f.colors.map(rgba)}]))}};
 installRangeReads(OM,settings);
 installEnsembleTransport(OM,settings);
 installDewPoint(OM,settings);

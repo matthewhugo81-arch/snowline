@@ -54,9 +54,11 @@ export function precipitationTypeValues(total,phase,hours,method='estimated'){
  return {values,directions:undefined,scaleFactor:1};
 }
 export function precipitationFileInfo(url){
- const match=new URL(url).pathname.match(/\/data_spatial\/([^/]+)\/(\d{4})\/(\d{2})\/(\d{2})\/(\d{2})(\d{2})Z\/(\d{4}-\d{2}-\d{2}T\d{2})(\d{2})\.om$/);
+ const path=new URL(url).pathname;
+ const match=path.match(/\/(?:data_spatial|ensemble-data)\/([^/]+)\/(\d{4})\/(\d{2})\/(\d{2})\/(\d{2})(\d{2})Z\/(\d{4}-\d{2}-\d{2}T\d{2})(\d{2})\.om$/);
  if(!match)throw Error('Unrecognized precipitation file time.');
  const [,domain,y,m,d,h,min,valid,vm]=match,reference=`${y}-${m}-${d}T${h}:${min}:00Z`,time=valid+':'+vm+':00Z';
+ if(path.includes('/ensemble-data/')&&domain!=='snowline_ukmo_early')throw Error('Unsupported precipitation source.');
  const lead=(Date.parse(time)-Date.parse(reference))/3600000,hours=precipitationStepHours(domain,lead);
  if(!hours||lead%hours)throw Error('Unknown native precipitation interval.');
  return {domain,hours,reference,time};

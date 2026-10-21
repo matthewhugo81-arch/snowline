@@ -31,7 +31,7 @@ export function precipitationStepHours(domain,lead) {
   case 'meteofrance_arpege_europe':case 'meteofrance_arome_france0025':return 1;
   case 'ecmwf_ifs':return lead<=90?1:lead<=144?3:6;
   case 'ecmwf_ifs025':return lead<=144?3:6;
-  case 'ukmo_global_deterministic_10km':return lead<=54?1:lead<=144?3:6;
+  case 'ukmo_global_deterministic_10km':case 'snowline_ukmo_early':return lead<=54?1:lead<=144?3:6;
   case 'ncep_gfs013':return lead<=120?1:3;
   case 'dwd_icon':case 'dwd_icon_eu':return lead<=78?1:3;
   case 'cmc_gem_gdps_15km':return lead<=84?1:3;
