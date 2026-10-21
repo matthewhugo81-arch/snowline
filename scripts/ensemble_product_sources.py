@@ -6,8 +6,19 @@ import json
 import threading
 import numpy as np
 from netCDF4 import Dataset
-import build_ensembles as core
-import build_ensemble_extras as extra
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+_HTTP = requests.Session()
+_HTTP.mount('https://', HTTPAdapter(max_retries=Retry(total=3,backoff_factor=1,status_forcelist=[429,500,502,503,504])))
+_HTTP.headers['User-Agent']='Snowline-ensemble-products/1.0'
+
+
+def fetch(url):
+    response=_HTTP.get(url,timeout=90)
+    response.raise_for_status()
+    return response.content
 from ensemble_products import complete_window, nonnegative_difference, lagged_cycles
 
 LOCK = threading.Lock()
@@ -17,6 +28,10 @@ BOUNDS = (-16, 46, 10, 63)
 
 class GlobalGRIB:
     def __init__(self, model, run, cache):
+        # Keep the GRIB libraries out of NetCDF/projection-only model jobs.
+        global core, extra
+        import build_ensembles as core
+        import build_ensemble_extras as extra
         self.model, self.run, self.cache = model, run, Path(cache)
         self.count = 51 if model == 'ecmwf' else 31
         self.source = SimpleNamespace(model=model, run=run, config=core.MODELS[model])
@@ -157,7 +172,7 @@ class MetOffice:
             with np.load(path,allow_pickle=False) as z: return z['values'],z['members'].tolist()
         valid=cycle+timedelta(hours=hour);bucket='uk' if self.uk else 'global'
         url=f'https://met-office-{bucket}-ensemble-model-data.s3.eu-west-2.amazonaws.com/{bucket}-ensemble/'+cycle.strftime('%Y/%m/%d/T%H00Z/')+valid.strftime('%Y%m%dT%H%MZ')+f'-PT{hour:04d}H00M-{file}.nc'
-        payload=core.fetch(url)
+        payload=fetch(url)
         with LOCK,Dataset('memory.nc',memory=payload) as d:
             v=d[variable];members=d['realization'][:].astype(int).tolist()
             if len(members)!=(3 if self.uk else 18) or len(set(members))!=len(members): raise ValueError('Incomplete or duplicate Met Office members')

@@ -33,6 +33,10 @@ jobs:
           cache: pip
           cache-dependency-path: scripts/ensemble-requirements.txt
       - run: pip install -r scripts/ensemble-requirements.txt
+      - name: Verify native runtimes initialize and shut down cleanly
+        env:
+          MODEL: ${{ matrix.model }}
+        run: python scripts/build_ensemble_products.py --model "$MODEL" --check-runtime
       - name: Verify member-first calculations
         run: python -m unittest discover -s tests -p 'test_ensemble_products.py'
       - name: Restore retained optional products
