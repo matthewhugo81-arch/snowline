@@ -1,9 +1,9 @@
 # Ensemble probabilities and temperature anomalies
 
 The Weather layer menu contains **Ensemble probabilities** and **Temperature
-anomalies**. Temperature anomalies are restricted to MOGREPS-UK and remain
-disabled until verified HadUK-Grid min/max climatology is installed. The user
-explicitly chose to wait for HadUK-Grid rather than substitute a coarse baseline.
+anomalies**. Temperature anomalies are restricted to MOGREPS-UK. The verified
+HadUK-Grid v1.3.2.0 1991–2020 baseline is installed; both extrema layers load
+on selection, with no new ordinary-startup requests.
 
 ## Probability definitions
 
@@ -55,8 +55,8 @@ data and never uploaded.
 
 ## Installing the temperature baseline
 
-Download these files through the user's CEDA account, accepting the applicable
-HadUK-Grid licence:
+The following files were downloaded through the user's CEDA access on
+21 October 2026 (archive v1.3.2.ceda, version v20260512):
 
 - `tasmin_hadukgrid_uk_1km_mon-30y_199101-202012.nc`
 - `tasmax_hadukgrid_uk_1km_mon-30y_199101-202012.nc`
@@ -64,7 +64,10 @@ HadUK-Grid licence:
 Run `python scripts/temperature_climatology.py /path/to/files`. It validates
 period, units, grid and file provenance and writes
 `climatology/haduk-extrema-1991-2020.npz`. Publishing that verified baseline
-enables the anomaly builder. No CEDA credentials should be committed.
+enables the anomaly builder. No CEDA credentials are committed. The compact
+5.4 MB reference is used only by the independent data publisher and excluded
+from the website bundle. Source NetCDF files are not committed. See
+`climatology/README.md` for attribution, checksums and preparation details.
 
 The first implementation uses monthly normals of daily extrema, with forecast
 24-hour windows ending 09 UTC to match HadUK definitions. Minimum uses the end
