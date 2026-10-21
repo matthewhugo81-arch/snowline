@@ -725,7 +725,9 @@ async function configurePanel(key,model,follow){
  const selection=panel.selectionGeneration=(panel.selectionGeneration??0)+1;
  pauseAnimation();++timeGeneration;++state.generation;panel.configuring=true;
  $('reload-maps').disabled=true;$('map-variable'+suffix).disabled=true;$('map-run'+suffix).disabled=true;
- status('Checking Panel '+(['a','b','c'].indexOf(key)+1)+' model run…');
+ failedSelection=null;
+ $('animation-status').textContent='Checking Panel '+(['a','b','c'].indexOf(key)+1)+' model run…';
+ status($('animation-status').textContent);
  try{
   const result=await mapRunCatalogue.select(follow?sourceModel(model):model,metadataLoader(false));
   if(selection!==panel.selectionGeneration)return;
@@ -742,6 +744,7 @@ async function configurePanel(key,model,follow){
   $('map-run'+suffix).value=state[property];
   $('map-error-'+key).textContent='Unable to change this panel: '+error.message;
   $('map-error-'+key).hidden=false;status(error.message);
+  $('animation-status').textContent='Unable to change this panel';
  }finally{
   if(selection===panel.selectionGeneration){
    panel.configuring=false;$('map-variable'+suffix).disabled=!panelSelection(state,key).field;$('map-run'+suffix).disabled=false;

@@ -21,3 +21,10 @@ is in `tests/map-worker-pool.test.mjs`.
 `settleNativeReads` before releasing native readers. A cancelled/failed input
 must not dispose the file or sibling reader while another WASM read is still
 pending. Regression coverage: `tests/map-reader-lifetime.test.mjs`.
+
+21 October 2026: `index.mjs` uses `forecastTileReadBounds(tileIndex)` for
+image/vector requests. Complete geographic tiles include a native-grid halo
+and no longer depend on shared viewport clipping. Point reads retain viewport
+bounds. Preserve this distinction: the interactive map now caches tiles across
+pans and independent panels. Tests: `tests/map-read-bounds.test.mjs` and the
+actual-renderer check in `tests/map-interactions-browser.mjs`.
