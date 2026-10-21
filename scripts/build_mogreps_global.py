@@ -246,6 +246,10 @@ def native_comparison_ready(record):
     return bool(record and all(key in record.get('variables', []) for key in COMPARISON if key != 'geopotential_height_500hPa_anomaly_mean'))
 
 
+def core_frame_ready(record, lead):
+    return bool(record and record.get('version') in (1, 2) and all(key in record.get('variables', []) for key in INSTANT + (PERIOD if lead else [])))
+
+
 def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison_frames=24):
     manifest = read_json(INDEX + (run_id+'/manifest.json' if run_id else 'latest.json'))
     run = validate_manifest(manifest)
@@ -267,6 +271,10 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison
     for h in manifest['leads']:
         path = folder / ((run+timedelta(hours=h)).strftime('%Y-%m-%dT%H%M')+'.om')
         cached[h] = json.loads(path.with_suffix('.json').read_text()) if path.exists() and path.with_suffix('.json').exists() else None
+    # New cycles publish their full core horizon first. Enrichment resumes on
+    # the next pass instead of delaying all new temperatures/rain/snow behind
+    # the first batch of more expensive upper-air source metadata reads.
+    core_pending = hours is None and any(not core_frame_ready(cached[h], h) for h in requested)
     # A failed optional anomaly must not repeatedly consume the first 24 slots
     # while later native pressure/wind/height hours remain unpublished.
     ordered = sorted(manifest['leads'], key=lambda h: native_comparison_ready(cached[h]))
@@ -281,8 +289,8 @@ def build(root, hours=None, workers=3, range_workers=12, run_id=None, comparison
             if record and record.get('version') in (1, 2):
                 records[h] = record['variables']
             if h in requested and (not record or record.get('version') != 2):
-                include_comparison = comparison_budget > 0
-                if record and not include_comparison:
+                include_comparison = comparison_budget > 0 and not core_pending
+                if core_frame_ready(record, h) and not include_comparison:
                     continue
                 comparison_budget -= int(include_comparison)
                 jobs[pool.submit(write_frame, manifest, h, path, range_workers, include_comparison)] = h
