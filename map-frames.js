@@ -134,6 +134,24 @@ export class ForecastFrames{
  }
  retryFailures(){this.failures.clear();this.failureAttempts.clear();}
  canRetry(url){return (this.failureAttempts.get(url)??0)<this.maxAttempts;}
+ moveStart(){
+  this.stop();
+  // Let MapLibre move the displayed image. Hidden frames must not all fetch
+  // intermediate camera positions, and their prepared bytes stay on disk.
+  for(const frame of this.frames.values())if(frame!==this.current)
+   for(const id of frame.layers)this.map.setLayoutProperty(id,'visibility','none');
+ }
+ setView(key){
+  if(key===this.viewKey)return false;
+  const previous=this.viewKey;this.viewKey=key;
+  if(previous!==undefined){
+   this.stop();this.preloaded.clear();this.retryFailures();
+   // Keep sources and their complete tiles. Only coverage readiness changes.
+   for(const frame of this.frames.values())frame.suspended=true;
+   this.onProgress();
+  }
+  return true;
+ }
  suspend(exceptURL){
   this.stop(exceptURL);
   this.preloaded.clear();this.retryFailures();this.onProgress();

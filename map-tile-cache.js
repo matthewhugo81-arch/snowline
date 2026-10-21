@@ -28,13 +28,13 @@ const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  signal.addEventListener('abort',cancelled,{once:true});
 });
 export class ForecastTileCache{
- constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=64*1024*1024,diskEntries=2048,maxAge=3600000,cacheVersion='render-20261020-v3',concurrency=8,backgroundConcurrency=4}={}){
+ constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=256*1024*1024,diskEntries=16384,maxAge=3600000,cacheVersion='render-20261021-complete-tiles',concurrency=8,backgroundConcurrency=4}={}){
   Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge,concurrency,backgroundConcurrency});
   this.renderQueue=[];this.rendering=new Set();this.foreground=null;
   this.diskStates=new WeakMap();
   this.contexts=new Map();this.contextSequence=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
-  // Run/field/style URLs and the viewport isolate pixels. A renderer revision
+  // Run/field/style URLs and complete tile coordinates isolate pixels. A revision
   // invalidates releases; a rolling per-entry lifetime bounds source corrections
   // without throwing away a freshly prepared tile at the next clock hour.
   this.session=persistent?'persistent-'+encodeURIComponent(cacheVersion):Date.now()+'-'+Math.random().toString(36).slice(2);
@@ -70,6 +70,19 @@ export class ForecastTileCache{
   this.disk=null;this.name=null;
  }
  limit(){if(!this.limited){this.limited=true;this.onLimit();}}
+ setSequence(urls){
+  const next=[...new Set(urls)].sort();
+  if(JSON.stringify(next)===JSON.stringify(this.sequenceURLs))return;
+  this.sequenceURLs=next;
+  // Changing model/layer frees obsolete sequence capacity. A cache that filled
+  // during earlier analysis must not permanently stop every later selection.
+  if(this.limited){this.limited=false;this.onLimit();}
+ }
+ retainedRequest(request){
+  if(!this.sequenceURLs)return true;
+  const [,url]=JSON.parse(new URL(request).searchParams.get('key'));
+  return this.sequenceURLs.some(source=>url===source||url.startsWith(source+'/'));
+ }
  async put(store,request,response,bytes,generation=this.generation){
   if(!this.persistent)return store.put(request,response);
   let state=this.diskStates.get(store);
@@ -89,12 +102,12 @@ export class ForecastTileCache{
    const old=state.entries.get(request)??0;
    state.entries.delete(request);state.bytes-=old;
    while((state.bytes+bytes>this.diskBytes||state.entries.size>=this.diskEntries)&&state.entries.size){
-    const [key,size]=state.entries.entries().next().value;
+    const [key,size]=[...state.entries].find(([key])=>!this.retainedRequest(key))??state.entries.entries().next().value;
     await store.delete(key);state.entries.delete(key);state.bytes-=size;
     // A complete sequence no longer fits. Stop speculative full-sequence work
     // instead of repeatedly evicting earlier frames while claiming all are kept.
     // Late writes for an old viewport must not limit the currently active view.
-    if(generation===this.generation){
+    if(generation===this.generation&&this.retainedRequest(key)){
      const entry=this.memory.get(new URL(key).searchParams.get('key'));
      if(entry)entry.durable=false;
      this.limit();

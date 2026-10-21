@@ -23,6 +23,19 @@ class FakeMap{
 }
 const loaded=async(cache,map,url)=>{const frame=cache.prepare(url);map.load(frame);assert.equal(await frame.ready,true);return frame;};
 
+test('pan retains source identities and cached frames; only new tile coverage changes readiness',async()=>{
+ const map=new FakeMap(),cache=new ForecastFrames(map,'a');cache.setView('tiles-1');
+ const current=await loaded(cache,map,'hour1'),next=await loaded(cache,map,'hour2');cache.show(current,.8,'linear');
+ cache.moveStart();assert.equal(cache.setView('tiles-1'),false);
+ assert.deepEqual([...cache.preloaded],['hour1','hour2']);assert.equal(cache.current,current);assert.equal(map.sourceAdds,2);
+ assert.equal(map.getLayer(current.layer).layout.visibility,'visible');
+ assert.equal(map.getLayer(next.layer).layout.visibility,'none');
+ assert.equal(cache.setView('tiles-2'),true);assert.equal(cache.preloaded.size,0);
+ assert.equal(cache.current,current);assert.equal(cache.frames.get('hour2'),next);
+ assert.equal(cache.prepare('hour1'),current);map.load(current);assert.equal(await current.ready,true);
+ assert.equal(map.sourceAdds,2,'MapLibre adds tiles to existing sources instead of rebuilding frames');cache.clear();
+});
+
 test('an unpublished slot hides the previous image and can return to it without relabelling stale imagery',async()=>{
  const map=new FakeMap(),cache=new ForecastFrames(map,'a');
  const frame=await loaded(cache,map,'run09/hour11');cache.show(frame,.8,'linear');cache.hide();

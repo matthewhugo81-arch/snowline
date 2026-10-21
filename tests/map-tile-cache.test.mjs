@@ -13,6 +13,19 @@ const storage=()=>{
 const read=(cache,url,type)=>cache.protocol(params(url,type),new AbortController());
 const saved=cache=>Promise.all([...cache.writes.values()].map(job=>job.promise));
 
+test('143 comparison frames with 24 raster/overlay tiles each remain reusable beyond the old entry and byte ceilings',async()=>{
+ let calls=0;
+ const cache=new ForecastTileCache(async()=>{calls++;return {data:new Uint8Array(24*1024).buffer};},{storage:storage(),persistent:true,memoryBytes:1024});
+ cache.setContext('complete-tiles');
+ for(let i=0;i<143*24;i++){
+  await read(cache,'tile-'+i);await saved(cache);
+  assert.equal(cache.limited,false,'The comparison must not stop at 2,048 entries / 64 MB');
+ }
+ assert.ok(cache.bytes<=1024,'Expanded disk capacity does not increase hot memory');
+ await read(cache,'tile-0');await read(cache,'tile-'+(143*24-1));
+ assert.equal(calls,143*24,'Both ends survive memory eviction without another native read');cache.release();
+});
+
 test('background tile fan-out leaves capacity for a selected chart and promotes shared queued tiles',async()=>{
  const started=[],jobs=new Map();
  const cache=new ForecastTileCache((p,c)=>new Promise((resolve,reject)=>{
@@ -82,6 +95,18 @@ test('disk capacity stops full preloading without preventing selected frames fro
   assert.equal(limited,1,'Capacity reporting does not restart on each selection');
   cache.setContext('another view');assert.equal(cache.limited,false);cache.release();
  }
+});
+
+test('switching fields evicts obsolete sequences first and resumes bounded background storage',async()=>{
+ let calls=0;
+ const cache=new ForecastTileCache(async()=>{calls++;return bytes();},{storage:storage(),persistent:true,diskBytes:8,memoryBytes:4});cache.setContext('tiles');
+ cache.setSequence(['om://old','om://keep']);
+ for(const url of ['keep/0','old/0','old/1']){await read(cache,url);await saved(cache);}
+ assert.equal(cache.limited,true);
+ cache.setSequence(['om://new','om://old/1']);assert.equal(cache.limited,false);
+ await read(cache,'new/0');await saved(cache);
+ assert.equal(cache.limited,false,'An obsolete layer evicted from disk does not stop the new comparison');
+ const before=calls;await read(cache,'old/1');assert.equal(calls,before,'A still-selected shared panel survives eviction');cache.release();
 });
 
 test('late capacity eviction for an old viewport cannot limit the new viewport',async()=>{

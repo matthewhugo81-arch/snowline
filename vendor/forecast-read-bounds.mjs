@@ -13,3 +13,15 @@ export function forecastReadBounds([west,south,east,north]){
  // Wrapped views need both sides of the native grid.
  return left < -180||right > 180?[-180,bottom,180,top]:[left,bottom,right,top];
 }
+
+// Render a complete geographic tile, independently of every panel's camera.
+// Neighbouring tiles share a 2x2 read area; one degree of halo covers native
+// interpolation and contour neighbours, including coarse ensemble grids.
+// Point-value reads can still use forecastReadBounds(viewport).
+export function forecastTileReadBounds({x,y,z}){
+ const zoom=Math.max(0,z-1),tiles=2**zoom,scale=2**(z-zoom);
+ const column=Math.floor(x/scale),row=Math.floor(y/scale);
+ const lat=n=>Math.atan(Math.sinh(Math.PI*(1-2*n/tiles)))*180/Math.PI;
+ return [Math.max(-180,column/tiles*360-181),Math.max(-90,lat(row+1)-1),
+  Math.min(180,(column+1)/tiles*360-179),Math.min(90,lat(row)+1)];
+}
