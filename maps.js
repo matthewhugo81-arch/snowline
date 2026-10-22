@@ -7,7 +7,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261022-weekday-headers';
+import {forecastPointChartTitle as forecastChartTitle,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261022-panel-single-time';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -320,7 +320,7 @@ function refreshStartingTime(message='No forecast times available'){
  select.disabled=!state.times.length;
  if(state.times.length)select.value=state.times[state.index];
  else select.append(new Option(message,''));
- $('map-start-time-note').textContent=state.compare?'Choose a forecast frame for all panels. Each period is shown in full; playback begins at this frame.':'Choose a forecast frame. Periods show their start and end; playback begins at this frame.';
+ $('map-start-time-note').textContent=state.compare?'Choose a valid forecast time for all panels; playback begins at this frame.':'Choose a valid forecast time; playback begins at this frame.';
 }
 function syncArrowButtons(index){
  $('previous-time').disabled=index<=0;$('next-time').disabled=index>=state.times.length-1;

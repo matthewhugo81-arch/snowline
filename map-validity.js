@@ -55,3 +55,15 @@ export function forecastChartTitle(field,name,time,meta){
  const validity=forecastValidity(field,time,meta);
  return temperatureAnomaly(field)?validity:name+' · '+validity;
 }
+
+// Compact map labels identify the frame by its valid (period-end) time.
+export function forecastPointTimeLabel(field,time,meta){
+ if(!Number.isFinite(Date.parse(time)))return '';
+ return periodStamp(new Date(time),false).replace(/(\d{2}):(\d{2})$/, '$1$2');
+}
+export function forecastPointChartTitle(field,name,time,meta){
+ const stamp=forecastPointTimeLabel(field,time,meta);
+ if(!stamp)return '';
+ const valid='VALID '+stamp+' UTC';
+ return temperatureAnomaly(field)?forecastValidity(field,time,meta).replace(/VALID .*/,valid):name+' · '+valid;
+}
