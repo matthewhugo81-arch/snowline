@@ -6,6 +6,7 @@ on:
     - cron: '2-57/5 * * * *'
   workflow_dispatch:
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -23,6 +24,7 @@ jobs:
         id: revision
         env:
           SOURCE_REVISION: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           deployed=$(curl --fail --silent --show-error --retry 2 --max-time 20 "https://matthewhugo81-arch.github.io/snowline/site-revision.txt?check=$GITHUB_RUN_ID" || true)
           validate=true
@@ -32,6 +34,10 @@ jobs:
             # Pipeline-only edits inherit the deployed runtime's browser proof.
             # Any changed file delivered to browsers still requires the suite.
             if git diff --quiet "$deployed" "$SOURCE_REVISION" -- . ':(exclude).github/**' ':(exclude)scripts/**' ':(exclude)tests/**' ':(exclude)review/**'; then validate=false; fi
+          fi
+          python -m unittest discover -s tests -p test_browser_validation.py
+          if [ "$validate" = true ] && python scripts/reuse_browser_validation.py; then
+            validate=false
           fi
           echo "validate=$validate" >> "$GITHUB_OUTPUT"
   browser:
