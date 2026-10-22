@@ -626,7 +626,8 @@ function setLegend(){
 }
 function populateVariables(onlyKey){
  for(const {key,model,field} of panelSelections(state).filter(item=>!onlyKey||item.key===onlyKey)){
-  const available=availableFields(fields,[state.metas[model],...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]);for(const f of productChoices(sourceModel(model)))if(!available.some(a=>a.key===f.key))available.push(f);available.sort(compareFields);const select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
+  const published=availableFields(fields,[state.metas[model],...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]);
+  const available=[...published];for(const f of productChoices(sourceModel(model)))if(!available.some(a=>a.key===f.key))available.push(f);available.sort(compareFields);const select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
   for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
   if(state.metas[model]?.variables.includes('precipitation')){
    const supported=ACCUMULATION_KEYS.filter(k=>accumulationSource(state.metas[model],k));
@@ -635,7 +636,9 @@ function populateVariables(onlyKey){
    if(group){for(const k of ACCUMULATION_KEYS.filter(k=>!supported.includes(k))){const o=document.createElement('option');o.value=k;o.disabled=true;o.textContent=accumulationHours(k)+' h total — incomplete window in this run';group.append(o);}
     const sorted=[...group.children].sort((a,b)=>accumulationHours(a.value)-accumulationHours(b.value));group.replaceChildren(...sorted);}
   }
-  const selected=available.some(f=>f.key===field)?field:available.find(f=>f.key===WEATHER_COMPOSITE)?.key??available.find(f=>f.key==='temperature_2m')?.key??available[0]?.key;
+  // Optional choices lead the menu but require their own metadata load. A model
+  // switch must start with a verified field, not an unloaded probability.
+  const selected=available.some(f=>f.key===field)?field:published.find(f=>f.key===WEATHER_COMPOSITE)?.key??published.find(f=>f.key==='temperature_2m')?.key??published[0]?.key;
   state['field'+(key==='a'?'':key.toUpperCase())]=selected;select.value=selected??'';
  }
 }

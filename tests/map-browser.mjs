@@ -793,6 +793,8 @@ try{
    await page.locator('#compare-maps').evaluate(el=>{el.checked=false;el.dispatchEvent(new Event('change',{bubbles:true}));});
    await page.locator('#map-model').selectOption('snowline_gefs_ensemble');
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('500 hPa height'));
+   assert.equal(await page.locator('#map-variable optgroup').first().getAttribute('label'),'Ensemble probabilities','Optional probabilities still lead the menu');
+   assert.equal(await page.locator('#map-variable').inputValue(),'geopotential_height_500hPa_mean','An ensemble model starts with a published field, not an unloaded optional product');
    assert.equal(await page.locator('#map-variable option:not([value^="ens_"])').count(),6);
    assert.equal(await page.locator('#map-mslp-a').isDisabled(),false);
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
