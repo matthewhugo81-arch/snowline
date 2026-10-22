@@ -1,4 +1,20 @@
 .page-nav{display:flex;gap:6px;margin-left:auto}
+.layout-restore{position:relative;align-self:center;color:#e8f2fa;font-size:14px}
+.layout-restore>summary{cursor:pointer;padding:8px 10px;border:1px solid #607d91;border-radius:6px;white-space:nowrap;list-style:none}
+.layout-restore>summary::after{content:' ▾'}
+.layout-restore>summary:focus-visible{outline:2px solid #6ce1d6;outline-offset:2px}
+.layout-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:3000;width:min(430px,calc(100vw - 24px));max-height:75vh;overflow:auto;padding:14px;background:#132a3d;color:#edf5fc;border:1px solid #607d91;border-radius:8px;box-shadow:0 8px 28px #0005;white-space:normal}
+.layout-menu p{font-size:12px;line-height:1.45;color:#c1d5e6;margin:8px 0}
+.layout-menu ol{list-style:none;margin:12px 0;padding:0}
+.layout-menu li{border-top:1px solid #496073;padding:8px 0;overflow-wrap:anywhere}
+.page-nav .layout-choice{display:block;padding:4px 0;font-size:13px;color:#fff}
+.layout-choice span{display:block;font-size:11px;color:#adc9de;margin-top:4px}
+.page-nav .layout-new-tab{display:inline-block;font-size:12px;color:#86ece3;padding:5px 0}
+.layout-menu label{display:block;font-size:12px;margin:8px 0 5px}
+.layout-name-row{display:flex;gap:6px}
+.layout-name-row input{min-width:0;flex:1;background:#fff;color:#142c40;padding:7px;border:1px solid #607d91;border-radius:5px}
+.layout-name-row button{white-space:nowrap;padding:6px 9px;background:#294b63;color:#fff;border:1px solid #607d91;border-radius:5px}
+@media(max-width:650px){.layout-restore{position:static;font-size:12px}.layout-menu{position:fixed;top:112px;right:12px;max-height:calc(100dvh - 130px)}.layout-restore>summary{padding:6px}.map-page .page-nav{gap:3px}.map-page .page-nav a{font-size:12px}.layout-name-row input{font-size:16px}}
 .page-nav a{color:#ccdae7;text-decoration:none;font-size:14px;padding:8px 12px;border-radius:6px}
 .page-nav a[aria-current=page],.page-nav a:hover{background:#294155;color:white}
 .map-page header{padding:10px 12px;gap:24px}
