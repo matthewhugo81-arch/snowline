@@ -33,3 +33,23 @@ test('ordinary model loading and publication do not import or run new processing
  const sources=await readFile(new URL('../map-sources.js',import.meta.url),'utf8');assert.ok(!sources.includes('loadProducts'));
  const core=await readFile(new URL('../.github/workflows/publish-maps.yml',import.meta.url),'utf8');assert.ok(!core.includes('build_ensemble_products'));
 });
+
+test('cold thresholds are UK-only inclusive air-temperature probabilities with complete periods',()=>{
+ const keys=['0','m2','m5','m10'].map(t=>`ens_temperature_le${t}c_24h`);
+ const fields=productChoices('ukmo_uk_ensemble_2km').filter(f=>keys.includes(f.key));
+ assert.equal(fields.length,4);
+ for(const f of fields){assert.equal(f.unit,'%');assert.equal(f.group,'Ensemble probabilities');assert.equal(f.periodHours,24);assert.match(f.name,/≤/);}
+ for(const model of ['snowline_ecmwf_ensemble','snowline_gefs_ensemble','snowline_mogreps_global'])assert.ok(productChoices(model).every(f=>!keys.includes(f.key)));
+ const end='2026-10-23T09:00:00Z',start='2026-10-22T09:00:00Z';
+ const m={...meta(),variables:keys,valid_times:[end],variable_valid_times:Object.fromEntries(keys.map(k=>[k,[end]])),variable_intervals:Object.fromEntries(keys.map(k=>[k,{[end]:{hours:24,start,end}}]))};
+ assert.equal(verifyProduct(m,'ukmo_uk_ensemble_2km'),true,'No climatology required');
+ m.variable_intervals[keys[0]][end].hours=12;
+ assert.equal(verifyProduct(m,'ukmo_uk_ensemble_2km'),false);
+});
+test('ECMWF anomalies cannot extend beyond Day 6',()=>{
+ const k='ens_temperature_min_anomaly';
+ for(const [t,expected] of [['2026-10-27T09:00:00Z',true],['2026-10-28T09:00:00Z',false]]){
+  const m={...meta(),domain:'snowline_ecmwf_products',member_count:51,variables:[k],valid_times:[t],variable_valid_times:{[k]:[t]},variable_intervals:{[k]:{[t]:{hours:24,start:new Date(Date.parse(t)-86400000).toISOString(),end:t}}},anomaly_reference:{dataset:'HadUK-Grid',period:'1991-2020'}};
+  assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),expected);
+ }
+});

@@ -1,7 +1,8 @@
 # Ensemble probabilities and temperature anomalies
 
 The Weather layer menu contains **Ensemble probabilities** and **Temperature
-anomalies**. Temperature anomalies are restricted to MOGREPS-UK. The verified
+anomalies**. Temperature anomalies are restricted to MOGREPS-UK and ECMWF ENS.
+ECMWF anomalies stop at Day 6 (T+144), where complete 09–09 UTC windows end. The verified
 HadUK-Grid v1.3.2.0 1991–2020 baseline is installed; both extrema layers load
 on selection, with no new ordinary-startup requests.
 
@@ -19,6 +20,12 @@ on selection, with no new ordinary-startup requests.
 - Snow: >=0.1, >=1, >=5 or >=10 mm liquid-water equivalent over 12 or 24 hours.
   MOGREPS-G includes both resolved and convective snowfall. No fixed snow/liquid
   ratio, snow-depth difference or settling inference is used.
+- MOGREPS-UK air temperature: minimum <=0, <=-2, <=-5 or <=-10°C during
+  each complete 24-hour period ending 09 UTC. Count the 18 member minima at or
+  below each threshold, including equality. This reuses the hourly minimum
+  input for anomalies, requires no climatology, and does not predict surface
+  freezing or damage directly. Existing retained minimum tasks are upgraded
+  when their threshold grids are missing.
 - GEFS rain/snow: occurrence from its native six-hour mean categorical flags.
   A positive flag in either/some constituent interval means occurrence for that
   member. GEFS also supplies total-precipitation threshold probabilities; these

@@ -12,7 +12,7 @@ import time
 import numpy as np
 from omfiles import OmFileWriter
 from ensemble_product_sources import GlobalGRIB, MetOffice, fetch
-from ensemble_products import threshold_fields, member_extrema_anomaly
+from ensemble_products import threshold_fields, member_extrema_anomaly, cold_probability_fields, COLD_THRESHOLDS
 
 UTC=timezone.utc
 def iso(t):return t.astimezone(UTC).isoformat(timespec='seconds').replace('+00:00','Z')
@@ -57,6 +57,13 @@ def write_frame(path,values):
     writer.close(writer.write_group(name='root',children=children));tmp.replace(path)
 
 
+def task_complete(record,task,model,kind,has_climatology):
+    if task not in record.get('tasks',[]):return False
+    required=set(COLD_THRESHOLDS) if model=='mogreps_uk' and kind=='min' else set()
+    if kind in ('min','max') and has_climatology:required.add(f'ens_temperature_{kind}_anomaly')
+    return required.issubset(record.get('variables',[]))
+
+
 def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
     run=run or latest_run(model);domain=f'snowline_{model}_products'
     folder=root/domain/run.strftime('%Y/%m/%d/%H00Z');folder.mkdir(parents=True,exist_ok=True)
@@ -69,8 +76,10 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
     if model in ('mogreps_uk','ecmwf') and climatology and Path(climatology).exists():
         from temperature_climatology import read_normals
         normal=read_normals(climatology,model)
+    if model=='mogreps_uk' or normal is not None:
         anomaly_limit=min(max_hour,144) if model=='ecmwf' else end_limit
-        targets += [(h,kind,24) for h in range(24,anomaly_limit+1) if (run+timedelta(hours=h)).hour==9 for kind in ('min','max')]
+        extrema_kinds=('min','max') if normal is not None else ('min',)
+        targets += [(h,kind,24) for h in range(24,anomaly_limit+1) if (run+timedelta(hours=h)).hour==9 for kind in extrema_kinds]
     # Publish near-term extrema alongside probabilities, not after the entire
     # probability horizon. Completed tasks are reused on the next build.
     targets.sort(key=lambda task:task[0])
@@ -81,12 +90,14 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
         record_path=path.with_suffix('.json')
         record=json.loads(record_path.read_text()) if record_path.exists() and path.exists() else {}
         task=f'{kind}-{period}'
-        if task in record.get('tasks',[]):continue
+        if task_complete(record,task,model,kind,normal is not None):continue
         try:
             a=source.window(h-period,h,kind)
             if kind in ('min','max'):
-                date=valid if kind=='min' else valid-timedelta(hours=24)
-                values={f'ens_temperature_{kind}_anomaly':member_extrema_anomaly(a,normal[kind][date.month-1],source.count)}
+                values=cold_probability_fields(a,source.count) if model=='mogreps_uk' and kind=='min' else {}
+                if normal is not None:
+                    date=valid if kind=='min' else valid-timedelta(hours=24)
+                    values[f'ens_temperature_{kind}_anomaly']=member_extrema_anomaly(a,normal[kind][date.month-1],source.count)
             else:values=threshold_fields(kind,a,period,source.count)
             if model=='mogreps_uk':
                 iy,ix,inside=uk_nearest_indices()
@@ -101,7 +112,7 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
             write_frame(path,merged)
             intervals=record.get('intervals',{})
             for key in values:intervals[key]=dict(start=iso(valid-timedelta(hours=period)),end=iso(valid),hours=period)
-            atomic_json(record_path,dict(tasks=record.get('tasks',[])+[task],variables=sorted(merged),intervals=intervals))
+            atomic_json(record_path,dict(tasks=sorted(set(record.get('tasks',[])+[task])),variables=sorted(merged),intervals=intervals))
             publish(root,folder,source,model,run,targets,normal is not None)
             print(f'{model} T+{h} {task}: published {len(values)} grids',flush=True)
         except Exception as error:
@@ -122,7 +133,7 @@ def publish(root,folder,source,model,run,targets,has_climatology):
         records[iso(valid)]=json.loads(f.read_text())
     variables=sorted({k for r in records.values() for k in r['variables']})
     times=sorted(records)
-    completed=sum(len(r['tasks']) for r in records.values())==len(targets)
+    completed=all(task_complete(records.get(iso(run+timedelta(hours=h)),{}),f'{kind}-{period}',model,kind,has_climatology) for h,kind,period in targets)
     meta=dict(format_version=1,domain=f'snowline_{model}_products',reference_time=iso(run),completed=completed,variables=variables,valid_times=times,
               variable_valid_times={k:[t for t in times if k in records[t]['variables']] for k in variables},
               variable_intervals={k:{t:records[t]['intervals'][k] for t in times if k in records[t]['variables']} for k in variables},
