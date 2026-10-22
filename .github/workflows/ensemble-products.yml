@@ -2,7 +2,7 @@ name: Publish optional ensemble probability and anomaly products
 on:
   push:
     branches: [main]
-    paths: ['scripts/*products*', 'scripts/ensemble_product_sources.py', 'scripts/temperature_climatology.py', '.github/workflows/ensemble-products.yml', 'climatology/**']
+    paths: ['scripts/*products*', 'scripts/ensemble_product_sources.py', 'scripts/temperature_climatology.py', 'scripts/ireland_temperature_climatology.py', '.github/workflows/ensemble-products.yml', 'climatology/**']
   schedule:
     - cron: '23 * * * *'
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
         run: python scripts/build_ensemble_products.py --model "$MODEL" --check-runtime
       - name: Verify member-first calculations
         run: python -m unittest discover -s tests -p 'test_ensemble_products.py'
-      - name: Verify installed HadUK-Grid reference
+      - name: Verify installed UK and Ireland temperature references
         if: matrix.model == 'mogreps_uk' || matrix.model == 'ecmwf'
         run: python -m unittest discover -s tests -p 'test_temperature_climatology.py'
       - name: Restore retained optional products

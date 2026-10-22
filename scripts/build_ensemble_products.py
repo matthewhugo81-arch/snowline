@@ -57,10 +57,12 @@ def write_frame(path,values):
     writer.close(writer.write_group(name='root',children=children));tmp.replace(path)
 
 
-def task_complete(record,task,model,kind,has_climatology):
+def task_complete(record,task,model,kind,has_climatology,revision=None):
     if task not in record.get('tasks',[]):return False
     required=set(COLD_THRESHOLDS) if model=='mogreps_uk' and kind=='min' else set()
-    if kind in ('min','max') and has_climatology:required.add(f'ens_temperature_{kind}_anomaly')
+    if kind in ('min','max') and has_climatology:
+        key=f'ens_temperature_{kind}_anomaly';required.add(key)
+        if revision and record.get('anomaly_revisions',{}).get(key)!=revision:return False
     return required.issubset(record.get('variables',[]))
 
 
@@ -72,22 +74,38 @@ def probability_targets(model,end_limit,kinds):
             if h>=period for kind in kinds]
 
 
-def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
+def extrema_targets(model,run,max_hour,kinds):
+    limit=min(max_hour,360 if model=='ecmwf' and run.hour in (0,12) else 144 if model=='ecmwf' else 114)
+    # Keep every existing 09–09 frame. After the last exact 09 UTC endpoint,
+    # use complete UTC calendar days; never split a six-hour extremum.
+    last_nine=max(h for h in range(24,145) if (run+timedelta(hours=h)).hour==9)
+    return [(h,kind,24) for h in range(24,limit+1)
+            if ((h<=144 and (run+timedelta(hours=h)).hour==9)
+                or (model=='ecmwf' and run.hour in (0,12) and h>last_nine and (run+timedelta(hours=h)).hour==0))
+            for kind in kinds]
+
+
+def extrema_reference_date(valid,kind):
+    # Both extrema of a 00–00 UTC day belong to its starting calendar date.
+    return valid-timedelta(hours=24) if kind=='max' or valid.hour==0 else valid
+
+
+def build(model,root,cache,run=None,max_hour=360,budget=1500,climatology=None):
     run=run or latest_run(model);domain=f'snowline_{model}_products'
     folder=root/domain/run.strftime('%Y/%m/%d/%H00Z');folder.mkdir(parents=True,exist_ok=True)
     source=(GlobalGRIB if model in ('gefs','ecmwf') else MetOffice)(model,run,cache)
     kinds=['gust','precip','rain_occurrence','snow_occurrence'] if model=='gefs' else ['gust','rain','snow']
     end_limit=min(max_hour,114 if model=='mogreps_uk' else 120)
     targets=probability_targets(model,end_limit,kinds)
-    normal=None
+    normal=None;reference=None
     if model=='ecmwf':climatology=Path(climatology).with_name('haduk-extrema-1991-2020-ecmwf.npz') if climatology else None
     if model in ('mogreps_uk','ecmwf') and climatology and Path(climatology).exists():
-        from temperature_climatology import read_normals
+        from temperature_climatology import read_normals,anomaly_reference
         normal=read_normals(climatology,model)
+        reference=anomaly_reference(climatology,model)
     if model=='mogreps_uk' or normal is not None:
-        anomaly_limit=min(max_hour,144) if model=='ecmwf' else end_limit
         extrema_kinds=('min','max') if normal is not None else ('min',)
-        targets += [(h,kind,24) for h in range(24,anomaly_limit+1) if (run+timedelta(hours=h)).hour==9 for kind in extrema_kinds]
+        targets += extrema_targets(model,run,max_hour,extrema_kinds)
     # Publish near-term extrema alongside probabilities, not after the entire
     # probability horizon. Completed tasks are reused on the next build.
     targets.sort(key=lambda task:task[0])
@@ -98,13 +116,13 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
         record_path=path.with_suffix('.json')
         record=json.loads(record_path.read_text()) if record_path.exists() and path.exists() else {}
         task=f'{kind}-{period}'
-        if task_complete(record,task,model,kind,normal is not None):continue
+        if task_complete(record,task,model,kind,normal is not None,reference and reference['revision']):continue
         try:
             a=source.window(h-period,h,kind)
             if kind in ('min','max'):
                 values=cold_probability_fields(a,source.count) if model=='mogreps_uk' and kind=='min' else {}
                 if normal is not None:
-                    date=valid if kind=='min' else valid-timedelta(hours=24)
+                    date=extrema_reference_date(valid,kind)
                     values[f'ens_temperature_{kind}_anomaly']=member_extrema_anomaly(a,normal[kind][date.month-1],source.count)
             else:values=threshold_fields(kind,a,period,source.count)
             if model=='mogreps_uk':
@@ -120,12 +138,18 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
             write_frame(path,merged)
             intervals=record.get('intervals',{})
             for key in values:intervals[key]=dict(start=iso(valid-timedelta(hours=period)),end=iso(valid),hours=period)
-            atomic_json(record_path,dict(tasks=sorted(set(record.get('tasks',[])+[task])),variables=sorted(merged),intervals=intervals))
-            publish(root,folder,source,model,run,targets,normal is not None)
+            revisions=record.get('anomaly_revisions',{})
+            for key in values:
+                if key.endswith('_anomaly'):revisions[key]=reference['revision']
+            atomic_json(record_path,dict(tasks=sorted(set(record.get('tasks',[])+[task])),variables=sorted(merged),intervals=intervals,anomaly_revisions=revisions))
+            publish(root,folder,source,model,run,targets,normal is not None,reference)
             print(f'{model} T+{h} {task}: published {len(values)} grids',flush=True)
         except Exception as error:
             failures.append(f'T+{h} {task}: {error}');print(f'::warning::{model} {failures[-1]}',flush=True)
-    if not (folder/'meta.json').exists():raise RuntimeError('No verified products: '+('; '.join(failures[:2])))
+    # Refresh even when all tasks were reused or rebuilding hit its budget.
+    # Old-baseline anomalies must never be advertised as the new reference.
+    publish(root,folder,source,model,run,targets,normal is not None,reference)
+    if not (folder/'meta.json').exists() or not json.loads((folder/'meta.json').read_text()).get('variables'):raise RuntimeError('No verified products: '+('; '.join(failures[:2])))
     # Retain two product runs independently of the ordinary map archive.
     folders=sorted((root/domain).glob('*/*/*/*Z'),reverse=True)
     for old in folders[2:]:
@@ -133,27 +157,34 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
         shutil.rmtree(old)
 
 
-def publish(root,folder,source,model,run,targets,has_climatology):
+def publish(root,folder,source,model,run,targets,has_climatology,reference=None):
     records={}
     for f in folder.glob('*.om.json'):
         valid=f.name.split('.om')[0];valid=datetime.strptime(valid,'%Y-%m-%dT%H%M').replace(tzinfo=UTC)
         if not f.with_suffix('.png').exists():continue
-        records[iso(valid)]=json.loads(f.read_text())
+        record=json.loads(f.read_text())
+        if reference:
+            record['variables']=[k for k in record['variables'] if not k.endswith('_anomaly')
+                                 or record.get('anomaly_revisions',{}).get(k)==reference['revision']]
+        if record['variables']:records[iso(valid)]=record
+    # Do not replace a usable older publication when a new run produced no
+    # data. An existing obsolete snapshot must still be invalidated below.
+    if not records and not (folder/'meta.json').exists():return
     variables=sorted({k for r in records.values() for k in r['variables']})
     times=sorted(records)
-    completed=all(task_complete(records.get(iso(run+timedelta(hours=h)),{}),f'{kind}-{period}',model,kind,has_climatology) for h,kind,period in targets)
+    completed=all(task_complete(records.get(iso(run+timedelta(hours=h)),{}),f'{kind}-{period}',model,kind,has_climatology,reference and reference['revision']) for h,kind,period in targets)
     meta=dict(format_version=1,domain=f'snowline_{model}_products',reference_time=iso(run),completed=completed,variables=variables,valid_times=times,
               variable_valid_times={k:[t for t in times if k in records[t]['variables']] for k in variables},
               variable_intervals={k:{t:records[t]['intervals'][k] for t in times if k in records[t]['variables']} for k in variables},
               member_count=source.count,source_cycles=[iso(c) for c in getattr(source,'cycles',[run])],generated_at=iso(datetime.now(UTC)),
               method='Member-first complete windows; all members required at each cell; no probability averaging, neighbourhood smoothing or missing-as-zero.',
-              anomaly_reference={'dataset':'HadUK-Grid','period':'1991-2020','statistic':'monthly normal of daily minimum/maximum','forecast_window':'24 hours ending 09 UTC'} if has_climatology else None)
+              anomaly_reference=(reference or {'dataset':'HadUK-Grid','period':'1991-2020','statistic':'monthly normal of daily minimum/maximum','forecast_window':'24 hours ending 09 UTC'}) if has_climatology else None)
     atomic_json(folder/'meta.json',meta)
     latest=root/meta['domain']/'latest.json'
     if not latest.exists() or json.loads(latest.read_text())['reference_time']<=meta['reference_time']:atomic_json(latest,meta)
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--check-runtime',action='store_true');p.add_argument('--max-hour',type=int,default=144);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--check-runtime',action='store_true');p.add_argument('--max-hour',type=int,default=360);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
     if a.check_runtime:runtime_check(a.model)
     else:build(a.model,a.output,a.cache,datetime.fromisoformat(a.run.replace('Z','+00:00')) if a.run else None,a.max_hour,a.budget,a.climatology)

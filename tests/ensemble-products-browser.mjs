@@ -9,7 +9,7 @@ const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new U
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin='http://127.0.0.1:'+server.address().port;
 const source=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(source.match(/const fakeOM=(`[^]*?`);\r?\nconst geo=/)[1]);
-const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
+const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
 const reference='2026-10-21T12:00:00Z',time='2026-10-22T00:00:00Z',UK='ukmo_uk_ensemble_2km',key='ens_gust_gt50kt_12h',rain='ens_rain_ge10mm_12h',snow='ens_snow_ge1mm_12h';
 const native={completed:true,reference_time:reference,variables:['temperature_2m','precipitation'],valid_times:Array.from({length:25},(_,h)=>new Date(Date.parse(reference)+h*3600000).toISOString())};
 const productReference='2026-10-21T06:00:00Z';
@@ -19,12 +19,17 @@ for(const k of six){product.variables.push(k);product.variable_valid_times[k]=[t
 const anomalyTime='2026-10-23T09:00:00Z',anomalies=['ens_temperature_min_anomaly','ens_temperature_max_anomaly'];
 const cold=['0','m2','m5','m10'].map(t=>`ens_temperature_le${t}c_24h`);
 product.valid_times.push(anomalyTime);
-product.anomaly_reference={dataset:'HadUK-Grid',period:'1991-2020',statistic:'monthly normal of daily minimum/maximum',forecast_window:'24 hours ending 09 UTC'};
+product.anomaly_reference={dataset:'HadUK-Grid + Met Eireann',period:'1991-2020',statistic:'monthly normal of daily minimum/maximum',forecast_window:'24 hours ending 09 UTC'};
 for(const k of [...anomalies,...cold]){product.variables.push(k);product.variable_valid_times[k]=[anomalyTime];product.variable_intervals[k]={[anomalyTime]:{hours:24,start:'2026-10-22T09:00:00Z',end:anomalyTime}};}
 const sixTimes=Array.from({length:9},(_,i)=>new Date(Date.parse(time)+i*6*3600000).toISOString());
 for(const k of six){product.variable_valid_times[k]=sixTimes;product.variable_intervals[k]=Object.fromEntries(sixTimes.map(t=>[t,{hours:6,start:new Date(Date.parse(t)-21600000).toISOString(),end:t}]));}
 product.valid_times=[...new Set([...product.valid_times,...sixTimes])].sort();
 const snowDay='ens_snow_ge1mm_24h';product.variables.push(snowDay);product.variable_valid_times[snowDay]=[sixTimes[4]];product.variable_intervals[snowDay]={[sixTimes[4]]:{hours:24,start:time,end:sixTimes[4]}};
+const lastAnomalyTime='2026-11-05T00:00:00Z';
+const ecmwfProduct=structuredClone({...product,domain:'snowline_ecmwf_products',reference_time:'2026-10-21T00:00:00Z',member_count:51,source_cycles:['2026-10-21T00:00:00Z'],variables:product.variables.filter(k=>!cold.includes(k))});
+ecmwfProduct.anomaly_reference.window_policy='09-to-00-utc-v1';
+ecmwfProduct.valid_times.push(lastAnomalyTime);
+for(const k of anomalies){ecmwfProduct.variable_valid_times[k].push(lastAnomalyTime);ecmwfProduct.variable_intervals[k][lastAnomalyTime]={hours:24,start:'2026-11-04T00:00:00Z',end:lastAnomalyTime};}
 try{
  for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
   const page=await browser.newPage({viewport}),errors=[],requests=[];
@@ -45,7 +50,7 @@ try{
    return r.fulfill({json:native});
   });
   await page.route('**/ensemble-data/**',r=>r.request().url().includes('/snowline_ecmwf_ensemble/')?r.fulfill({json:{...native,domain:'snowline_ecmwf_ensemble',format_version:1,member_count:51}}):r.fulfill({status:404,json:{error:true}}));
-  await page.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:r.request().url().includes('/snowline_ecmwf_products/')?{...product,domain:'snowline_ecmwf_products',member_count:51,source_cycles:[productReference],variables:product.variables.filter(k=>!cold.includes(k))}:product}));
+  await page.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:r.request().url().includes('/snowline_ecmwf_products/')?ecmwfProduct:product}));
   const ready=()=>page.waitForFunction(()=>!document.getElementById('map-variable').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'),{},{timeout:60000});
   const ordered=async(selector)=>{
    const periods=await page.locator(selector+' optgroup[label="Ensemble probabilities"] option').evaluateAll(os=>os.map(o=>Number(o.textContent.match(/(6|12|24) h/)?.[1])).filter(Boolean));
@@ -130,6 +135,7 @@ try{
    assert.match(await page.locator('#panel-label-a').textContent(),/VALID Fri 23 Oct 0900 UTC$/);
    assert.equal(await page.locator('#map-time-label').textContent(),'Fri 23 Oct 0900');
    assert.equal(await page.locator('#map-start-time option:checked').textContent(),'Fri 23 Oct 0900');
+   assert.match(await page.locator('#legend-interval-a').textContent(),/10-22 09:00 to 10-23 09:00 UTC/,'The legend retains the full 24-hour window');
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
   }
   await ordered('#map-variable');
@@ -187,7 +193,12 @@ try{
   for(const anomaly of anomalies){
    await page.locator('#map-variable').selectOption(anomaly);await ready();
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('snowline_ecmwf_products/'));
+   await page.locator('#map-start-time').selectOption(anomalyTime);await ready();
    assert.equal(await page.locator('#map-time-label').textContent(),'Fri 23 Oct 0900');
+   await page.locator('#map-start-time').selectOption(lastAnomalyTime);await ready();
+   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 5 Nov 0000');
+   assert.match(await page.locator('#panel-label-a').textContent(),/for Wed 4th \(00–00 UTC\).*VALID Thu 5 Nov 0000 UTC/);
+   assert.match(await page.locator('#legend-interval-a').textContent(),/11-04 00:00 to 11-05 00:00 UTC/);
   }
   for(const k of six){
    await page.locator('#map-variable').selectOption(k);await ready();
@@ -195,7 +206,7 @@ try{
    assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct 0000');
    await ordered('#map-variable');
   }
-  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Full periods fit the viewport');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Valid time labels fit the viewport');
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({viewport,ordinaryStartupProductRequests:0,probabilitySwitching:true,directAnomalySelection:true,refreshAndReload:true,returnToOrdinaryChart:true,otherPanelWasLoaded:!!otherBefore.url}));
   await page.close();

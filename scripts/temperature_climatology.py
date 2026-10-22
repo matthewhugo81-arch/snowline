@@ -87,7 +87,26 @@ def prepare_ecmwf(folder,output):
                         grid='0.25 degree centres: lon -16 to 10, lat 46 to 63; mean of valid 1 km UK land cells')
 
 
-def read_normals(path,model='mogreps_uk'):
+def ireland_path(path,model):
+    suffix='-ecmwf' if model=='ecmwf' else ''
+    return Path(path).with_name(f'met-eireann-extrema-1991-2020{suffix}.npz')
+
+
+def anomaly_reference(path,model):
+    """Fingerprint all baseline inputs so retained tasks cannot hide upgrades."""
+    files=[Path(path)];supplement=ireland_path(path,model)
+    if supplement.exists():files.append(supplement)
+    hashes=[hashlib.sha256(f.read_bytes()).hexdigest() for f in files]
+    return dict(dataset='HadUK-Grid + Met Eireann' if len(files)>1 else 'HadUK-Grid',
+                period='1991-2020',statistic='monthly normal of daily minimum/maximum',
+                forecast_window=('24 hours ending 09 UTC through the last exact three-hourly window; then 00-00 UTC calendar days' if model=='ecmwf' else '24 hours ending 09 UTC'),
+                window_policy='09-to-00-utc-v1' if model=='ecmwf' else '09-utc',
+                coverage='UK and Republic of Ireland' if len(files)>1 else 'UK',
+                revision=hashlib.sha256(':'.join(hashes).encode()).hexdigest(),
+                inputs=[dict(file=f.name,sha256=h) for f,h in zip(files,hashes)])
+
+
+def read_normals(path,model='mogreps_uk',include_ireland=True):
     with np.load(path,allow_pickle=False) as z:
         if str(z['period'])!='1991-2020' or str(z['statistic'])!='monthly extrema normals':raise ValueError('Wrong temperature baseline')
         result={kind:z[kind].copy() for kind in ('min','max')}
@@ -96,7 +115,23 @@ def read_normals(path,model='mogreps_uk'):
         if np.any(result['min']>result['max']):raise ValueError('Minimum normal exceeds maximum')
         provenance=json.loads(str(z['provenance']))
         if any(len(provenance[k]['sha256'])!=64 for k in result):raise ValueError('Missing baseline provenance')
-        return result
+    supplement=ireland_path(path,model)
+    if include_ireland and supplement.exists():
+        manifest=json.loads(supplement.with_name('ireland-manifest.json').read_text(encoding='utf8'))
+        if hashlib.sha256(supplement.read_bytes()).hexdigest()!=manifest['artifacts'][model]['sha256']:
+            raise ValueError('Irish baseline checksum mismatch')
+        with np.load(supplement,allow_pickle=False) as z:
+            if (str(z['period'])!='1991-2020' or str(z['statistic'])!='monthly extrema normals'
+                or str(z['units'])!='degC' or str(z['model'])!=model
+                or json.loads(str(z['provenance']))!=manifest['sources']):
+                raise ValueError('Unverified Irish temperature baseline')
+            extra={k:z[k].copy() for k in result}
+            if any(v.shape!=shape for v in extra.values()) or np.any(extra['min']>extra['max']):
+                raise ValueError('Invalid Irish extrema grid')
+            use=(~np.isfinite(result['min']) & ~np.isfinite(result['max'])
+                 & np.isfinite(extra['min']) & np.isfinite(extra['max']))
+            for kind in result:result[kind]=np.where(use,extra[kind],result[kind])
+    return result
 
 
 if __name__=='__main__':

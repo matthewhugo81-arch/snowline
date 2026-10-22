@@ -2,8 +2,8 @@
 
 The Weather layer menu contains **Ensemble probabilities** and **Temperature
 anomalies**. Temperature anomalies are restricted to MOGREPS-UK and ECMWF ENS.
-ECMWF anomalies stop at Day 6 (T+144), where complete 09–09 UTC windows end. The verified
-HadUK-Grid v1.3.2.0 1991–2020 baseline is installed; both extrema layers load
+ECMWF retains the existing 09–09 UTC windows, then extends 00/12 UTC runs to the last complete 00–00 UTC day within T+360. Later charts explicitly label their UTC calendar-day window. The verified
+HadUK-Grid v1.3.2.0 1991–2020 baseline and Met Éireann 1991–2020 Irish supplement are installed; both extrema layers load
 on selection, with no new ordinary-startup requests.
 
 ## Probability definitions
@@ -35,8 +35,8 @@ ECMWF uses 50 perturbed members plus CTRL; GEFS uses 30 perturbed members plus
 control. MOGREPS-G uses 18 same-cycle members. MOGREPS-UK uses six consecutive
 hourly cycles (three distinct members each), aligned to the same valid window.
 UK publication anchors every six hours and uses the common forecast coverage
-of all six cycles, initially through T+108 h. Global products initially extend
-through T+120 h. Grids cover the UK and nearby waters; they do not fabricate
+of all six cycles, initially through T+108 h. Global probability products extend
+through T+120 h; ECMWF temperature anomalies additionally extend to the last complete UTC day within T+360. Grids cover the UK and nearby waters; they do not fabricate
 coverage across the full North Atlantic map preset.
 
 Extrema/sums are calculated before counting members. Missing members or source
@@ -87,12 +87,43 @@ enables the anomaly builder. No CEDA credentials are committed. The compact
 from the website bundle. Source NetCDF files are not committed. See
 `climatology/README.md` for attribution, checksums and preparation details.
 
-The first implementation uses monthly normals of daily extrema, with forecast
-24-hour windows ending 09 UTC to match HadUK definitions. Minimum uses the end
-date's normal; maximum uses the start date's normal. This differs from the UKPP
+The implementation uses monthly normals of daily extrema. Existing 09–09 UTC
+windows retain the minimum end-date normal and maximum start-date normal.
+For longer-range ECMWF output, 00–00 UTC windows use the starting date for both
+normals and chart dates, including month/year boundaries. This differs from the UKPP
 day/night charts against daily NCIC climatology and is explicitly labelled.
 For a future exact daily reference, derive smoothed calendar-day normals from
 the historical daily HadUK files and validate their observation windows.
+
+The Republic of Ireland uses the verified Met Éireann V2 1991–2020 monthly
+extrema grids. Existing UK values are preserved, including Northern Ireland.
+Both models still subtract the normal from the mean of genuine, complete
+member extrema. Missing forecast members or baseline cells remain missing.
+The Irish reference adds no browser download or runtime processing dependency.
+See `climatology/README.md` for reproducible preparation, provenance, border
+precedence, attribution and differences between the two observational datasets.
+Completed tasks record the baseline fingerprint; changing the reference rebuilds
+only extrema tasks. Metadata excludes stale anomalies during partial rebuilding.
+
+## ECMWF extended anomaly range
+
+The public 00/12 UTC forecasts provide three-hour extrema through T+144,
+then six-hour extrema through T+360. Six-hour intervals cannot reproduce
+09–09 UTC extrema. After the last existing 09 UTC endpoint, Snowline therefore
+adds complete midnight-ending days, using all 51 members and genuine interval
+minima/maxima. The source adapter checks every interval boundary and member;
+09 UTC windows beyond T+144 remain invalid. The transition windows overlap by
+nine hours and are not independent daily periods. Later UTC calendar days do
+not match the 09–09 observation convention exactly. Headers, legends and
+metadata identify their actual period; old metadata cannot silently opt in.
+
+The publisher targets T+360 by default but keeps probability horizons and
+MOGREPS windows unchanged. Its existing time budget, near-first ordering and
+retained task outputs allow partial builds to resume. A 00 UTC run has 15
+anomaly frames; a 12 UTC run has 14 complete frames, ending at T+348. Missing
+source intervals prevent publication rather than shortening the stated day.
+
+Source: [ECMWF Open Data schedule](https://www.ecmwf.int/en/forecasts/datasets/open-data).
 
 ## Validation
 

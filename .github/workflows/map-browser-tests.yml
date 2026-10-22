@@ -41,7 +41,7 @@ jobs:
         run: MAP_THREE_PANELS_ONLY=1 node tests/map-browser.mjs
       - name: Check pan reuse, 143-frame loading and independent model, run and rainfall panels
         run: node tests/map-interactions-browser.mjs
-      - name: Check lazy ensemble probabilities and HadUK temperature anomalies
+      - name: Check lazy ensemble probabilities and UK/Ireland temperature anomalies
         run: node tests/ensemble-products-browser.mjs
       - name: Check desktop and phone controls with delayed synthetic weather transport
         run: node tests/map-browser.mjs

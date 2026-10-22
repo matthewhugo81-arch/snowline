@@ -27,3 +27,5 @@ jobs:
           for family in ensemble generated mogreps vertical publication; do
             python -X faulthandler -m unittest discover -s tests -p "test_${family}*.py"
           done
+      - name: Verify installed UK and Ireland temperature references
+        run: python -m unittest discover -s tests -p test_temperature_climatology.py

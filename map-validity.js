@@ -1,4 +1,4 @@
-import {productField} from './map-ensemble-products.js?v=20261022-briefing-products';
+import {productField} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {fieldIntervalHours} from './map-sources.js?v=20261020-run-selector';
@@ -44,9 +44,10 @@ export function forecastValidity(field,time,meta){
  const period='VALID '+periodStamp(start,year)+' to '+periodStamp(end,year)+' UTC';
  if(temperatureAnomaly(field)){
   const minimum=field==='ens_temperature_min_anomaly';
-  const attributed=minimum?end:start;
+  const calendarDay=start.getUTCHours()===0&&end.getUTCHours()===0;
+  const attributed=minimum&&!calendarDay?end:start;
   const day=new Intl.DateTimeFormat('en-GB',{weekday:'short',timeZone:'UTC'}).format(attributed)+' '+ordinal(attributed.getUTCDate());
-  return '24 hr '+(minimum?'Minimum':'Maximum')+' Temperature Anomaly for '+day+' - '+period;
+  return '24 hr '+(minimum?'Minimum':'Maximum')+' Temperature Anomaly for '+day+(calendarDay?' (00–00 UTC)':'')+' - '+period;
  }
  return period;
 }

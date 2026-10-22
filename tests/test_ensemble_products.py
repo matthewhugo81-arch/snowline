@@ -5,12 +5,12 @@ import unittest
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 import json
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 import numpy as np
 from ensemble_products import complete_window,probability,threshold_fields,lagged_cycles,member_extrema_anomaly,nonnegative_difference
 from ensemble_product_sources import MetOffice,GlobalGRIB
 from ensemble_products import cold_probability_fields,COLD_THRESHOLDS
-from build_ensemble_products import build,publish,probability_targets
+from build_ensemble_products import build,publish,probability_targets,task_complete
 
 
 class Products(unittest.TestCase):
@@ -106,6 +106,33 @@ class Products(unittest.TestCase):
                     build('mogreps_uk',root,root/'cache',run,max_hour=24,climatology=normal)
                     self.assertEqual(calls,[],'Complete retained tasks require no source download')
                     self.assertTrue(json.loads((folder/'meta.json').read_text())['completed'])
+                    if has_normal:
+                        normal.write_bytes(b'new verified baseline fixture')
+                        calls.clear()
+                        build('mogreps_uk',root,root/'cache',run,max_hour=24,climatology=normal)
+                        self.assertEqual(calls,[(0,24,'min'),(0,24,'max')],
+                                         'Baseline upgrade rebuilds extrema only; probabilities stay cached')
+
+    def test_publication_hides_stale_anomalies_during_partial_rebuild(self):
+        from types import SimpleNamespace
+        run=datetime(2026,10,21,9,tzinfo=timezone.utc)
+        key='ens_temperature_min_anomaly';rain='ens_rain_ge1mm_24h'
+        record=dict(tasks=['min-24','rain-24'],variables=[key,rain],
+                    anomaly_revisions={key:'old'},intervals={key:{},rain:{}})
+        self.assertFalse(task_complete(record,'min-24','ecmwf','min',True,'new'))
+        self.assertTrue(task_complete(record,'rain-24','ecmwf','rain',True,'new'))
+        with TemporaryDirectory() as directory:
+            root=Path(directory);folder=root/'run';folder.mkdir()
+            (folder/'2026-10-22T0900.om.png').write_bytes(b'fixture')
+            path=folder/'2026-10-22T0900.om.json';path.write_text(json.dumps(record))
+            reference=dict(dataset='HadUK-Grid + Met Eireann',period='1991-2020',revision='new')
+            publish(root,folder,SimpleNamespace(count=51),'ecmwf',run,[(24,'min',24)],True,reference)
+            meta=json.loads((folder/'meta.json').read_text())
+            self.assertEqual(meta['variables'],[rain]);self.assertFalse(meta['completed'])
+            # Even an anomaly-only old snapshot must stop exposing its old data.
+            record['variables']=[key];path.write_text(json.dumps(record))
+            publish(root,folder,SimpleNamespace(count=51),'ecmwf',run,[(24,'min',24)],True,reference)
+            self.assertEqual(json.loads((folder/'meta.json').read_text())['variables'],[])
 
     def test_member_extrema_precede_probability(self):
         a=np.array([[[60]],[[0]]],dtype=float);b=np.array([[[0]],[[60]]],dtype=float)
@@ -164,12 +191,35 @@ class Products(unittest.TestCase):
 
     def test_ecmwf_complete_extrema_and_medium_range_boundary(self):
         source=GlobalGRIB('ecmwf',datetime(2026,10,21,12,tzinfo=timezone.utc),Path('unused'))
-        source.read=lambda h,k:(np.full((51,1,1),h),(h-3,h,k))
+        source.read=lambda h,k:(np.full((51,1,1),h),(h-(3 if h<=144 else 6),h,k))
         np.testing.assert_equal(source.window(117,141,'min'),120)
         np.testing.assert_equal(source.window(117,141,'max'),141)
+        np.testing.assert_equal(source.window(138,162,'min'),141)
+        np.testing.assert_equal(source.window(138,162,'max'),162)
+        np.testing.assert_equal(source.window(336,360,'min'),342)
+        np.testing.assert_equal(source.window(336,360,'max'),360)
         with self.assertRaises(ValueError):source.window(141,165,'max')
+        with self.assertRaises(ValueError):source.window(354,378,'max')
+        source.run=datetime(2026,10,21,6,tzinfo=timezone.utc)
+        with self.assertRaises(ValueError):source.window(144,168,'min')
         source.read=lambda h,k:(np.ones((51,1,1)),(h-1,h,k))
         with self.assertRaises(ValueError):source.window(21,45,'min')
+
+    def test_ecmwf_targets_retain_early_windows_and_reach_last_complete_utc_day(self):
+        from build_ensemble_products import extrema_targets,extrema_reference_date
+        for cycle,last,first_midnight in [(0,360,144),(12,348,156)]:
+            run=datetime(2026,10,22,cycle,tzinfo=timezone.utc)
+            targets=extrema_targets('ecmwf',run,360,('min','max'))
+            ends=[h for h,k,_ in targets if k=='min']
+            old=[h for h in range(24,145) if (run+timedelta(hours=h)).hour==9]
+            self.assertEqual(ends,old+list(range(first_midnight,last+1,24)))
+            self.assertEqual(len(targets),2*len(ends))
+            self.assertEqual(extrema_targets('ecmwf',run,120,('min',)),[(h,'min',24) for h in old if h<=120])
+        run=datetime(2026,10,22,tzinfo=timezone.utc)
+        self.assertTrue(all((run+timedelta(hours=h)).hour==9 and h<=114 for h,_,_ in extrema_targets('mogreps_uk',run,360,('min',))))
+        end=datetime(2026,11,1,tzinfo=timezone.utc)
+        for kind in ('min','max'):self.assertEqual(extrema_reference_date(end,kind).month,10)
+        self.assertEqual(extrema_reference_date(end+timedelta(hours=9),'min').month,11)
 
     def test_ecmwf_anomaly_requires_all_51_members(self):
         a=np.full((51,1,2),10.);a[50,0,1]=np.nan
