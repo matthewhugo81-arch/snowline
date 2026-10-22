@@ -1,4 +1,4 @@
-"""Move verified older IFS grids out of the Pages bundle, preserving all runs.
+"""Move verified older IFS and GEFS grids out of the Pages bundle, preserving all runs.
 
 Uses the same generated snapshot-branch approach as Stratoscope. Only the
 dedicated forecast-archive branch is replaced, with a lease; never source/main.
@@ -23,8 +23,8 @@ DOMAIN = 'snowline_ecmwf_ensemble'
 RAW = f'https://raw.githubusercontent.com/{REPOSITORY}/'
 
 
-def archive_plan(site):
-    parent = site / 'ensemble-data' / DOMAIN
+def domain_archive_plan(site, domain):
+    parent = site / 'ensemble-data' / domain
     latest = json.loads((parent / 'latest.json').read_text())
     history = json.loads((parent / 'history.json').read_text())
     references = history['runs']
@@ -49,7 +49,17 @@ def archive_plan(site):
             with path.open('rb') as stream:
                 digest = hashlib.file_digest(stream, 'sha256').hexdigest()
             files[path.relative_to(site).as_posix()] = {'bytes': size, 'sha256': digest}
-    if sum(item['bytes'] for item in files.values()) > 600_000_000:
+    return files, metadata
+
+
+def archive_plan(site):
+    files, metadata = domain_archive_plan(site, DOMAIN)
+    gefs = 'snowline_gefs_ensemble'
+    if (site / 'ensemble-data' / gefs).exists():
+        extra_files, extra_metadata = domain_archive_plan(site, gefs)
+        files.update(extra_files)
+        metadata.update(extra_metadata)
+    if sum(item['bytes'] for item in files.values()) > 900_000_000:
         raise ValueError('Generated archive exceeds its own storage budget')
     return files, metadata
 
@@ -106,13 +116,13 @@ def publish(site):
             for folder, meta in canonical.items():
                 (root / folder / 'meta.json').write_text(json.dumps(meta, sort_keys=True) + '\n')
             (root / 'archive.json').write_text(json.dumps({'publisher': 'snowline-map-archive-v1', 'contentSha256': fingerprint, 'files': files}, sort_keys=True) + '\n')
-            (root / 'README.md').write_text('Generated Snowline IFS archive. Replaced automatically with two retained predecessor runs. Source code is on main. Pages metadata pins immutable commit URLs.\n')
+            (root / 'README.md').write_text('Generated Snowline IFS and GEFS archive. Replaced automatically with two retained predecessor runs. Source code is on main. Pages metadata pins immutable commit URLs.\n')
             git(root, 'init', '-b', BRANCH)
             git(root, 'config', 'user.name', 'github-actions[bot]')
             git(root, 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
             git(root, 'remote', 'add', 'origin', 'https://github.com/' + REPOSITORY + '.git')
             git(root, 'add', '.')
-            git(root, 'commit', '-m', 'Publish verified IFS predecessor grids')
+            git(root, 'commit', '-m', 'Publish verified IFS and GEFS predecessor grids')
             git(root, 'push', f'--force-with-lease=refs/heads/{BRANCH}:{previous}', 'origin', f'HEAD:refs/heads/{BRANCH}')
             commit = git(root, 'rev-parse', 'HEAD')
     verify_transport(commit, files, metadata)

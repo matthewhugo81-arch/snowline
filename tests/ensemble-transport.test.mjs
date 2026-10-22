@@ -111,3 +111,11 @@ test('immutable archived IFS URLs preserve range-capable binary transport',async
  await reader.withReader(url,()=>{});assert.equal(calls.pop(),url+'.png');
  const unknown=url.replace('a'.repeat(40),'main');await reader.withReader(unknown,()=>{});assert.equal(calls.pop(),unknown);
 });
+
+test('archived GEFS uses binary-safe ranges without accepting mutable branch URLs',async()=>{
+ const calls=[],reader={withReader(url,fn){calls.push(url);return fn({});}};
+ installEnsembleTransport({getProtocolInstance:()=>({omFileReader:reader})},{});
+ const url='https://raw.githubusercontent.com/matthewhugo81-arch/snowline/'+'b'.repeat(40)+'/ensemble-data/snowline_gefs_ensemble/run/frame.om';
+ await reader.withReader(url,()=>{});assert.equal(calls.pop(),url+'.png');
+ const unknown=url.replace('b'.repeat(40),'main');await reader.withReader(unknown,()=>{});assert.equal(calls.pop(),unknown);
+});

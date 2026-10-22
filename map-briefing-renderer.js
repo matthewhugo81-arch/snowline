@@ -4,13 +4,13 @@ import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-au
 import {backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {ForecastFrames} from './map-frames.js?v=20261019-mogreps-uk';
-import {ForecastTileCache} from './map-tile-cache.js?v=20261020-rolling-cache';
+import {ForecastTileCache} from './map-tile-cache.js?v=20261022-retention-recovery';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261020-run-selector';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-ireland-ecmwf-range';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-gefs-archive';
 import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {briefingValueLabels} from './map-briefing-values.js?v=20261020-run-selector';
 

@@ -222,7 +222,7 @@ export async function loadSpatialRun(model,referenceTime,load){
  if(Date.parse(data?.reference_time)!==reference||!publishedRun(data))throw Error('Archived metadata does not match the requested run.');
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(data))throw Error('Unverified MOGREPS-G archive.');
  if(data.archive_base){
-  if(domain!=='snowline_ecmwf_ensemble'||!/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/$/.test(data.archive_base))throw Error('Unverified archive storage location');
+  if(!['snowline_ecmwf_ensemble','snowline_gefs_ensemble'].includes(domain)||!/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/$/.test(data.archive_base))throw Error('Unverified archive storage location');
   baseURL=data.archive_base;
  }
  let primary={...data,domain,baseURL,runFamily:family};const warnings=[];

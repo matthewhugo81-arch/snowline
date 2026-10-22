@@ -9,6 +9,27 @@ from publish_map_archive import archive_plan, DOMAIN
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_gefs_predecessors_are_archived_but_latest_grids_stay_local(self):
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory)
+            for domain, cycle in ((DOMAIN, 12), ('snowline_gefs_ensemble', 6)):
+                parent = site / 'ensemble-data' / domain
+                parent.mkdir(parents=True)
+                latest = datetime(2026, 10, 22, 12, tzinfo=timezone.utc)
+                refs = [(latest-timedelta(hours=h*cycle)).strftime('%Y-%m-%dT%H:%M:%SZ') for h in range(3)]
+                (parent/'latest.json').write_text(json.dumps({'reference_time': refs[0]}))
+                (parent/'history.json').write_text(json.dumps({'runs': refs}))
+                for reference in refs:
+                    folder = parent/datetime.fromisoformat(reference).strftime('%Y/%m/%d/%H%MZ')
+                    folder.mkdir(parents=True)
+                    (folder/'meta.json').write_text(json.dumps({'reference_time':reference,'completed':True,'valid_times':[reference]}))
+                    (folder/(reference[:16].replace(':','')+'.om.png')).write_bytes(b'x'*64)
+            files, metadata = archive_plan(site)
+            self.assertEqual(len(files), 4)
+            self.assertEqual(len(metadata), 4)
+            self.assertFalse(any('/2026/10/22/1200Z/' in path for path in files))
+            self.assertEqual(len(list(site.rglob('*.om.png'))), 6)
+
     def test_only_two_exact_complete_predecessors_leave_pages_and_originals_survive_planning(self):
         with tempfile.TemporaryDirectory() as directory:
             site = Path(directory)

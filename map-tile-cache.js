@@ -1,6 +1,6 @@
 // Keep prepared PNG/vector tiles on disk, with a small hot memory cache. MapLibre
 // can then recreate a distant frame without downloading/decoding the model again.
-import {cacheDiskBudget,SharedForecastStorage} from './map-cache-storage.js?v=20261022-shared-cache';
+import {cacheDiskBudget,SharedForecastStorage,cleanupObsoleteCaches} from './map-cache-storage.js?v=20261022-cache-cleanup';
 const PREFIX='snowline-forecast-tiles-v1-';
 // Faster machines can prepare six tiles concurrently while two slots remain
 // available for the selected chart. Keep the existing budget on smaller devices.
@@ -50,6 +50,12 @@ export class ForecastTileCache{
   // invalidates releases; a rolling per-entry lifetime bounds source corrections
   // without throwing away a freshly prepared tile at the next clock hour.
   this.session=persistent&&!this.isolated?'persistent-'+encodeURIComponent(cacheVersion):Date.now()+'-'+Math.random().toString(36).slice(2);
+  this.cleanup=()=>{
+   const shared=this.contexts.get(this.context)?.shared;
+   if(!this.coordinated||!shared||this.cleaning)return;
+   this.cleaning=shared.lease().then(()=>cleanupObsoleteCaches({storage:this.storage,db:shared.db,locks:shared.locks,prefix:PREFIX,currentPrefix:PREFIX+this.session+'-'})).catch(()=>{}).finally(()=>{this.cleaning=null;});
+  };
+  if(this.coordinated)this.cleanupTimer=setInterval(()=>this.cleanup(),60000);
   // Only remove this feature's abandoned caches, never other site data.
   storage?.keys().then(names=>Promise.all(names.filter(name=>name.startsWith(PREFIX)&&
    (name.startsWith(PREFIX+'persistent-')?false:
@@ -85,6 +91,8 @@ export class ForecastTileCache{
    entry.disk.then(store=>{if(store)this.sharedStores.set(store,entry.shared);}).catch(()=>{});
   }
   while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.shared?.close();if(!this.coordinated)old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
+  if(this.coordinated&&!this.cleanupTimer)this.cleanupTimer=setInterval(()=>this.cleanup(),60000);
+  this.cleanup();
   if(this.persistent&&!this.coordinated)entry.disk.then(async()=>{
    const active=new Set([...this.contexts.values()].map(item=>item.name));
    const others=(await this.storage?.keys()??[]).filter(name=>name.startsWith(PREFIX+this.session+'-')&&!active.has(name));
@@ -98,6 +106,7 @@ export class ForecastTileCache{
   this.pending.clear();this.writes.clear();this.memory.clear();this.bytes=0;
  }
  release(){
+  clearInterval(this.cleanupTimer);this.cleanupTimer=null;
   clearTimeout(this.statsTimer);for(const entry of this.contexts.values())entry.shared?.close();
   this.resetPending();
   if(!this.persistent||this.isolated)for(const entry of this.contexts.values())entry.disk.then(()=>this.storage?.delete(entry.name)).catch(()=>{});
@@ -161,7 +170,7 @@ export class ForecastTileCache{
   // Immutable archive commits cannot be corrected in place. Retain their
   // prepared pixels for the run-retention window, avoiding another native
   // download/decode on next-day comparisons. Mutable feeds keep the short TTL.
-  const immutable=/^om:\/\/https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/snowline_ecmwf_ensemble\//.test(url);
+  const immutable=/^om:\/\/https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/snowline_(?:ecmwf|gefs)_ensemble\//.test(url);
   return Number.isFinite(created)&&created>0&&Date.now()>=created&&Date.now()-created<(immutable?48*3600000:this.maxAge);
  }
  remember(key,result,durable,persisting=false,created=Date.now()){

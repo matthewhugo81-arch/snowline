@@ -6,7 +6,7 @@ import {PRODUCT_BASE,productPath} from './map-ensemble-products.js?v=20261022-ir
 const installed=new WeakSet();
 export function installEnsembleTransport(OM,settings,base=new URL('./ensemble-data/',import.meta.url).href){
  const companion='https://matthewhugo81-arch.github.io/snowline-ensembles/ensemble-data/';
- const archive=url=>url.match(/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/(snowline_ecmwf_ensemble\/.*)$/)?.[1];
+ const archive=url=>url.match(/^https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/(snowline_(?:ecmwf|gefs)_ensemble\/.*)$/)?.[1];
  const own=url=>!!productPath(url)||url.startsWith(PRODUCT_BASE)||url.startsWith(base)||url.startsWith(companion)||!!archive(url);
  const reader=OM.getProtocolInstance(settings).omFileReader;
  if(installed.has(reader))return;

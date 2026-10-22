@@ -15,7 +15,7 @@ import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261022-attribution';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-ireland-ecmwf-range';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-gefs-archive';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
@@ -23,7 +23,7 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-zoom-cache';
-import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-shared-cache';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-retention-recovery';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
@@ -33,7 +33,7 @@ import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPa
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261020-ifs-coverage';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261022-three-hour-runs';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261022-gefs-archive';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261022-ireland-ecmwf-range';
@@ -41,7 +41,7 @@ import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-concise-names';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-responsive-layers';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-retention-recovery';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
@@ -94,6 +94,7 @@ const accumulationReader=installAccumulations(OM,settings);
 const renderMapTile=(params,controller)=>isSymbolURL(params.url)?precipitationSymbolProtocol(params,controller,OM,settings):OM.omProtocol(params,controller,isCompositeURL(params.url)?compositeSettings(settings):settings);
 const readMapValue=createValueReader({...OM,omProtocol:renderMapTile},settings);
 OM.updateCurrentBounds(UK);
+let failedSelection=null;
 const imageryCache=new ForecastTileCache(async(params,controller)=>{
  const result=await renderMapTile(params,controller);
  if(params.type==='json'&&params.url.includes('/ensemble-data/')){
@@ -201,6 +202,9 @@ for(const id of ['map-model','map-model-b','map-model-c']){
  }
 }
 $('map-model').value=sourceModel(state.model);$('map-model-b').value=sourceModel(state.modelB);$('map-model-c').value=sourceModel(state.modelC);
+// The startup wrapper can let metadata arrive before model options exist.
+// Reapply verified labels as soon as the three menus have been populated.
+document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));
 function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false});
  map.touchZoomRotate.disableRotation();
@@ -292,7 +296,7 @@ async function drawGridValues(panel){
  }catch(error){if(version===panel.gridVersion){note.textContent='Grid values unavailable; try another time.';console.warn('Grid values:',error.message);}}
 }
 function concreteURL(model,meta,time,field){if(field===THETA_SYMBOLS)return concreteURL(model,meta,time,'wet_bulb_potential_temperature_850hPa')+'&winter_chart=1';if(field===WEATHER_COMPOSITE)return compositeURL(concreteURL(model,meta,time,'precipitation'));const source=fieldSource(meta,field,time);return 'om://'+fieldDataURL(meta,field,time)+'?'+new URLSearchParams({...(field.startsWith('relative_vorticity_')?{diagnostic_style:'20261011-smooth20km-purple'}:{}),...(isSurfaceWind(field)?{wind_style:'20261020-surface-wind110'}:{}),...(isJetWind(field)?{wind_style:'20261012-jet60',arrow_profile:'jet'}:{}),...(is850Temperature(field)?{contour_style:'20261012-major850'}:{}),variable:precipitationRateVariable(sourceVariable(source,field)??field),interpolation:fields.find(f=>f.key===field)?.categorical?'nearest':'linear',arrows:!fields.find(f=>f.key===field)?.ensembleStatistic&&/^wind_speed_|^ocean_current_speed$/.test(field)?'true':'false',tile_size:'512',color_blend:fields.find(f=>f.key===field)?.bands||fields.find(f=>f.key===field)?.temperatureBands?'false':'true',contours:'true',intervals:contourLevels(fields.find(f=>f.key===field)).join(',')});}
-let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),failedSelection=null,outlineWait,navigationDirection=1;
+let playing=false,timeGeneration=0,playback,timePending=Promise.resolve(true),outlineWait,navigationDirection=1;
 const arrowNavigation=new ForecastNavigation({select:()=>setTime()});
 function updateOutlineStatus(panel){
  if(!panelVisible(panel.key)||briefingActive||panel.restyling)return;
@@ -973,7 +977,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261022-ireland-ecmwf-range').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261022-retention-recovery').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;
