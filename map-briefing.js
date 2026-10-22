@@ -1,9 +1,9 @@
 import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261022-briefing-products';
 import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-briefing-products';
+import {forecastValidity,forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261022-anomaly-headers';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261022-three-hour-runs';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261022-anomaly-headers';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261022-briefing-products';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261022-briefing-products';
@@ -152,7 +152,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    title.textContent=modelName()+' · '+periodTitle(time);caption.textContent=briefingCaption(meta,preset,time);
    button.type='button';button.className='briefing-chart';button.disabled=true;button.setAttribute('aria-label','Enlarge chart · '+forecastValidity(preset.field,time,meta));
    placeholder.textContent='Preparing chart…';button.append(placeholder);card.append(title,caption,button);$('grid').append(card);
-   const exportInfo={title:modelName()+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · '+forecastValidity(selection.preset.field,time,selection.meta),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
+   const exportInfo={title:modelName()+' · '+runLabel(selection.meta)+' · '+forecastChartTitle(selection.preset.field,selection.preset.name,time,selection.meta),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
    const show=src=>{const image=document.createElement('img');image.src=src;image.alt=exportInfo.title;image.decoding='async';button.replaceChildren(image);button.disabled=false;card.dataset.ready='true';imageMenu?.registerImage(image,exportInfo);button.onclick=()=>enlarge(src,time,exportInfo);loaded++;};
    const cached=images.get(key(time));if(cached)show(cached);
    cards.set(time,{show,card,placeholder});

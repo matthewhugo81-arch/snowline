@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {forecastValidity,forecastTimeLabel,forecastPeriod} from '../map-validity.js';
+import {forecastValidity,forecastChartTitle,forecastTimeLabel,forecastPeriod} from '../map-validity.js';
 import {MAP_AREAS} from '../map-areas.js';
 import {BRIEFING_AREAS} from '../map-briefing-data.js';
 
@@ -20,11 +20,18 @@ test('native metadata bounds determine labels independently of playback cadence'
 });
 
 test('HadUK maxima belong to the starting day and minima to the ending day',()=>{
- for(const [end,startDay,endDay] of [['2026-10-23T09:00:00Z','Thu, 22 Oct 2026','Fri, 23 Oct 2026'],['2026-11-01T09:00:00Z','Sat, 31 Oct 2026','Sun, 1 Nov 2026'],['2027-01-01T09:00:00Z','Thu, 31 Dec 2026','Fri, 1 Jan 2027']]){
-  assert.ok(forecastValidity('ens_temperature_max_anomaly',end).startsWith('Attributed to '+startDay+' · VALID '));
-  assert.ok(forecastValidity('ens_temperature_min_anomaly',end).startsWith('Attributed to '+endDay+' · VALID '));
+ for(const [end,startDay,endDay] of [['2026-10-23T09:00:00Z','Thu 22nd','Fri 23rd'],['2026-11-01T09:00:00Z','Sat 31st','Sun 1st'],['2027-01-01T09:00:00Z','Thu 31st','Fri 1st']]){
+  assert.ok(forecastValidity('ens_temperature_max_anomaly',end).startsWith('24 hr Maximum Temperature Anomaly for '+startDay+' - VALID '));
+  assert.ok(forecastValidity('ens_temperature_min_anomaly',end).startsWith('24 hr Minimum Temperature Anomaly for '+endDay+' - VALID '));
   assert.match(forecastValidity('ens_temperature_max_anomaly',end),/09:00 to .*09:00 UTC$/);
  }
+});
+
+test('maximum headers advance with the selected period without a duplicate layer name',()=>{
+ const field='ens_temperature_max_anomaly';
+ assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-23T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Thu 22nd - VALID 22 Oct 09:00 to 23 Oct 09:00 UTC');
+ assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-24T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Fri 23rd - VALID 23 Oct 09:00 to 24 Oct 09:00 UTC');
+ for(const day of [11,12,13])assert.match(forecastValidity('ens_temperature_min_anomaly',`2026-10-${day}T09:00:00Z`),new RegExp('for [A-Za-z]+ '+day+'th - VALID'));
 });
 
 test('rainfall header states one valid period, without repeating the duration or ending time',()=>{
