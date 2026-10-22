@@ -30,7 +30,7 @@ def get_json(path):
         return json.load(response)
 
 
-def reuse(revision, fetch=get_json, compare=same_inputs, sleep=time.sleep, clock=time.monotonic, wait=1200):
+def reuse(revision, fetch=get_json, compare=same_inputs, sleep=time.sleep, clock=time.monotonic, wait=1800):
     runs = fetch('actions/workflows/map-browser-tests.yml/runs?branch=main&event=push&per_page=10')['workflow_runs']
     for run in runs:
         if run.get('head_branch') != 'main' or run.get('event') != 'push':
