@@ -16,7 +16,7 @@ test('native metadata bounds determine labels independently of playback cadence'
  const meta={variables:[key],variable_valid_times:{[key]:[end]},variable_intervals:{[key]:{[end]:{start,end,hours:6}}}};
  assert.deepEqual(forecastPeriod(key,end,meta),{start,end});
  assert.equal(forecastTimeLabel(key,end,meta),'Fri 23 Oct at 18:00 to Sat 24 Oct at 00:00');
- assert.equal(forecastValidity(key,end,meta),'VALID 23 Oct 18:00 to 24 Oct 00:00 UTC');
+ assert.equal(forecastValidity(key,end,meta),'VALID Fri 23 Oct 18:00 to Sat 24 Oct 00:00 UTC');
 });
 
 test('HadUK maxima belong to the starting day and minima to the ending day',()=>{
@@ -29,20 +29,20 @@ test('HadUK maxima belong to the starting day and minima to the ending day',()=>
 
 test('maximum headers advance with the selected period without a duplicate layer name',()=>{
  const field='ens_temperature_max_anomaly';
- assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-23T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Thu 22nd - VALID 22 Oct 09:00 to 23 Oct 09:00 UTC');
- assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-24T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Fri 23rd - VALID 23 Oct 09:00 to 24 Oct 09:00 UTC');
+ assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-23T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Thu 22nd - VALID Thu 22 Oct 09:00 to Fri 23 Oct 09:00 UTC');
+ assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-24T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Fri 23rd - VALID Fri 23 Oct 09:00 to Sat 24 Oct 09:00 UTC');
  for(const day of [11,12,13])assert.match(forecastValidity('ens_temperature_min_anomaly',`2026-10-${day}T09:00:00Z`),new RegExp('for [A-Za-z]+ '+day+'th - VALID'));
 });
 
 test('rainfall header states one valid period, without repeating the duration or ending time',()=>{
- assert.equal(forecastValidity('precipitation_total_24h','2026-10-14T03:00:00Z'),'VALID 13 Oct 03:00 to 14 Oct 03:00 UTC');
- assert.equal(forecastValidity('precipitation_total_6h','2026-10-14T06:00:00Z'),'VALID 14 Oct 00:00 to 14 Oct 06:00 UTC');
+ assert.equal(forecastValidity('precipitation_total_24h','2026-10-14T03:00:00Z'),'VALID Tue 13 Oct 03:00 to Wed 14 Oct 03:00 UTC');
+ assert.equal(forecastValidity('precipitation_total_6h','2026-10-14T06:00:00Z'),'VALID Wed 14 Oct 00:00 to Wed 14 Oct 06:00 UTC');
 });
 test('valid periods remain UTC across month, year and daylight-saving boundaries',()=>{
- assert.equal(forecastValidity('precipitation_total_24h','2026-11-01T03:00:00Z'),'VALID 31 Oct 03:00 to 1 Nov 03:00 UTC');
- assert.equal(forecastValidity('precipitation_total_24h','2027-01-01T03:00:00Z'),'VALID 31 Dec 2026 03:00 to 1 Jan 2027 03:00 UTC');
- assert.equal(forecastValidity('precipitation_total_24h','2026-10-25T03:00:00Z'),'VALID 24 Oct 03:00 to 25 Oct 03:00 UTC');
- assert.equal(forecastValidity('precipitation_total_24h','2026-10-14T04:00:00+01:00'),'VALID 13 Oct 03:00 to 14 Oct 03:00 UTC');
+ assert.equal(forecastValidity('precipitation_total_24h','2026-11-01T03:00:00Z'),'VALID Sat 31 Oct 03:00 to Sun 1 Nov 03:00 UTC');
+ assert.equal(forecastValidity('precipitation_total_24h','2027-01-01T03:00:00Z'),'VALID Thu 31 Dec 2026 03:00 to Fri 1 Jan 2027 03:00 UTC');
+ assert.equal(forecastValidity('precipitation_total_24h','2026-10-25T03:00:00Z'),'VALID Sat 24 Oct 03:00 to Sun 25 Oct 03:00 UTC');
+ assert.equal(forecastValidity('precipitation_total_24h','2026-10-14T04:00:00+01:00'),'VALID Tue 13 Oct 03:00 to Wed 14 Oct 03:00 UTC');
 });
 test('instantaneous charts keep their single valid time; invalid times are not printed',()=>{
  assert.equal(forecastValidity('temperature_2m','2026-10-14T03:00:00Z'),'Valid Wed 14 Oct, 03:00 UTC');

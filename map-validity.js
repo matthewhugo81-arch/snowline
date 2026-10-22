@@ -10,9 +10,9 @@ const instant=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',mon
 const temperatureAnomaly=field=>/^ens_temperature_(min|max)_anomaly$/.test(field);
 const ordinal=day=>day+(day%100>=11&&day%100<=13?'th':({1:'st',2:'nd',3:'rd'}[day%10]??'th'));
 const periodStamp=(date,year)=>{
- const parts=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',...(year?{year:'numeric'}:{}),hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'UTC'}).formatToParts(date);
+ const parts=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',...(year?{year:'numeric'}:{}),hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'UTC'}).formatToParts(date);
  const part=type=>parts.find(p=>p.type===type).value;
- return part('day')+' '+part('month')+(year?' '+part('year'):'')+' '+part('hour')+':'+part('minute');
+ return part('weekday')+' '+part('day')+' '+part('month')+(year?' '+part('year'):'')+' '+part('hour')+':'+part('minute');
 };
 
 const nativePeriods=new Set(['precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability',WEATHER_COMPOSITE,PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS]);
