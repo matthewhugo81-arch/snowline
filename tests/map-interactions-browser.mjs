@@ -46,16 +46,18 @@ try{
   page.on('pageerror',error=>errors.push(error.message));
   await page.addInitScript(()=>{localStorage.setItem('snowline-terrain','false');window.fixtureDelay=1;});
   await page.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
-  await page.route('**/maps.js*',async r=>r.fulfill({contentType:'text/javascript',body:(await readFile('maps.js','utf8'))+'\nwindow.fixturePanels=panels;window.fixtureImageryCache=imageryCache;'}));
+  await page.route('**/maps.js*',async r=>r.fulfill({contentType:'text/javascript',body:(await readFile('maps.js','utf8'))+'\nwindow.fixturePanels=panels;window.fixtureImageryCache=imageryCache;const fixtureResolve=resolvePanelRun;resolvePanelRun=async(...args)=>{if(window.fixtureMetadataGate)await window.fixtureMetadataGate;return fixtureResolve(...args);};'}));
   await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({json:style}));
   await page.route('**/coastline.geojson',r=>r.fulfill({json:geo}));
-  let holdMetadata=false,releaseMetadata;
+  let holdMetadata=false,releaseMetadata,releaseArchive;
   const metadataGate=new Promise(resolve=>releaseMetadata=resolve);
+  const archiveGate=new Promise(resolve=>releaseArchive=resolve);
   await page.route('https://openmeteo.s3.amazonaws.com/**',async r=>{
    const url=r.request().url(),domain=new URL(url).pathname.split('/')[2];
    if(holdMetadata&&domain.startsWith('ncep_gfs'))await metadataGate;
    const value=domain===UKV?ukv:domain===UKMO?ukmo:domain.startsWith('ncep_gfs')?ukmo:null;
    const dated=url.match(/\/(\d{4}\/\d{2}\/\d{2})\/(\d{4})Z\/meta.json/);
+   if(holdMetadata&&domain.startsWith('ncep_gfs')&&dated?.[1]==='2026/10/09')await archiveGate;
    const known=!dated||dated[1]==='2026/10/10'&&dated[2]==='0000'||domain.startsWith('ncep_gfs')&&dated[1]==='2026/10/09'&&dated[2]==='1800';
    const previous=dated?.[1]==='2026/10/09'?meta([...Array(169).keys()],'2026-10-09T18:00:00Z'):value;
    await r.fulfill({status:value&&known?200:404,json:value&&known?previous:{error:true}});
@@ -108,11 +110,22 @@ try{
   // Select a common valid time with a complete 48-hour rainfall window.
   await page.locator('#map-start-time').selectOption('2026-10-12T00:00:00.000Z');await ready();
   const rain=await snapshot();holdMetadata=true;
+  await page.evaluate(()=>{window.fixtureMetadataGate=new Promise(resolve=>window.releaseMetadataGate=resolve);});
   await page.locator('#map-model-b').selectOption('gfs_global');
   await page.waitForFunction(()=>document.getElementById('map-variable-b').disabled);
   const held=await snapshot();
   for(const key of ['a','c'])assert.deepEqual(held.panels[key],rain.panels[key],'Other rainfall panels stay visible while metadata is pending');
-  releaseMetadata();await ready();
+  // Neither archive discovery nor slow weather rendering may lock the layer menu
+  // after the selected complete run has been verified.
+  await page.evaluate(()=>{window.fixtureTransportGate=new Promise(resolve=>window.releaseTransport=resolve);window.releaseMetadataGate();window.fixtureMetadataGate=null;});
+  releaseMetadata();
+  await page.waitForFunction(()=>!document.getElementById('map-variable-b').disabled,{},{timeout:10000});
+  await page.locator('#map-variable-b').selectOption('temperature_2m');
+  assert.equal(await page.locator('#map-variable-b').isEnabled(),true);
+  releaseArchive();
+  await page.waitForFunction(()=>[...document.getElementById('map-run-b').options].some(o=>o.value.includes('2026-10-09')));
+  assert.equal(await page.locator('#map-variable-b').inputValue(),'temperature_2m','Background archive discovery preserves the chosen layer');
+  await page.evaluate(()=>{window.releaseTransport();window.fixtureTransportGate=null;});await ready();
   const changed=await snapshot();
   for(const key of ['a','c'])assert.equal(changed.panels[key].source,rain.panels[key].source,'Only the changed model replaces its source');
   await page.locator('#map-variable-b').selectOption('temperature_2m');await ready();
@@ -123,6 +136,6 @@ try{
   const run=await snapshot();for(const key of ['a','c'])assert.equal(run.panels[key].source,rain.panels[key].source,'Only the changed run replaces its source');
   assert.deepEqual(errors,[]);await mapView();await mkdir('review-output',{recursive:true});
   await page.screenshot({path:`review-output/independent-panels-${viewport.width}.png`});
-  console.log(JSON.stringify({viewport,completeFrames:143,smallPanReuse:true,largePanReuse:true,zoomReturnReuse:true,independentModelLayerRun:true}));await page.close();
+  console.log(JSON.stringify({viewport,completeFrames:143,smallPanReuse:true,largePanReuse:true,zoomReturnReuse:true,independentModelLayerRun:true,layerMenuBeforeArchiveAndImagery:true}));await page.close();
  }
 }finally{await browser.close();server.close();}

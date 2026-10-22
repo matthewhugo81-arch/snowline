@@ -78,3 +78,17 @@ test('briefing offers optional products before any product metadata has loaded',
  assert.equal(briefingPresets(ordinary,PRODUCT_FIELDS,'snowline_ecmwf_ensemble').filter(p=>p.key.startsWith('ens_temperature_le')).length,0);
  assert.equal(briefingPresets(ordinary,PRODUCT_FIELDS,'snowline_gefs_ensemble').filter(p=>p.group==='Temperature anomalies').length,0);
 });
+
+test('probabilities lead the menus, cold thresholds descend from zero, and snow risk belongs with rain and snow',async()=>{
+ const {briefingPresets}=await import('../map-briefing-data.js');
+ const snow=describeVariable('snowfall_probability',{});
+ assert.equal(snow.group,'Rain & snow');assert.equal(variableGroup(snow.key),'Rain & snow');
+ const expected=['0','m2','m5','m10'].map(t=>'ens_temperature_le'+t+'c_24h');
+ const mixed=[snow,...productChoices('ukmo_uk_ensemble_2km')].reverse();
+ const meta={variables:mixed.map(f=>f.key)};
+ for(const choices of [availableFields(mixed,[meta]),briefingPresets(meta,mixed)]){
+  assert.equal(choices[0].group,'Ensemble probabilities');
+  assert.deepEqual(choices.filter(f=>f.key.startsWith('ens_temperature_le')).map(f=>f.key),expected);
+  assert.equal(choices.at(-1).key,'snowfall_probability');
+ }
+});
