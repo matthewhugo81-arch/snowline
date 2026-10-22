@@ -29,6 +29,8 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Check accumulation windows and pinned previous-run panels
         run: node tests/accumulation-history-browser.mjs
+      - name: Check shared chart storage across four windows and mobile limits
+        run: node tests/shared-cache-browser.mjs
       - name: Check fixed rainfall periods and North Atlantic framing
         run: node tests/accumulation-periods-browser.mjs
       - name: Check UKV completed fallback, rollover and exact-cycle loading

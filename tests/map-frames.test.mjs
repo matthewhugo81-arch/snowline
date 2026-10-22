@@ -148,6 +148,17 @@ test('background warming waits, loads one future image at a time, and covers com
  map.load(second);await second.ready;cache.clear();
 });
 
+test('a full disk cache still advances the rolling playback buffer without distant work',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),cache=new ForecastFrames(map,'limited',{canPreload:()=>false});
+ const current=await loaded(cache,map,'now');cache.show(current,.8,'linear');
+ cache.warm({keep:new Set(['now','next']),upcoming:['next'],all:['distant']});t.mock.timers.tick(180);
+ const next=cache.frames.get('next');assert.ok(next);map.load(next);await next.ready;await Promise.resolve();
+ assert.equal(cache.frames.has('distant'),false);cache.show(next,.8,'linear');
+ cache.warm({keep:new Set(['next','later']),upcoming:['later'],all:['distant']});t.mock.timers.tick(180);
+ assert.ok(cache.frames.has('later'));assert.equal(cache.frames.has('distant'),false);cache.clear();
+});
+
 test('panning suspends old images so they cannot compete for tiles in the new viewport',async()=>{
  const map=new FakeMap(),cache=new ForecastFrames(map,'a');
  const first=await loaded(cache,map,'first'),current=await loaded(cache,map,'current');cache.show(current,.8,'linear');

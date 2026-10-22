@@ -22,7 +22,7 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purp
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261020-layout-playback';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-zoom-cache';
-import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261021-zoom-cache';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-shared-cache';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
@@ -102,7 +102,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
-},{persistent:true,...forecastRenderBudget(navigator),onLimit:()=>updatePreloadStatus()});
+},{persistent:true,coordinate:true,adaptive:true,cacheVersion:'render-20261022-shared',diskEntries:65536,...forecastRenderBudget({hardwareConcurrency:navigator.hardwareConcurrency,deviceMemory:navigator.deviceMemory,mobile:matchMedia('(max-width: 650px), (pointer: coarse)').matches}),onLimit:()=>updatePreloadStatus()});
 imageryCache.setContext('complete-geographic-tiles');
 maplibregl.addProtocol('om',(params,controller)=>imageryCache.protocol(params,controller));
 window.addEventListener('pagehide',()=>imageryCache.release());
@@ -347,12 +347,15 @@ function updatePreloadStatus(){
  if(cached>loaded)message=cached+'/'+total+' frames cached · '+loaded+'/'+total+' ready for this view'+(failed?' · '+failed+' unavailable':'');
  if(complete)message='All '+total+' frames loaded';
  if(choices.some(({field})=>accumulationHours(field)))message='Accumulations · selected period first; nearby totals cached'+(failed?' · '+failed+' unavailable':'');
- if(imageryCache.limited)message='Storage limited · nearby frames cached';
+ const storage=imageryCache.storageStatus(),limitedText=storage.reason==='budget'?'Chart cache budget reached':storage.reason==='browser-quota'?'Browser storage allowance reached':storage.reason==='memory'?'Chart memory buffer full':'Browser storage unavailable';
+ if(imageryCache.limited)message=limitedText+' · nearby frames buffered';
+ const detail=$('chart-cache-details');
+ if(detail)detail.textContent=(Number.isFinite(storage.bytes)?(storage.bytes/1048576).toFixed(0)+' MiB cached / ':'')+(storage.budget/1048576).toFixed(0)+' MiB disk budget. '+(storage.coordinated?'Shared across '+(storage.windows??1)+' active window(s). ':'Separate cache for this window. ')+(imageryCache.limited?limitedText+'. Selected and nearby charts continue loading; distant frames load when selected. ':'Selected charts load first; remaining frames prepare in the background. ')+'Prepared tile memory is capped at 32 MiB per window; map rendering uses additional memory.';
  const progress=$('preload-status');progress.textContent=message;progress.dataset.complete=String(complete);progress.dataset.loaded=String(loaded);progress.dataset.cached=String(cached);progress.dataset.total=String(total);
  const outlineFailed=choices.some(({key})=>panels[key]?.coastline.state.status==='error');
  $('retry-preload').hidden=!failedSelection&&!outlineFailed&&(!failed||imageryCache.limited);
  $('retry-preload').textContent=outlineFailed||failedSelection?.outline?'Retry map outline':failedSelection?'Retry selected frame':'Retry background loading';
- if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?'storage limited; selected and nearby frames available':complete?'all frames loaded':cached>loaded?cached+'/'+total+' cached · '+loaded+'/'+total+' ready for view':loaded+'/'+total+' frames loaded');
+ if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?limitedText.toLowerCase()+'; nearby frames buffered':complete?'all frames loaded':cached>loaded?cached+'/'+total+' cached · '+loaded+'/'+total+' ready for view':loaded+'/'+total+' frames loaded');
 }
 function orderForecastBasemap(panel){
  if(panel.styleOrdered)return;
@@ -408,6 +411,10 @@ async function prepareSelection(index,valid=()=>true){
  imageryCache.setSequence(choices.flatMap(({key})=>{
   const panel=panels[key],cache=panel.frameCache;
   return panel.frameURLs.filter(Boolean).flatMap(url=>[url,...cache.decorate(url).map(group=>group.source.url)]);
+ }));
+ imageryCache.setProtected(choices.flatMap(({key})=>{
+  const panel=panels[key],cache=panel.frameCache;
+  return [...frameWindow(panel.frameURLs,index,frameBudget()).keep].flatMap(url=>[url,...cache.decorate(url).map(group=>group.source.url)]);
  }));
  const prepared=await Promise.all(choices.map(async({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
