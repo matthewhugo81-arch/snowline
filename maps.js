@@ -6,7 +6,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-briefing-products';
+import {forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261022-anomaly-headers';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -166,7 +166,7 @@ const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
 if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isFinite(initialLon)&&Math.abs(initialLat)<=90&&Math.abs(initialLon)<=180){state.location={latitude:initialLat,longitude:initialLon};$('nav-charts').href='./?'+new URLSearchParams({lat:initialLat,lon:initialLon,time:params.get('time')??''});}
 function modelName(id){return MODELS.find(m=>m.id===sourceModel(id))?.name??id;}
 function panelRunLabel(model){return modelName(model)+' · '+runLabel(state.metas[model])+(state.metas[model]?.completed===false?' · updating':'');}
-function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · '+forecastValidity(field,time,state.metas[model]);}
+function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+forecastChartTitle(field,fields.find(f=>f.key===field).name,time,state.metas[model]);}
 function status(message){$('map-status').textContent=message;}
 function usageUpdate(){$('usage-summary').textContent=usageText();}window.addEventListener('snowline-usage',usageUpdate);usageUpdate();
 const modelGroups=[
@@ -919,7 +919,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261022-three-hour-runs').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261022-anomaly-headers').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

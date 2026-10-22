@@ -1,6 +1,6 @@
 import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-briefing-products';
+import {forecastValidity,forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261022-anomaly-headers';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261020-run-selector';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
@@ -113,7 +113,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   let loaded=0,failed=0,unavailable=0;const started=performance.now();
   const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+(runCount()-unavailable)+' available charts ready'+(unavailable?' · '+unavailable+' run'+(unavailable===1?'':'s')+' without data at this time':'')+(failed?' · '+failed+' failed to load':loaded+unavailable===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(hours?' · Shared period: '+accumulationPeriod(p.field,time):' · Valid time / periods: '+selected().map(m=>forecastTimeLabel(p.field,time,m)).filter((v,i,a)=>a.indexOf(v)===i).join(' / '));};
   const show=(c,src,meta)=>{
-   const description=model.name+' · Run '+runLabel(meta)+' · '+p.name+' · '+forecastValidity(p.field,time,meta),subtitle=briefingCaption(meta,p,time);
+   const description=model.name+' · Run '+runLabel(meta)+' · '+forecastChartTitle(p.field,p.name,time,meta),subtitle=briefingCaption(meta,p,time);
    const info={title:description,subtitle,scales:chartScales(fields.find(f=>f.key===p.field),subtitle,p.id==='weather')};
    const img=document.createElement('img');img.src=src;img.alt=description;img.decoding='async';c.button.replaceChildren(img);c.button.disabled=false;c.card.dataset.ready='true';imageMenu?.registerImage(img,info);
    c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();};loaded++;

@@ -7,6 +7,8 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 
 const instant=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
+const temperatureAnomaly=field=>/^ens_temperature_(min|max)_anomaly$/.test(field);
+const ordinal=day=>day+(day%100>=11&&day%100<=13?'th':({1:'st',2:'nd',3:'rd'}[day%10]??'th'));
 const periodStamp=(date,year)=>{
  const parts=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',...(year?{year:'numeric'}:{}),hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'UTC'}).formatToParts(date);
  const part=type=>parts.find(p=>p.type===type).value;
@@ -40,10 +42,16 @@ export function forecastValidity(field,time,meta){
  if(!bounds)return (unknownPeriods.has(field)?'Period ending ':'Valid ')+instant.format(end)+' UTC'+(unknownPeriods.has(field)?' · duration unspecified':'');
  const start=new Date(bounds.start),year=start.getUTCFullYear()!==end.getUTCFullYear();
  const period='VALID '+periodStamp(start,year)+' to '+periodStamp(end,year)+' UTC';
- if(/^ens_temperature_(min|max)_anomaly$/.test(field)){
+ if(temperatureAnomaly(field)){
   const minimum=field==='ens_temperature_min_anomaly';
-  const day=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(minimum?end:start);
-  return 'Attributed to '+day+' · '+period;
+  const attributed=minimum?end:start;
+  const day=new Intl.DateTimeFormat('en-GB',{weekday:'short',timeZone:'UTC'}).format(attributed)+' '+ordinal(attributed.getUTCDate());
+  return '24 hr '+(minimum?'Minimum':'Maximum')+' Temperature Anomaly for '+day+' - '+period;
  }
  return period;
+}
+// Anomaly validity already includes the chart name and its attributed day.
+export function forecastChartTitle(field,name,time,meta){
+ const validity=forecastValidity(field,time,meta);
+ return temperatureAnomaly(field)?validity:name+' · '+validity;
 }
