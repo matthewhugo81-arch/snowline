@@ -8,6 +8,7 @@ import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type
 import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-clean-symbols';
+import {MOGREPS_UK,mogrepsUKCycle,selectMogrepsUKRun} from './mogreps-run-selection.js?v=20261022-three-hour-runs';
 import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mogreps-global.js?v=20261020-native-levels';
 
 import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261014-interaction-audit';
@@ -143,7 +144,7 @@ export async function loadSpatialModel(model,load){
  if(!published.some(publishedRun)&&!early)throw results.find(result=>result.status==='rejected')?.reason??new Error('No published model hours yet.');
  const latest=published.some(publishedRun)?await chooseRun(...published):early;
  const family=ukvRunFamily(model);
- let primary=latest===early?early:{...(family?await selectUKVRun(latest,base,load,family):await chooseRun(latest)),domain,baseURL};
+ let primary=latest===early?early:{...(family?await selectUKVRun(latest,base,load,family):model===MOGREPS_UK?await selectMogrepsUKRun(latest,base,load,published):await chooseRun(latest)),domain,baseURL};
  if(early&&Date.parse(early.reference_time)>Date.parse(primary.reference_time))primary=early;
  if(domain===MOGREPS_GLOBAL&&!verifiedMogrepsGlobal(primary))throw Error('Unverified MOGREPS-G run metadata.');
  if(domain===MOGREPS_GLOBAL)historyBases.set(domain,baseURL);
@@ -194,7 +195,7 @@ export async function loadSpatialModel(model,load){
    warnings.push('Member snowfall probabilities are being prepared for this initialization; incoming precipitation probability is available.');
   }
  }
- const completedReferenceTime=published.filter(m=>publishedRun(m)&&m.completed===true).sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0]?.reference_time;
+ const completedReferenceTime=published.filter(m=>publishedRun(m)&&m.completed===true&&(model!==MOGREPS_UK||mogrepsUKCycle(m.reference_time))).sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0]?.reference_time;
  return withHarmoniePressure({...combineSources(primary,other.filter(Boolean)),completedReferenceTime,ensembleNote:domain===MOGREPS_GLOBAL?MOGREPS_GLOBAL_NOTE:MOGREPS_MODELS.find(model=>model.id===domain)?.ensembleNote,sourceWarnings:warnings,freshnessWarning,publicationStatus},load);
 }
 
@@ -204,6 +205,7 @@ export async function loadSpatialRun(model,referenceTime,load){
  const domain=domains[model===UKV_NOWCAST?UKV:model];
  if(!domain)throw Error('Archived runs are not supported for this model.');
  const reference=Date.parse(referenceTime);if(!Number.isFinite(reference))throw Error('Invalid archive run time.');
+ if(model===MOGREPS_UK&&!mogrepsUKCycle(referenceTime))throw Error('MOGREPS-UK charts use 00, 03, 06, 09, 12, 15, 18 and 21 UTC runs. Select a three-hourly run.');
  const family=ukvRunFamily(model);
  if(family&&((new Date(reference).getUTCHours()%3===0?'main':'nowcast')!==family))throw Error('Archived UKV run is in a different run family.');
  let baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;

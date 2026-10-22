@@ -32,7 +32,7 @@ import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPa
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261020-ifs-coverage';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261021-harmonie-pressure';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261022-three-hour-runs';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261022-briefing-products';
@@ -40,7 +40,7 @@ import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-attribution';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-product-dates';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-three-hour-runs';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
@@ -919,7 +919,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261022-briefing-products').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261022-three-hour-runs').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

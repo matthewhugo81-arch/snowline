@@ -35,7 +35,15 @@ try{
   await page.route('**/map-briefing.js*',async r=>r.fulfill({contentType:'text/javascript',body:(await readFile('map-briefing.js','utf8')).replace('},close};','},close,refresh:refreshRun};')}));
   await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({json:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'white'}}]}}));
   await page.route('**/coastline.geojson',r=>r.fulfill({json:{type:'FeatureCollection',features:[]}}));
-  await page.route('https://openmeteo.s3.amazonaws.com/**',r=>r.fulfill({json:native}));
+  await page.route('https://openmeteo.s3.amazonaws.com/**',r=>{
+   const url=r.request().url();
+   // Hourly upstream indexes must not enter the three-hourly MOGREPS chart menu.
+   if(url.includes('/'+UK+'/')&&/\/(latest|in-progress)\.json$/.test(url)){
+    const h=url.endsWith('latest.json')?13:14;
+    return r.fulfill({json:{...native,reference_time:`2026-10-21T${h}:00:00Z`,valid_times:native.valid_times.filter(t=>Date.parse(t)>=Date.parse(`2026-10-21T${h}:00:00Z`))}});
+   }
+   return r.fulfill({json:native});
+  });
   await page.route('**/ensemble-data/**',r=>r.request().url().includes('/snowline_ecmwf_ensemble/')?r.fulfill({json:{...native,domain:'snowline_ecmwf_ensemble',format_version:1,member_count:51}}):r.fulfill({status:404,json:{error:true}}));
   await page.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:r.request().url().includes('/snowline_ecmwf_products/')?{...product,domain:'snowline_ecmwf_products',member_count:51,source_cycles:[productReference],variables:product.variables.filter(k=>!cold.includes(k))}:product}));
   const ready=()=>page.waitForFunction(()=>!document.getElementById('map-variable').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'),{},{timeout:60000});
@@ -48,6 +56,8 @@ try{
   if(viewport.width<651)await page.locator('#mobile-map-settings').click();
   assert.equal(requests.filter(u=>u.includes('/ensemble-products/')).length,0,'Ordinary startup has no product requests');
   await page.locator('#map-model').selectOption(UK);await ready();
+  assert.ok((await page.locator('#map-run option').evaluateAll(os=>os.map(o=>o.value))).every(v=>new Date(v.split('@')[1]).getUTCHours()%3===0));
+  assert.ok(!requests.some(u=>u.includes('/'+UK+'/')&&/\/(1300|1400)Z\/meta.json/.test(u)));
   assert.equal(requests.filter(u=>u.includes('/ensemble-products/')).length,0,'Selecting MOGREPS alone does not load products');
   assert.equal(await page.locator('#map-variable optgroup[label="Temperature anomalies"] option:disabled').count(),0);
   await ordered('#map-variable');
@@ -55,6 +65,7 @@ try{
   await page.locator(viewport.width<651?'#mobile-briefing':'#open-briefing').click();
   const briefingReady=()=>page.waitForFunction(()=>document.getElementById('briefing-preset')&&!document.getElementById('briefing-preset').disabled&&/charts ready/.test(document.getElementById('briefing-status').textContent)&&!document.querySelector('#briefing-grid .briefing-card:not([data-ready="true"])'),{},{timeout:60000});
   await briefingReady();
+  assert.ok((await page.locator('#briefing-run-select option').evaluateAll(os=>os.map(o=>o.value))).every(v=>new Date(v.split('@')[1]).getUTCHours()%3===0));
   console.log('Ordinary briefing ready',viewport.width);
   assert.equal(requests.filter(u=>u.endsWith('publication.json')).length,0,'Ordinary briefing does not fetch product data');
   await ordered('#briefing-preset');

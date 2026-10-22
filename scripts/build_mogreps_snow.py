@@ -127,25 +127,61 @@ def write_frame(config, run, hour, path):
     return record
 
 
-def build(model, root, hours=None, workers=2):
-    config = CONFIG[model]
+def three_hour_cycle(reference):
+    return datetime.fromisoformat(reference).timestamp() % (3 * 3600) == 0
+
+
+def select_upstream(config):
+    """Select UTC 00/03/06/... chart runs, without changing raw member inputs."""
+    base = 'https://openmeteo.s3.amazonaws.com/data_spatial/' + config['native'] + '/'
     candidates = []
     for filename in ('latest.json', 'in-progress.json'):
         try:
-            meta = fetch('https://openmeteo.s3.amazonaws.com/data_spatial/' + config['native'] + '/' + filename).json()
+            meta = fetch(base + filename).json()
             if meta.get('valid_times'):
                 candidates.append(meta)
         except requests.RequestException:
             pass
     if not candidates:
         raise ValueError('No verified MOGREPS run available')
-    upstream = max(candidates, key=lambda m: (m['reference_time'], len(m['valid_times'])))
-    run = datetime.fromisoformat(upstream['reference_time'])
+    candidates.sort(key=lambda m: (datetime.fromisoformat(m['reference_time']), len(m['valid_times'])), reverse=True)
+    newest = datetime.fromisoformat(candidates[0]['reference_time']).astimezone(timezone.utc)
+    if newest.minute or newest.second or newest.microsecond:
+        raise ValueError('Invalid MOGREPS initialization')
+    run = newest.replace(hour=newest.hour // 3 * 3)
+    while run >= newest - timedelta(hours=24):
+        meta = next((m for m in candidates if datetime.fromisoformat(m['reference_time']) == run), None)
+        if meta is None:
+            try:
+                meta = fetch(base + run.strftime('%Y/%m/%d/%H00Z/meta.json')).json()
+            except requests.HTTPError as error:
+                if error.response.status_code != 404:
+                    raise
+                run -= timedelta(hours=3)
+                continue
+        if datetime.fromisoformat(meta['reference_time']) != run:
+            raise ValueError('MOGREPS metadata does not match requested initialization')
+        times = meta.get('valid_times')
+        if times == []:
+            run -= timedelta(hours=3)
+            continue
+        if not isinstance(times, list) or not times or not meta.get('variables') or any(datetime.fromisoformat(t) < run for t in times):
+            raise ValueError('Invalid MOGREPS metadata')
+        return meta
+    raise ValueError('No three-hourly MOGREPS run published within 24 hours')
+
+
+def build(model, root, hours=None, workers=2):
+    config = CONFIG[model]
+    upstream = select_upstream(config)
+    run = datetime.fromisoformat(upstream['reference_time']).astimezone(timezone.utc)
     domain_root = root / config['domain']
     latest = domain_root / 'latest.json'
     previous = json.loads(latest.read_text()) if latest.exists() else None
-    if previous and previous['reference_time'] > iso(run):
-        return  # Never roll an already published run backwards.
+    if previous:
+        previous_time = datetime.fromisoformat(previous['reference_time']).astimezone(timezone.utc)
+        if previous_time.replace(hour=previous_time.hour // 3 * 3) > run:
+            return  # Only migrate an hourly index within its same three-hour block.
     folder = domain_root / run.strftime('%Y/%m/%d/%H00Z')
     folder.mkdir(parents=True, exist_ok=True)
     expected = sorted({int((datetime.fromisoformat(t) - run).total_seconds() / 3600) for t in upstream['valid_times'] if datetime.fromisoformat(t) > run})
@@ -189,8 +225,10 @@ def build(model, root, hours=None, workers=2):
     # Three cycles support comparison and allow already-open pages to finish.
     folders = sorted(domain_root.glob('*/*/*/*Z'), reverse=True)
     from run_retention import last_complete_folder
-    protected = last_complete_folder(domain_root, metadata['reference_time'])
-    keep = set(folders[:3] if not protected or protected in folders[:3] else folders[:2] + [protected])
+    eligible = [p for p in folders if p.name in {f'{h:02d}00Z' for h in range(0, 24, 3)}]
+    protected = last_complete_folder(domain_root, metadata['reference_time'],
+                                     reference_filter=lambda ref: three_hour_cycle(ref.isoformat()))
+    keep = set(eligible[:3] if not protected or protected in eligible[:3] else eligible[:2] + [protected])
     for old in folders:
         if old in keep:
             continue

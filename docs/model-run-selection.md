@@ -34,6 +34,19 @@ identity errors and incomplete intervening cycles never qualify as a fallback.
 Failed checks retain verified displayed metadata. UKV retains its main-cycle
 restriction; no point-forecast API behaviour changes.
 
+MOGREPS-UK 2 km chart runs also use 00, 03, 06, 09, 12, 15, 18 and 21 UTC.
+Maps, Forecast Briefing and Previous Run Analysis select the same dated cycles.
+An hourly upstream latest index is resolved to the newest published three-hourly
+initialization; archived selections and completion hints cannot introduce an
+intervening hourly run. Forecast steps and each field's reporting periods remain
+unchanged. The generated native snowfall supplement builds only these cycles,
+reuses existing frames and retains three runs with complete-predecessor protection.
+Old hourly generations age out through that retention policy. This reduces new
+generation work, but does not imply a threefold reduction in total hosted storage:
+native grids are upstream and the retained generation count remains three.
+The separate full 18-member probability products still use all six hourly member
+cycles, and their six-hourly initialization anchors remain unchanged.
+
 Native models use existing dated Open-Meteo OM grids. No native run is copied
 to Snowline, and no bulk imagery download is added to the browser. The checked
 native source runs on 20 October 2026 occupied about 124.6 GiB upstream; this is

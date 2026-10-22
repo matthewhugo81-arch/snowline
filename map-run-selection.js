@@ -1,15 +1,17 @@
-import {loadSpatialModel,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261021-harmonie-pressure';
+import {loadSpatialModel,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261022-three-hour-runs';
 import {publishedRun,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
-import {runCandidates} from './map-previous-run-data.js?v=20261020-compact-controls';
+import {runCandidates} from './map-previous-run-data.js?v=20261022-three-hour-runs';
 import {formatModelRun} from './map-model-run-menu.js?v=20261020-run-selector';
 import {ukvRunFamily,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {completedSources} from './map-ukmo-early.js?v=20261021-early';
+import {MOGREPS_UK,mogrepsUKCycle} from './mogreps-run-selection.js?v=20261022-three-hour-runs';
 
 export const sourceModel=id=>id.split('@')[0].replace(/_previous$/,'');
 export const selectedReference=id=>id.includes('@')?id.slice(id.indexOf('@')+1):null;
 export const selectedRunKey=(model,meta)=>sourceModel(model)+'@'+new Date(meta.reference_time).toISOString();
 export function completedModelRun(model,meta){
  if(!publishedRun(meta))return false;
+ if(sourceModel(model)===MOGREPS_UK&&!mogrepsUKCycle(meta.reference_time))return false;
  const sources=(meta.sources??[meta]).filter(s=>!(model==='knmi_harmonie_arome_europe'&&s.harmoniePressureSupplement===true)),reference=Date.parse(meta.reference_time);
  if(!completedSources(sources)||!sources.every(s=>Date.parse(s.reference_time)===reference))return false;
  return model!=='gfs_global'||sources.some(s=>s.domain==='ncep_gfs025');
@@ -38,7 +40,7 @@ export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpati
   // UKV's shared latest index can point to an intervening nowcast. It must
   // not interrupt discovery of the previous complete main initialization.
   const hint=incoming.completedReferenceTime,family=ukvRunFamily(model);
-  if(hint&&(!family||cycleFamily(hint)===family)&&Date.parse(hint)<reference&&!candidates.some(t=>Date.parse(t)===Date.parse(hint)))candidates.push(hint);
+  if(hint&&(!family||cycleFamily(hint)===family)&&(model!==MOGREPS_UK||mogrepsUKCycle(hint))&&Date.parse(hint)<reference&&!candidates.some(t=>Date.parse(t)===Date.parse(hint)))candidates.push(hint);
   candidates.sort((a,b)=>Date.parse(b)-Date.parse(a));
   for(const ref of candidates){
    if(previous&&Date.parse(ref)<=Date.parse(previous.reference_time))break;

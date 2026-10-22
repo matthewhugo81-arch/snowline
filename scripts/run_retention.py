@@ -3,12 +3,14 @@ import json
 from datetime import datetime
 
 
-def last_complete_folder(domain_root, before=None):
+def last_complete_folder(domain_root, before=None, reference_filter=None):
     candidates = []
     for folder in domain_root.glob('*/*/*/*Z'):
         try:
             meta = json.loads((folder / 'meta.json').read_text())
             reference = datetime.fromisoformat(meta['reference_time'].replace('Z', '+00:00'))
+            if reference_filter is not None and not reference_filter(reference):
+                continue
             if before and reference >= datetime.fromisoformat(before.replace('Z', '+00:00')):
                 continue
             if folder != domain_root / reference.strftime('%Y/%m/%d/%H%MZ'):

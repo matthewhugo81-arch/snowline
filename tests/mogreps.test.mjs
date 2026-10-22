@@ -42,12 +42,12 @@ test('MOGREPS maps use published native probability grids and preserve their act
  }
 });
 
-test('MOGREPS in-progress and archive selections preserve the exact cycle and published times',async()=>{
- assert.deepEqual(runCandidates(MOGREPS_MODELS[0].id,t(12),3),[t(11),t(10),t(9)]);
- const id=MOGREPS_MODELS[0].id,complete=fixture(),progress={...complete,completed:false,reference_time:t(1),valid_times:[1,2,3,4].map(t)};
+test('MOGREPS three-hourly in-progress and archive selections preserve exact cycles and forecast steps',async()=>{
+ assert.deepEqual(runCandidates(MOGREPS_MODELS[0].id,t(12),3),[t(9)]);
+ const id=MOGREPS_MODELS[0].id,complete=fixture(),progress={...complete,completed:false,reference_time:t(3),valid_times:[3,4,5,6].map(t)};
  const meta=await loadSpatialModel(id,async url=>url.endsWith('in-progress.json')?progress:complete);
- assert.equal(meta.reference_time,t(1));assert.deepEqual(meta.valid_times,progress.valid_times);
- assert.equal(fieldDataURL(meta,probability,t(5)),null);
+ assert.equal(meta.reference_time,t(3));assert.deepEqual(meta.valid_times,progress.valid_times);
+ assert.equal(fieldDataURL(meta,probability,t(8)),null);
  const archive=await loadSpatialRun(id,t(0),async url=>{assert.equal(url,SPATIAL_BASE+id+'/2026/10/13/1200Z/meta.json');return complete;});
  assert.equal(archive.reference_time,t(0));assert.match(archive.ensembleNote,/only 3 members/);
  await assert.rejects(loadSpatialRun(id,t(0),async()=>progress),/does not match/);

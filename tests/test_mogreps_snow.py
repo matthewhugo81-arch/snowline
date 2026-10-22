@@ -3,6 +3,10 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import tempfile
 import unittest
+import json
+import sys
+from unittest.mock import patch, Mock
+import requests
 
 from netCDF4 import Dataset
 import numpy as np
@@ -10,6 +14,102 @@ import numpy as np
 spec = importlib.util.spec_from_file_location('snow', Path(__file__).parents[1] / 'scripts/build_mogreps_snow.py')
 snow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(snow)
+sys.path.insert(0, str(Path(__file__).parents[1] / 'scripts'))
+
+
+class RunSelectionTests(unittest.TestCase):
+    @staticmethod
+    def metadata(hour, **changes):
+        reference = datetime(2026, 10, 22, tzinfo=timezone.utc) + timedelta(hours=hour)
+        return dict(reference_time=snow.iso(reference), completed=True,
+                    variables=['precipitation_probability'],
+                    valid_times=[snow.iso(reference + timedelta(hours=h)) for h in (1, 2, 3, 6)], **changes)
+
+    @staticmethod
+    def loader(records, calls):
+        def fetch(url):
+            calls.append(url)
+            for suffix, meta in records.items():
+                if url.endswith(suffix):
+                    if isinstance(meta, Exception):
+                        raise meta
+                    return Mock(json=lambda: meta)
+            raise requests.HTTPError(response=Mock(status_code=404))
+        return fetch
+
+    def test_completed_index_avoids_extra_lookup_and_keeps_forecast_steps(self):
+        calls = []
+        records = {'latest.json': self.metadata(0), 'in-progress.json': self.metadata(2)}
+        with patch.object(snow, 'fetch', self.loader(records, calls)):
+            self.assertEqual(snow.select_upstream(snow.CONFIG['uk']), self.metadata(0))
+        self.assertEqual(len(calls), 2)
+
+    def test_only_aligned_cycles_are_looked_up_across_midnight(self):
+        calls = []
+        records = {'latest.json': self.metadata(1), 'in-progress.json': self.metadata(2),
+                   '2026/10/21/2100Z/meta.json': self.metadata(-3)}
+        with patch.object(snow, 'fetch', self.loader(records, calls)):
+            self.assertEqual(snow.select_upstream(snow.CONFIG['uk']), self.metadata(-3))
+        self.assertTrue(calls[-2].endswith('2026/10/22/0000Z/meta.json'))
+        self.assertTrue(calls[-1].endswith('2026/10/21/2100Z/meta.json'))
+        self.assertEqual(len(calls), 4)
+
+    def test_wrong_identity_and_network_failure_do_not_use_older_cycles(self):
+        for value in (self.metadata(-3), requests.HTTPError(response=Mock(status_code=503)), requests.Timeout()):
+            calls = []
+            records = {'latest.json': self.metadata(2), 'in-progress.json': self.metadata(2),
+                       '2026/10/22/0000Z/meta.json': value}
+            with patch.object(snow, 'fetch', self.loader(records, calls)):
+                with self.assertRaises((ValueError, requests.RequestException)):
+                    snow.select_upstream(snow.CONFIG['uk'])
+            self.assertEqual(len(calls), 3)
+
+    def test_all_cycles_and_utc_offsets(self):
+        for hour in range(24):
+            self.assertEqual(snow.three_hour_cycle(self.metadata(hour)['reference_time']), hour % 3 == 0)
+        self.assertTrue(snow.three_hour_cycle('2026-10-22T04:00:00+01:00'))
+        self.assertFalse(snow.three_hour_cycle('2026-10-22T03:30:00Z'))
+
+    def test_publisher_migrates_hourly_index_and_reuses_existing_aligned_frames(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            domain = root / snow.CONFIG['uk']['domain']
+            domain.mkdir()
+            latest = domain / 'latest.json'
+            latest.write_text(json.dumps(self.metadata(2)))
+            # Existing hourly folders must not crowd out the new 00Z generation
+            # or its complete 21Z predecessor during migration.
+            for hour in (-3, 1, 2):
+                meta = self.metadata(hour)
+                folder = domain / datetime.fromisoformat(meta['reference_time']).strftime('%Y/%m/%d/%H00Z')
+                folder.mkdir(parents=True)
+                (folder / 'meta.json').write_text(json.dumps(meta))
+                for time in meta['valid_times']:
+                    (folder / (time[:16].replace(':', '') + '.om')).write_bytes(b'fixture')
+
+            def write(config, run, hour, path):
+                record = dict(interval_hours=1, members=[1, 2, 3])
+                path.write_bytes(b'fixture')
+                path.with_suffix('.json').write_text(json.dumps(record))
+                return record
+
+            with patch.object(snow, 'select_upstream', return_value=self.metadata(0)), patch.object(snow, 'write_frame', side_effect=write) as writer:
+                snow.build('uk', root)
+                published = json.loads(latest.read_text())
+                self.assertEqual(published['reference_time'], self.metadata(0)['reference_time'])
+                self.assertEqual(published['valid_times'], self.metadata(0)['valid_times'])
+                self.assertTrue(published['completed'])
+                self.assertEqual(sorted(p.name for p in domain.glob('*/*/*/*Z')), ['0000Z', '2100Z'])
+                self.assertEqual(writer.call_count, 4)
+                snow.build('uk', root)
+                self.assertEqual(writer.call_count, 4, 'Repeated builds must reuse all prepared frames')
+            # A previously published eligible cycle is never rewound.
+            for hour in (3, 5):
+                latest.write_text(json.dumps(self.metadata(hour)))
+                with patch.object(snow, 'select_upstream', return_value=self.metadata(0)), patch.object(snow, 'write_frame') as writer:
+                    snow.build('uk', root)
+                    writer.assert_not_called()
+                    self.assertEqual(json.loads(latest.read_text())['reference_time'], self.metadata(hour)['reference_time'])
 
 
 class ProbabilityTests(unittest.TestCase):
