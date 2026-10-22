@@ -118,6 +118,8 @@ jobs:
           wait "$extra_ecmwf" || echo '::warning::Optional ECMWF fields deferred; retaining last verified publication.'
       - name: Restore matching native HARMONIE sea-level pressure
         continue-on-error: true
+        env:
+          KNMI_API_KEY: ${{ secrets.KNMI_API_KEY }}
         run: timeout --kill-after=15s 180s python scripts/build_harmonie_pressure.py
       - name: Record source-to-publication health without changing model timestamps
         continue-on-error: true

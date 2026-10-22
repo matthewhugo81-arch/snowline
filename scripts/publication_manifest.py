@@ -79,6 +79,8 @@ def main():
         return
     if size > args.budget:
         raise SystemExit(f'Publication exceeds {args.budget:,}-byte budget; previous live site is preserved')
+    if size >= args.budget * 0.9:
+        print(f'::warning::Publication headroom is {args.budget-size:,} bytes ({100*(args.budget-size)/args.budget:.1f}%); review data growth before adding more feeds')
     previous = None
     if args.live_url:
         try:

@@ -132,7 +132,7 @@ try{
    assert.equal(await page.locator('#map-run option').count(),1,'Only the published product run is offered');
    assert.match(await page.locator('#map-run option').textContent(),/06Z · ensemble products$/);
    assert.match(await page.locator('#panel-label-a').textContent(),anomaly===anomalies[0]?/24 hr Minimum Temperature Anomaly for Fri 23rd/:/24 hr Maximum Temperature Anomaly for Thu 22nd/);
-   assert.match(await page.locator('#panel-label-a').textContent(),/VALID Fri 23 Oct 0900 UTC/);
+   assert.match(await page.locator('#panel-label-a').textContent(),/VALID Fri 23 Oct 0900 UTC$/);
    assert.equal(await page.locator('#map-time-label').textContent(),'Fri 23 Oct 0900');
    assert.equal(await page.locator('#map-start-time option:checked').textContent(),'Fri 23 Oct 0900');
    assert.match(await page.locator('#legend-interval-a').textContent(),/10-22 09:00 to 10-23 09:00 UTC/,'The legend retains the full 24-hour window');
@@ -166,7 +166,7 @@ try{
   await page.locator('#map-variable').selectOption(key);await ready();
   assert.equal(await page.locator('#map-variable').inputValue(),key);
   assert.match(await page.evaluate(()=>window.productPanels.a.url),/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
-  assert.match(await page.locator('#panel-label-a').textContent(),/VALID Thu 22 Oct 0000 UTC/);
+  assert.match(await page.locator('#panel-label-a').textContent(),/VALID Thu 22 Oct 0000 UTC$/);
   await comparisonLayout(2);
   assert.equal(await page.locator('.timeline-panel-value').first().textContent(),'Thu 22 Oct 0000');
   // The common timeline changes but the other panel remains a normal source.
@@ -185,7 +185,7 @@ try{
   await page.locator('#map-variable').selectOption(key);await ready();
   await page.locator('#map-variable-b').selectOption(six[1]);await ready();
   await comparisonLayout(3);
-  assert.ok((await page.locator('.timeline-panel-value').allTextContents()).every(text=>/^[A-Za-z]{3} \d{1,2} [A-Za-z]{3} \d{4}$/.test(text)),'Three valid times fit without clipping');
+  assert.deepEqual(await page.locator('.timeline-panel-value').allTextContents(),Array(3).fill('Thu 22 Oct 0000'),'All three panels show the same valid time without clipping');
   await page.locator('#compare-maps').uncheck();await ready();
   assert.equal(await page.locator('.comparison-timeline').count(),0,'Single-panel footer returns to its original layout');
   await page.locator('#map-model').selectOption('snowline_ecmwf_ensemble');await ready();
