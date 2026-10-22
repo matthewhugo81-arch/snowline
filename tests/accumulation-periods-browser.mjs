@@ -10,7 +10,7 @@ const root=process.cwd(),types={'.js':'text/javascript','.mjs':'text/javascript'
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!path.startsWith(root+sep))throw Error('Invalid path');const data=await readFile(path);res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(data);}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
-const oldTests=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\nconst geo=/)[1]);
+const oldTests=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\r?\nconst geo=/)[1]);
 const geo={type:'FeatureCollection',features:[]},style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'background',type:'background',paint:{'background-color':'#ffffff'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222222'}}]};
 const UKV='ukmo_uk_deterministic_2km',ref='2026-10-12T12:00:00Z',hour=3600000,periods=[6,12,18,24,36,48,72,120],key=h=>'precipitation_total_'+h+'h';
 const meta=(reference_time,domain=UKV)=>{const cycle=new Date(reference_time).getUTCHours(),ukv=domain===UKV,max=ukv?(cycle%3===0?54:12):168;return {completed:true,reference_time,variables:['temperature_2m','temperature_850hPa','relative_humidity_2m','precipitation','cloud_cover','pressure_msl'],valid_times:Array.from({length:max+1},(_,i)=>new Date(Date.parse(reference_time)+i*hour).toISOString()).filter((_,i)=>ukv||i<=120||i%3===0)};};
@@ -40,7 +40,7 @@ try{
   });
   try{
    await page.goto(origin+'/maps.html?time=2026-10-13T12:00:00Z');
-   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.toLowerCase().includes('valid'),{},{timeout:40000});
    await page.evaluate(async()=>{
     const {Map}=await import('/vendor/maplibre-gl.mjs');const fit=Map.prototype.fitBounds;window.fixtureFits=[];
     Map.prototype.fitBounds=function(bounds,options){window.fixtureFits.push({map:this.getContainer().id,bounds});return fit.call(this,bounds,options);};
@@ -157,7 +157,7 @@ try{
    assert.equal(await page.locator('#briefing-preset').inputValue(),'temperature','The selected comparison chart carries back into sequence');
    await page.locator('#briefing-model').selectOption(UKV);await readySequence();
    await page.locator('#briefing-preset').selectOption('weather');await readySequence();
-   assert.equal(await page.locator('#briefing-time-heading').textContent(),'Starting time');
+   assert.equal(await page.locator('#briefing-time-heading').textContent(),'Forecast time / period · UTC');
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
    await page.locator('#briefing-model').selectOption('gfs_global');await readySequence();
    await page.locator('#briefing-interval').selectOption('6');await readySequence();

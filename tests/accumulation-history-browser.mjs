@@ -10,7 +10,7 @@ const root=process.cwd(),types={'.js':'text/javascript','.mjs':'text/javascript'
 const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!path.startsWith(root+sep))throw Error('Invalid path');const data=await readFile(path);res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(data);}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
-const oldTests=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\nconst geo=/)[1]);
+const oldTests=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(oldTests.match(/const fakeOM=(`[^]*?`);\r?\nconst geo=/)[1]);
 const geo={type:'FeatureCollection',features:[]},style={version:8,sources:{roads:{type:'geojson',data:geo}},layers:[{id:'background',type:'background',paint:{'background-color':'#ffffff'}},{id:'road-lines',source:'roads',type:'line',paint:{'line-color':'#222222'}}]};
 const UKV='ukmo_uk_deterministic_2km',ref='2026-10-12T12:00:00Z',hour=3600000,periods=[6,12,18,24,36,48,72,120],key=h=>'precipitation_total_'+h+'h';
 const meta=(reference_time,domain=UKV)=>{const cycle=new Date(reference_time).getUTCHours(),ukv=domain===UKV,max=ukv?(cycle%3===0?54:12):168;return {completed:true,reference_time,variables:['temperature_2m','temperature_850hPa','relative_humidity_2m','precipitation','cloud_cover','pressure_msl'],valid_times:Array.from({length:max+1},(_,i)=>new Date(Date.parse(reference_time)+i*hour).toISOString()).filter((_,i)=>ukv||i<=120||i%3===0)};};
@@ -43,7 +43,7 @@ try{
   });
   try{
    const start=performance.now();await page.goto(origin+'/maps.html?time=2026-10-13T12:00:00Z');
-   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});const firstMs=performance.now()-start;
+   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.toLowerCase().includes('valid'),{},{timeout:40000});const firstMs=performance.now()-start;
    const opt=await page.locator('#map-variable option').evaluateAll(os=>os.filter(o=>o.value.startsWith('precipitation_total')).map(o=>({key:o.value,disabled:o.disabled})));
    assert.deepEqual(opt,periods.map(h=>({key:key(h),disabled:h>54})), 'All windows are explicit; no extended run substitute');
    assert.equal(await page.evaluate(()=>window.fixtureRequests.some(r=>decodeURIComponent(r.url).includes('precipitation_total'))),false,'No accumulation grid work before selection');
@@ -55,7 +55,7 @@ try{
    await page.screenshot({path:`review-output/accumulation-${viewport.width}.png`});
    metrics.push({viewport:viewport.width,syntheticFirstMapMs:Math.round(firstMs),syntheticSelected24hMs:Math.round(performance.now()-accumStart)});
    if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').check();if(viewport.width<650)await page.locator('#mobile-return-map').click();
-   await page.locator('#map-variable-b').selectOption('temperature_2m');await page.waitForFunction(()=>document.querySelector('#panel-label-b').textContent.includes('Valid'));
+   await page.locator('#map-variable-b').selectOption('temperature_2m');await page.waitForFunction(()=>document.querySelector('#panel-label-b').textContent.toLowerCase().includes('valid'));
    assert.match(await page.locator('#panel-label-a').textContent(),/13 Oct.*12:00/);assert.match(await page.locator('#panel-label-b').textContent(),/13 Oct.*12:00/);
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);

@@ -1,8 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {forecastValidity} from '../map-validity.js';
+import {forecastValidity,forecastTimeLabel,forecastPeriod} from '../map-validity.js';
 import {MAP_AREAS} from '../map-areas.js';
 import {BRIEFING_AREAS} from '../map-briefing-data.js';
+
+test('timeline shows the entire probability and accumulation period',()=>{
+ const end='2026-10-24T00:00:00Z';
+ for(const key of ['ens_gust_gt60kt_24h','precipitation_total_24h'])assert.equal(forecastTimeLabel(key,end),'Fri 23 Oct at 00:00 to Sat 24 Oct at 00:00');
+ assert.equal(forecastTimeLabel('temperature_2m',end),'Sat 24 Oct at 00:00');
+ assert.match(forecastTimeLabel('temperature_2m_max',end),/period end \(duration unspecified\)/);
+});
+
+test('native metadata bounds determine labels independently of playback cadence',()=>{
+ const key='precipitation_mean',end='2026-10-24T00:00:00Z',start='2026-10-23T18:00:00Z';
+ const meta={variables:[key],variable_valid_times:{[key]:[end]},variable_intervals:{[key]:{[end]:{start,end,hours:6}}}};
+ assert.deepEqual(forecastPeriod(key,end,meta),{start,end});
+ assert.equal(forecastTimeLabel(key,end,meta),'Fri 23 Oct at 18:00 to Sat 24 Oct at 00:00');
+ assert.equal(forecastValidity(key,end,meta),'VALID 23 Oct 18:00 to 24 Oct 00:00 UTC');
+});
 
 test('HadUK maxima belong to the starting day and minima to the ending day',()=>{
  for(const [end,startDay,endDay] of [['2026-10-23T09:00:00Z','Thu, 22 Oct 2026','Fri, 23 Oct 2026'],['2026-11-01T09:00:00Z','Sat, 31 Oct 2026','Sun, 1 Nov 2026'],['2027-01-01T09:00:00Z','Thu, 31 Dec 2026','Fri, 1 Jan 2027']]){

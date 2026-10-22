@@ -51,9 +51,16 @@ class GlobalGRIB:
             self.errors[(hour,kind)]=0
             return np.zeros((self.count, 69, 105), np.float32), (0, 0, 'accum')
         arrays, bounds, packing_error = [], None, 0
+        payloads=None
+        if self.model=='ecmwf' and kind in ('min','max'):
+            rows=[self.record(hour,kind,member) for member in range(self.count)]
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                payloads=list(pool.map(lambda item:extra.message(*item),rows))
         for member in range(self.count):
-            url, row = self.record(hour, kind, member)
-            payload = extra.message(url, row)
+            if payloads is None:
+                url, row = self.record(hour, kind, member)
+                payload = extra.message(url, row)
+            else:payload=payloads[member]
             with core._grib_lock:
                 g = core.ec.codes_new_from_message(payload)
                 try:
@@ -68,9 +75,12 @@ class GlobalGRIB:
                     elif template not in (1, 11) or get('perturbationNumber') != member:
                         raise ValueError('Wrong ensemble member')
                     identities = {'gust': (('10fg', '10fg3', '10fg6', 'gust'), ('m s**-1',)), 'precip': (('tp',), ('m', 'kg m**-2')), 'snow': (('sf',), ('m of water equivalent',)), 'rain_occurrence': (('crain',), ('(Code table 4.222)', 'Numeric', '(0 - 1)')), 'snow_occurrence': (('csnow',), ('(Code table 4.222)', 'Numeric', '(0 - 1)'))}
+                    identities.update({'min':(('mn2t3','mn2t6','mn2t'),('K',)), 'max':(('mx2t3','mx2t6','mx2t'),('K',))})
                     names, units = identities[kind]
                     if get('shortName') not in names or get('units') not in units:
                         raise ValueError(f'Wrong native field/units: {get("shortName")} {get("units")}')
+                    if kind in ('min','max') and (get('typeOfLevel')!='heightAboveGround' or get('level')!=2):
+                        raise ValueError('Expected 2 metre temperature extrema')
                     period = (int(get('startStep')), hour, get('stepType'))
                     if bounds is not None and bounds != period: raise ValueError('Member periods differ')
                     bounds = period
@@ -85,6 +95,7 @@ class GlobalGRIB:
                     a = a[int((46-south)/step):int((63-south)/step)+1, int((-16-west)/step):int((10-west)/step)+1]
                     factor=1000 if kind in ('snow','precip') and get('units').startswith('m') else 1
                     a*=factor
+                    if kind in ('min','max'):a-=273.15
                     # Only cumulative IFS differences need a packing-error bound.
                     # GEFS complex packing does not expose this optional key.
                     if self.model=='ecmwf' and kind in ('precip','snow'):
@@ -102,7 +113,7 @@ class GlobalGRIB:
         if self.model == 'ecmwf':
             url = extra.surface_urls(self.source, hour)[1 if member == 0 else 0][0]
             if url not in self.indexes: self.indexes[url] = extra.indexed(url)
-            param = {'gust': ('10fg', '10fg3', '10fg6'), 'precip': ('tp',), 'snow': ('sf',)}[kind]
+            param = {'gust': ('10fg', '10fg3', '10fg6'), 'precip': ('tp',), 'snow': ('sf',), 'min':('mn2t3',) if hour<=144 else ('mn2t6',), 'max':('mx2t3',) if hour<=144 else ('mx2t6',)}[kind]
             rows = [r for r in self.indexes[url] if r.get('param') in param and r.get('type') == ('fc' if member == 0 else 'pf') and str(r.get('step')) == str(hour) and (member == 0 or str(r.get('number')) == str(member))]
             if len(rows) != 1: raise ValueError('Missing or duplicate ECMWF member field')
             return url, rows[0]
@@ -122,6 +133,15 @@ class GlobalGRIB:
         return url, {'_offset':offset,'_length':length}
 
     def window(self, start, end, kind):
+        if kind in ('min','max'):
+            if self.model!='ecmwf' or end>144 or start%3 or end%3:
+                raise ValueError('Exact 09–09 UTC extrema require complete three-hour intervals through T+144')
+            records=[]
+            for h in range(start+3,end+1,3):
+                a,p=self.read(h,kind)
+                if tuple(p)!=(h-3,h,kind):raise ValueError('Incomplete or wrong extrema interval')
+                records.append((h-3,h,a))
+            return complete_window(records,start,end,kind)
         if self.model == 'ecmwf' and kind in ('rain','snow','precip'):
             def amount(k):
                 b,pb=self.read(end,k);a,pa=self.read(start,k)

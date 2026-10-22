@@ -8,11 +8,11 @@ import hashlib
 import json
 from pathlib import Path
 import numpy as np
-from netCDF4 import Dataset
-from pyproj import Transformer
 
 
 def prepare(folder,output):
+    from netCDF4 import Dataset
+    from pyproj import Transformer
     result={};provenance={}
     x,y=np.meshgrid(-1158000+2000*np.arange(1042),-1036000+2000*np.arange(970))
     projection='+proj=laea +lat_0=54.9 +lon_0=-2.5 +a=6378137 +b=6356752.314140356 +units=m'
@@ -46,11 +46,53 @@ def prepare(folder,output):
     np.savez_compressed(output,**result,period='1991-2020',statistic='monthly extrema normals',provenance=json.dumps(provenance))
 
 
-def read_normals(path):
+def prepare_ecmwf(folder,output):
+    """Area-average original 1 km UK land cells into the published 0.25° cells.
+
+    Projection libraries are needed only for preparation, never in GRIB jobs.
+    Equal-area HadUK cells have equal weights; no sea or foreign-land normals
+    are invented. This is spatial matching, not model bias correction.
+    """
+    from netCDF4 import Dataset
+    from pyproj import Transformer
+    result={};provenance={}
+    for kind in ('min','max'):
+        name='tas'+kind;file=Path(folder)/f'{name}_hadukgrid_uk_1km_mon-30y_199101-202012.nc'
+        with Dataset(file) as d:
+            v=d[name]
+            if str(d.lta_period)!='1991-2020' or v.units!='degC' or not np.array_equal(d['month_number'][:],np.arange(1,13)):
+                raise ValueError('Unverified HadUK period, units or months')
+            expected=f'time: {"minimum" if kind=="min" else "maximum"} within days time: mean over days time: mean over years'
+            if v.cell_methods!=expected:raise ValueError('Wrong extrema statistic')
+            xs=np.asarray(d['projection_x_coordinate'][:]);ys=np.asarray(d['projection_y_coordinate'][:])
+            if not np.allclose(np.diff(xs),1000) or not np.allclose(np.diff(ys),1000):raise ValueError('Expected 1 km cells')
+            x,y=np.meshgrid(xs,ys)
+            lon,lat=Transformer.from_crs('EPSG:27700','EPSG:4326',always_xy=True).transform(x,y)
+            ix=np.floor((lon+16+.125)/.25).astype(int);iy=np.floor((lat-46+.125)/.25).astype(int)
+            inside=(ix>=0)&(ix<105)&(iy>=0)&(iy<69)
+            ids=(iy*105+ix)[inside];values=np.asarray(np.ma.filled(v[:],np.nan),np.float32)[:,inside]
+            result[kind]=values
+        provenance[kind]=dict(file=file.name,sha256=hashlib.sha256(file.read_bytes()).hexdigest())
+    valid=np.isfinite(result['min'])&np.isfinite(result['max'])&(result['min']<=result['max'])
+    counts=[];normals={k:[] for k in result}
+    for month in range(12):
+        use=valid[month];count=np.bincount(ids[use],minlength=69*105)
+        counts.append(count.reshape(69,105))
+        for kind in result:
+            total=np.bincount(ids[use],weights=result[kind][month,use],minlength=69*105)
+            mean=np.divide(total,count,out=np.full(total.shape,np.nan),where=count>0)
+            normals[kind].append(mean.reshape(69,105).astype(np.float32))
+    np.savez_compressed(output,**{k:np.stack(v) for k,v in normals.items()},land_cell_count=np.stack(counts),
+                        period='1991-2020',statistic='monthly extrema normals',provenance=json.dumps(provenance),
+                        grid='0.25 degree centres: lon -16 to 10, lat 46 to 63; mean of valid 1 km UK land cells')
+
+
+def read_normals(path,model='mogreps_uk'):
     with np.load(path,allow_pickle=False) as z:
         if str(z['period'])!='1991-2020' or str(z['statistic'])!='monthly extrema normals':raise ValueError('Wrong temperature baseline')
         result={kind:z[kind].copy() for kind in ('min','max')}
-        if any(a.shape!=(12,970,1042) for a in result.values()):raise ValueError('Wrong normal grid')
+        shape=(12,69,105) if model=='ecmwf' else (12,970,1042)
+        if any(a.shape!=shape for a in result.values()):raise ValueError('Wrong normal grid')
         if np.any(result['min']>result['max']):raise ValueError('Minimum normal exceeds maximum')
         provenance=json.loads(str(z['provenance']))
         if any(len(provenance[k]['sha256'])!=64 for k in result):raise ValueError('Missing baseline provenance')
@@ -58,4 +100,6 @@ def read_normals(path):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('folder');p.add_argument('--output',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args();prepare(a.folder,a.output)
+    p=argparse.ArgumentParser();p.add_argument('folder');p.add_argument('--model',choices=['mogreps_uk','ecmwf'],default='mogreps_uk');p.add_argument('--output');a=p.parse_args()
+    output=a.output or ('climatology/haduk-extrema-1991-2020-ecmwf.npz' if a.model=='ecmwf' else 'climatology/haduk-extrema-1991-2020.npz')
+    (prepare_ecmwf if a.model=='ecmwf' else prepare)(a.folder,output)

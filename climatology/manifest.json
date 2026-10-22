@@ -17,5 +17,8 @@
       "sha256": "e2fde4f3c8dcef64b01d672143ac5f0f4a800a7c96a4747f078a5a49251e63f2"
     }
   },
-  "prepared_sha256": "d2a26e4ff1df6c3050ccaf22b262c944790823fc735928faa9c333b4f6f3ec7d"
+  "prepared_sha256": "d2a26e4ff1df6c3050ccaf22b262c944790823fc735928faa9c333b4f6f3ec7d",
+  "ecmwf_prepared_file": "haduk-extrema-1991-2020-ecmwf.npz",
+  "ecmwf_prepared_sha256": "609a8606844cfa0e2128912f17a9eb272efda424bd18034b1607699fc0018efb",
+  "ecmwf_grid_method": "Equal-area mean of original valid 1 km UK land cells within each 0.25 degree published grid cell; no bias correction."
 }

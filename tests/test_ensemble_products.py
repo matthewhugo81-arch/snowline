@@ -64,5 +64,21 @@ class Products(unittest.TestCase):
     def test_reset_is_not_silently_clipped(self):
         with self.assertRaises(ValueError):nonnegative_difference(np.array([1]),np.array([5]))
 
+    def test_ecmwf_complete_extrema_and_medium_range_boundary(self):
+        source=GlobalGRIB('ecmwf',datetime(2026,10,21,12,tzinfo=timezone.utc),Path('unused'))
+        source.read=lambda h,k:(np.full((51,1,1),h),(h-3,h,k))
+        np.testing.assert_equal(source.window(117,141,'min'),120)
+        np.testing.assert_equal(source.window(117,141,'max'),141)
+        with self.assertRaises(ValueError):source.window(141,165,'max')
+        source.read=lambda h,k:(np.ones((51,1,1)),(h-1,h,k))
+        with self.assertRaises(ValueError):source.window(21,45,'min')
+
+    def test_ecmwf_anomaly_requires_all_51_members(self):
+        a=np.full((51,1,2),10.);a[50,0,1]=np.nan
+        anomaly=member_extrema_anomaly(a,np.full((1,2),12.),51)
+        self.assertEqual(anomaly[0,0],-2)
+        self.assertTrue(np.isnan(anomaly[0,1]))
+        with self.assertRaises(ValueError):member_extrema_anomaly(a[:50],np.full((1,2),12.),51)
+
 
 if __name__=='__main__':unittest.main()
