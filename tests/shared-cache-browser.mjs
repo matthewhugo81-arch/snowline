@@ -66,6 +66,9 @@ try{
   const {cleanupObsoleteCaches}=await import('/map-cache-storage.js');
   const active=cache.contexts.get('tiles').shared;
   await active.lease();
+  const {ForecastTileCache}=await import('/map-tile-cache.js');
+  const briefing=new ForecastTileCache(async()=>({data:new Uint8Array(4).buffer}),{persistent:true,cacheVersion:'briefing-active-fixture'});briefing.setContext('briefing');
+  await briefing.contexts.get('briefing').lease.lease();
   const old='snowline-forecast-tiles-v1-persistent-obsolete-fixture-tiles';
   await caches.open(old);
   const options={storage:caches,db:active.db,locks:navigator.locks,prefix:'snowline-forecast-tiles-v1-',currentPrefix:'snowline-forecast-tiles-v1-persistent-four-windows-',grace:100};
@@ -77,13 +80,15 @@ try{
   await lease(now+10000);
   await cleanupObsoleteCaches({...options,now:now+200});
   const activeProtected=(await caches.keys()).includes(old);
+  const briefingProtected=(await caches.keys()).includes(briefing.name);
+  briefing.release();
   await lease(0);
   await cleanupObsoleteCaches({...options,now:now+400});
   const removed=!(await caches.keys()).includes(old);
   const currentProtected=(await caches.keys()).includes(cache.name);
-  return {graceProtected,activeProtected,removed,currentProtected};
+  return {graceProtected,activeProtected,removed,currentProtected,briefingProtected};
  });
- assert.deepEqual(cleanup,{graceProtected:true,activeProtected:true,removed:true,currentProtected:true});
+ assert.deepEqual(cleanup,{graceProtected:true,activeProtected:true,removed:true,currentProtected:true,briefingProtected:true});
  const denied=await pages[0].evaluate(async()=>{
   const {ForecastTileCache}=await import('/map-tile-cache.js');
   const c=new ForecastTileCache(async()=>({data:new Uint8Array(4).buffer}),{persistent:true,coordinate:true,cacheVersion:'denied-disk',diskBytes:32});c.setContext('tiles');
