@@ -46,8 +46,6 @@ generation work, but does not imply a threefold reduction in total hosted storag
 native grids are upstream and the retained generation count remains three.
 The separate full 18-member probability products still use all six hourly member
 cycles, and their six-hourly initialization anchors remain unchanged.
-The generated-feed freshness checker shares the publisher's UTC cycle policy,
-so intervening hourly native runs do not request redundant snow rebuilds.
 
 Native models use existing dated Open-Meteo OM grids. No native run is copied
 to Snowline, and no bulk imagery download is added to the browser. The checked
