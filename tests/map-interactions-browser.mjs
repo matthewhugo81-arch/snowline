@@ -74,7 +74,7 @@ try{
   await page.locator('#map-forecast-interval').selectOption('native');await ready();await mapView();
   await page.waitForFunction(()=>document.getElementById('preload-status').dataset.complete==='true',{},{timeout:120000});
   assert.equal(await page.locator('#preload-status').getAttribute('data-total'),'143','UKV + UKMO complete all 143 charts');
-  const snapshot=()=>page.evaluate(()=>({panels:Object.fromEntries(Object.entries(window.fixturePanels).map(([key,p])=>[key,{source:p.sourceId,time:p.displayedTime,url:p.url,loaded:[...p.frameCache.preloaded].sort(),layer:p.map.getLayer(p.weatherLayer)?.id}])),generation:window.fixtureImageryCache.generation,requests:window.fixtureRequests.map(r=>r.type+' '+r.url)}));
+  const snapshot=()=>page.evaluate(()=>({panels:Object.fromEntries(Object.entries(window.fixturePanels).map(([key,p])=>[key,{source:p.sourceId,time:p.displayedTime,url:p.url,loaded:[...p.frameCache.preloaded].sort(),layer:p.map.getLayer(p.weatherLayer)?.id}])),generation:window.fixtureImageryCache.generation,preparedRequests:[...window.fixtureImageryCache.memory.keys()].map(key=>{const [type,url]=JSON.parse(key);return type+' '+url;}),requests:window.fixtureRequests.map(r=>r.type+' '+r.url)}));
   const before=await snapshot();
   await page.evaluate(()=>window.fixturePanels.a.map.panBy([1,0],{duration:0}));await ready();await page.waitForTimeout(300);
   const smallPan=await snapshot();
@@ -104,7 +104,10 @@ try{
   const largePan=await snapshot();
   assert.deepEqual(largePan.panels.b,before.panels.b,'A larger pan only prepares the moved panel');
   assert.equal(largePan.panels.a.source,before.panels.a.source);
-  for(const request of new Set(before.requests))assert.equal(largePan.requests.filter(r=>r===request).length,before.requests.filter(r=>r===request).length,'Exposing new tiles retains already downloaded tiles');
+  // Initial camera changes can cancel native attempts before they enter the cache.
+  // Only successfully prepared tiles have a reuse guarantee when exposed again.
+  assert.ok(before.preparedRequests.length>100,'The complete sequence has prepared tiles to reuse');
+  for(const request of before.preparedRequests)assert.equal(largePan.requests.filter(r=>r===request).length,before.requests.filter(r=>r===request).length,'Exposing new tiles retains already prepared tiles: '+request);
   await settings();await page.locator('#map-comparison-count').selectOption('3');await ready();
   for(const suffix of ['','-b','-c']){await page.locator('#map-variable'+suffix).selectOption('precipitation_total_48h');await ready();}
   // Select a common valid time with a complete 48-hour rainfall window.

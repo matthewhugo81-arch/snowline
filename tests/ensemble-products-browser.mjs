@@ -100,7 +100,8 @@ try{
    assert.equal(await page.locator('#briefing-preset').inputValue(),field);
    assert.equal(await page.locator('#briefing-run-select option').count(),1);
    assert.match(await page.locator('#briefing-run-select option').textContent(),/06Z · ensemble products/);
-   assert.match(await page.locator('#briefing-grid h3').first().textContent(),/VALID .* to /);
+   assert.match(await page.locator('#briefing-grid h3').first().textContent(),/VALID [A-Z][a-z]{2} \d{2} [A-Z][a-z]{2} \d{4} UTC$/);
+   assert.doesNotMatch(await page.locator('#briefing-grid h3').first().textContent(),/\bto\b/);
    if(field===six[0]){assert.equal(await page.locator('#briefing-grid .briefing-card[data-ready="true"]').count(),6);await mkdir('review-output',{recursive:true});await page.screenshot({path:'review-output/briefing-products-'+viewport.width+'.png',fullPage:true});}
    if(field.includes('anomaly'))assert.match(await page.locator('#briefing-grid h3').first().textContent(),/24 hr (Minimum|Maximum) Temperature Anomaly for/);
    assert.doesNotMatch(await page.locator('#briefing-grid h3').first().textContent(),/precipitation.*snow probability/);

@@ -70,13 +70,14 @@ try{
    assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
    assert.deepEqual(await page.locator('#briefing-interval option').allTextContents(),['24-hour periods']);
    assert.deepEqual(await ends(),['2026-10-13T12:00:00.000Z','2026-10-14T12:00:00.000Z']);
-   assert.match(await page.locator('#briefing-grid h3').first().textContent(),/12 Oct.*12:00.*13 Oct.*12:00/);
+   assert.match(await page.locator('#briefing-grid h3').first().textContent(),/VALID Tue 13 Oct 1200 UTC$/);
    assert.equal(await page.locator('#briefing-next').isDisabled(),true);
    const expectedPeriod='VALID Mon 12 Oct 12:00 to Tue 13 Oct 12:00 UTC';
-   assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · '+expectedPeriod);
+   const expectedStamp='VALID Tue 13 Oct 1200 UTC';
+   assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · '+expectedStamp);
    assert.equal(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),'T+024');
    const exported=JSON.parse(await page.locator('#briefing-grid img').first().getAttribute('data-fixture-export'));
-   assert.ok(exported.title.endsWith(expectedPeriod));assert.equal(exported.subtitle,'T+024');
+   assert.ok(exported.title.endsWith(expectedStamp));assert.equal(exported.subtitle,'T+024');
    const sequenceNW=await page.evaluate(()=>window.fixtureBounds);
    assert.ok(sequenceNW[0]>-28&&sequenceNW[2]<26&&sequenceNW[1]>40&&sequenceNW[3]<70,JSON.stringify(sequenceNW));
    await page.locator('#briefing-grid img').first().click();
