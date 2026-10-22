@@ -118,3 +118,14 @@ test('MOGREPS-G discovers retained archive cycles across both publication sites'
  }
  assert.equal(calls.length,4,'Listed older runs are verified once each; no latest-run substitution');
 });
+
+test('GEFS archive metadata keeps exact-run grid URLs and rejects untrusted storage',async()=>{
+ const domain='snowline_gefs_ensemble',archive='https://raw.githubusercontent.com/matthewhugo81-arch/snowline/'+'c'.repeat(40)+'/ensemble-data/';
+ const archived={...meta(),domain,variables:['temperature_850hPa_mean'],archive_base:archive};
+ const load=async url=>{if(url.includes('_extra_v2/'))throw Object.assign(Error('Not published'),{status:404});return archived;};
+ const result=await loadSpatialRun(domain,archived.reference_time,load);
+ assert.equal(fieldDataURL(result,'temperature_850hPa_mean',archived.valid_times[0]),archive+domain+'/2026/10/12/1200Z/2026-10-12T1200.om');
+ for(const invalid of [archive.replace('c'.repeat(40),'main'),archive.replace('raw.githubusercontent.com','untrusted.test')]){
+  await assert.rejects(loadSpatialRun(domain,archived.reference_time,async()=>({...archived,archive_base:invalid})),/Unverified archive storage/);
+ }
+});

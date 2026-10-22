@@ -23,7 +23,7 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-zoom-cache';
-import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-cache-cleanup';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-retention-recovery';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
@@ -41,7 +41,7 @@ import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-concise-names';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-responsive-layers';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-retention-recovery';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
@@ -974,7 +974,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261022-ireland-ecmwf-range').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261022-retention-recovery').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;
