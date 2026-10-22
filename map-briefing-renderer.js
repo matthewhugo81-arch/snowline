@@ -11,7 +11,7 @@ import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-briefing-products';
-import {installDiagnostics} from './map-diagnostics.js?v=20261011-vorticity-purple';
+import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-bands';
 import {briefingValueLabels} from './map-briefing-values.js?v=20261020-run-selector';
 
 import {compositeSettings as briefingSettings,compositeUnderlay,WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';

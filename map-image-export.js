@@ -13,7 +13,7 @@ export function chartScales(field,interval='',weather=false){
   {name:'Mean precipitation · mm/h'+(interval?' · '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm/h: cloud remains visible; not necessarily dry.'}
  ];
  const offset=field.legendStart??0,stops=displayStops(field).slice(offset),colors=field.colors.slice(offset);
- const labels=field.categoryLabels?field.categoryLabels.slice(offset):field.bands?stops.map((v,i)=>v+(i===stops.length-1&&!field.categorical?'+':'')):[String(field.temperatureBands?stops[1]:stops[0]),String(stops.at(-1))];
+ const labels=field.legendLabels?field.legendLabels.slice(offset):field.categoryLabels?field.categoryLabels.slice(offset):field.bands?stops.map((v,i)=>v+(i===stops.length-1&&!field.categorical?'+':'')):[String(field.temperatureBands?stops[1]:stops[0]),String(stops.at(-1))];
  const notes=interval&&field.legendNote&&interval.startsWith(field.legendNote)?[interval]:[interval,field.legendNote];
  return [{name:field.name+(field.categorical?'':' · '+displayUnit(field)),colors,labels,bands:!!field.bands,discrete:!!field.temperatureBands,positions:stops.map(v=>(v-stops[0])/(stops.at(-1)-stops[0]||1)),note:notes.filter((v,i,a)=>v&&a.indexOf(v)===i).join(' · ')}];
 }

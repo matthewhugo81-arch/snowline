@@ -8,7 +8,7 @@ import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasC
 import {BRIEFING_AREAS,briefingTimes,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261022-layer-order';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261022-briefing-products';
 import {runLabel,runAvailability} from './map-runs.js?v=20261020-run-selector';
-import {chartScales} from './map-image-export.js?v=20261020-ifs-coverage';
+import {chartScales} from './map-image-export.js?v=20261022-theta-bands';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261014-interaction-audit';
 const stamp=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const utc=time=>stamp.format(new Date(time))+' UTC';
