@@ -39,7 +39,7 @@ import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGro
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
-import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-attribution';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-concise-names';
 import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-three-hour-runs';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
