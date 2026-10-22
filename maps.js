@@ -202,6 +202,9 @@ for(const id of ['map-model','map-model-b','map-model-c']){
  }
 }
 $('map-model').value=sourceModel(state.model);$('map-model-b').value=sourceModel(state.modelB);$('map-model-c').value=sourceModel(state.modelC);
+// The startup wrapper can let metadata arrive before model options exist.
+// Reapply verified labels as soon as the three menus have been populated.
+document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));
 function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false});
  map.touchZoomRotate.disableRotation();
