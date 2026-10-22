@@ -1,7 +1,7 @@
 import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261022-briefing-products';
 import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastTimeLabel} from './map-validity.js?v=20261022-weekday-headers';
+import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-weekday-headers';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
 import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261022-layer-order';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -124,7 +124,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   }
   $('time').disabled=!times.length;legend();navigation();configureOverlays();
  }
- function periodTitle(time){const parts=date.formatToParts(new Date(time));const part=type=>parts.find(p=>p.type===type).value;return 'VALID '+part('weekday')+' '+part('day')+' '+part('month')+' '+part('hour')+part('minute')+' UTC';}
+ function periodTitle(time){const parts=date.formatToParts(new Date(time));const part=type=>parts.find(p=>p.type===type).value;const stamp='VALID '+part('weekday')+' '+part('day')+' '+part('month')+' '+part('hour')+part('minute')+' UTC';const validity=forecastValidity(preset.field,time,meta);return validity.startsWith('24 hr ')?validity.replace(/VALID .*/,stamp):stamp;}
+ function chartTitle(time){const title=periodTitle(time);return title.startsWith('24 hr ')?title:preset.name+' · '+title;}
  function rememberTime(){if(times[start]){requestedTime=Date.parse(times[start]);const hours=accumulationHours(preset?.field);if(hours)requestedStart=periodStart(times[start],hours);}}
  function enlarge(src,time,exportInfo){
   const title=exportInfo.title;
@@ -153,7 +154,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    title.textContent=modelName()+' · '+periodTitle(time);caption.textContent=briefingCaption(meta,preset,time);
    button.type='button';button.className='briefing-chart';button.disabled=true;button.setAttribute('aria-label','Enlarge chart · '+periodTitle(time));
    placeholder.textContent='Preparing chart…';button.append(placeholder);card.append(title,caption,button);$('grid').append(card);
-   const exportInfo={title:modelName()+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · '+periodTitle(time),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
+   const exportInfo={title:modelName()+' · '+runLabel(selection.meta)+' · '+chartTitle(time),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
    const show=src=>{const image=document.createElement('img');image.src=src;image.alt=exportInfo.title;image.decoding='async';button.replaceChildren(image);button.disabled=false;card.dataset.ready='true';imageMenu?.registerImage(image,exportInfo);button.onclick=()=>enlarge(src,time,exportInfo);loaded++;};
    const cached=images.get(key(time));if(cached)show(cached);
    cards.set(time,{show,card,placeholder});
