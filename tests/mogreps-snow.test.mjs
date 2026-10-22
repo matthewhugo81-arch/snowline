@@ -7,7 +7,7 @@ import {describeVariable,availableFields,extendCatalogue} from '../map-catalogue
 import {briefingCaption,briefingTimes} from '../map-briefing-data.js';
 import {createRunCatalogue} from '../map-run-selection.js';
 
-const t=h=>new Date(Date.UTC(2026,9,14,2+h)).toISOString(),model=MOGREPS_MODELS[0];
+const t=h=>new Date(Date.UTC(2026,9,14,h)).toISOString(),model=MOGREPS_MODELS[0];
 const native={reference_time:t(0),completed:true,variables:['precipitation_probability'],valid_times:[0,1,2,3,63].map(t)};
 const snow={format_version:1,reference_time:t(0),completed:false,variables:['snowfall_probability'],valid_times:[1,3,63].map(t),intervals:Object.fromEntries([1,3,63].map(h=>[t(h),1])),member_count:3,threshold_mm_per_hour:.1};
 const loader=(url)=>Promise.resolve(url.includes(model.snowDomain)?snow:native);
@@ -15,7 +15,7 @@ const loader=(url)=>Promise.resolve(url.includes(model.snowDomain)?snow:native);
 test('snow probability is a separate Winter Analysis field with its actual periods',async()=>{
  const meta=await loadSpatialModel(model.id,loader),fields=[],settings={colorScales:{}};
  assert.equal(fieldSource(meta,'snowfall_probability',t(63)).domain,model.snowDomain);
- assert.match(fieldDataURL(meta,'snowfall_probability',t(63)),/ensemble-data\/snowline_mogreps_uk\/2026\/10\/14\/0200Z\//);
+ assert.match(fieldDataURL(meta,'snowfall_probability',t(63)),/ensemble-data\/snowline_mogreps_uk\/2026\/10\/14\/0000Z\//);
  assert.match(fieldDataURL(meta,'precipitation_probability',t(63)),/^https:\/\/openmeteo/);
  assert.equal(fieldDataURL(meta,'snowfall_probability',t(2)),null);
  assert.equal(fieldIntervalHours(meta,'snowfall_probability',t(63)),1,'A missing frame is not a 60-hour accumulation');
@@ -30,16 +30,16 @@ test('snow probability is a separate Winter Analysis field with its actual perio
 });
 
 test('incoming rain is selectable without rewinding to an older snow run',async()=>{
- const calls=[],later={...native,reference_time:t(1),valid_times:[1,2,3,4].map(t)};
+ const calls=[],later={...native,reference_time:t(3),valid_times:[3,4,5,6].map(t)};
  const meta=await loadSpatialModel(model.id,async url=>{calls.push(url);return url.includes(model.snowDomain)?snow:url.endsWith('/meta.json')?native:later;});
- assert.equal(meta.reference_time,t(1));assert.ok(meta.sources.every(s=>s.reference_time===t(1)));
+ assert.equal(meta.reference_time,t(3));assert.ok(meta.sources.every(s=>s.reference_time===t(3)));
  assert.ok(calls.some(url=>url.includes('/0300Z/meta.json')));
  assert.equal(meta.completed,false,'Missing snow must not make the combined run Complete');
- assert.ok(fieldDataURL(meta,'precipitation_probability',t(3)));
+ assert.ok(fieldDataURL(meta,'precipitation_probability',t(4)));
  assert.equal(fieldDataURL(meta,'snowfall_probability',t(3)),null);
  assert.ok(meta.sourceWarnings.some(w=>w.includes('being prepared')));
  const unavailable=await loadSpatialModel(model.id,async url=>url.includes(model.snowDomain)?snow:later);
- assert.equal(unavailable.reference_time,t(1));assert.equal(fieldDataURL(unavailable,'snowfall_probability',t(3)),null);
+ assert.equal(unavailable.reference_time,t(3));assert.equal(fieldDataURL(unavailable,'snowfall_probability',t(3)),null);
 });
 
 test('archive lookup never substitutes another snow cycle and invalid products are rejected',async()=>{
@@ -52,24 +52,24 @@ test('archive lookup never substitutes another snow cycle and invalid products a
 });
 
 test('the complete rain/snow predecessor remains default while new rain arrives',async()=>{
- const completeSnow={...snow,completed:true},later={...native,reference_time:t(1),valid_times:[1,2,3,4].map(t)};
+ const completeSnow={...snow,completed:true},later={...native,reference_time:t(3),valid_times:[3,4,5,6].map(t)};
  const catalogue=createRunCatalogue();
  const load=async url=>{
   if(url.includes(model.snowDomain)){
-   if(url.includes('/0200Z/'))return completeSnow;
+   if(url.includes('/0000Z/'))return completeSnow;
    throw Object.assign(Error('Snow not prepared'),{status:404});
   }
   if(url.endsWith('/latest.json'))return native;
   if(url.endsWith('/in-progress.json'))return later;
-  if(url.includes('/0200Z/meta.json'))return native;
+  if(url.includes('/0000Z/meta.json'))return native;
   throw Object.assign(Error('Not published'),{status:404});
  };
  const selected=await catalogue.select(model.id,load);
  assert.equal(selected.meta.reference_time,t(0));
- assert.equal(selected.latest.reference_time,t(1));
+ assert.equal(selected.latest.reference_time,t(3));
  assert.equal(selected.previous.completed,true);
- const incoming=await catalogue.select(model.id+'@'+t(1),load);
- assert.ok(fieldDataURL(incoming.meta,'precipitation_probability',t(3)));
+ const incoming=await catalogue.select(model.id+'@'+t(3),load);
+ assert.ok(fieldDataURL(incoming.meta,'precipitation_probability',t(4)));
  assert.equal(fieldDataURL(incoming.meta,'snowfall_probability',t(3)),null);
 });
 

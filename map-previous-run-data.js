@@ -1,8 +1,9 @@
 import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261020-run-selector';
 import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261022-briefing-products';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
-import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261020-run-selector';
+import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261022-three-hour-runs';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
+import {MOGREPS_UK,mogrepsUKCycle} from './mogreps-run-selection.js?v=20261022-three-hour-runs';
 import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {retainRunProgress,runSignature} from './map-runs.js?v=20261020-run-selector';
@@ -10,7 +11,8 @@ const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
  if(!Number.isInteger(lookbackHours)||lookbackHours<1||lookbackHours>48)throw Error('Archive search is limited to 48 hours.');
  const init=Date.parse(reference);if(!Number.isFinite(init)||init%HOUR)throw Error('Invalid model initialization.');
- const cadence=model===UKV?3:model===UKV_NOWCAST||['knmi_harmonie_arome_europe','ukmo_uk_ensemble_2km'].includes(model)?1:['icon_eu','meteofrance_arome_france'].includes(model)?3:model==='gem_global'?12:6;
+ if(model===MOGREPS_UK)return Array.from({length:lookbackHours},(_,i)=>new Date(init-(i+1)*HOUR).toISOString()).filter(mogrepsUKCycle);
+ const cadence=model===UKV?3:model===UKV_NOWCAST||model==='knmi_harmonie_arome_europe'?1:['icon_eu','meteofrance_arome_france'].includes(model)?3:model==='gem_global'?12:6;
  const out=[];
  for(let delta=cadence;delta<=lookbackHours;delta+=cadence){const time=new Date(init-delta*HOUR).toISOString();if(model===UKV_NOWCAST&&cycleFamily(time)!=='nowcast')continue;out.push(time);}
  return out;
