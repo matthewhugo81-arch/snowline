@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
-const server=createServer(async(req,res)=>{try{const path=resolve('.'+new URL(req.url,'http://local').pathname),data=await readFile(path);res.writeHead(200,{'Content-Type':({'.js':'text/javascript','.wasm':'application/wasm','.css':'text/css'})[extname(path)]??'text/html'});res.end(data);}catch{res.writeHead(404);res.end();}});
+const server=createServer(async(req,res)=>{try{const path=resolve('.'+new URL(req.url,'http://local').pathname),data=await readFile(path);res.writeHead(200,{'Content-Type':({'.js':'text/javascript','.mjs':'text/javascript','.wasm':'application/wasm','.css':'text/css'})[extname(path)]??'text/html'});res.end(data);}catch{res.writeHead(404);res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin='http://127.0.0.1:'+server.address().port,browser=await chromium.launch({headless:true});
 try{
