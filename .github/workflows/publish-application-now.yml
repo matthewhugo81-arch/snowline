@@ -1,0 +1,55 @@
+name: Publish application update using retained forecast data
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+concurrency:
+  group: snowline-pages
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify application tests
+        run: node --test tests/*.test.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          run-id: 39773012949
+          github-token: ${{ github.token }}
+          path: retained-publication
+      - name: Apply application changes to last complete publication
+        shell: bash
+        run: |
+          mkdir _site
+          tar -xf retained-publication/artifact.tar -C _site
+          test "$(cat _site/site-revision.txt)" = '203fb77a33b1f63d80f2cd018260fb6c11792c12'
+          git fetch --depth=1 origin 203fb77a33b1f63d80f2cd018260fb6c11792c12
+          python - <<'PY'
+          import pathlib, subprocess, shutil
+          base='203fb77a33b1f63d80f2cd018260fb6c11792c12'
+          paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD','--','.',':(exclude).github/**',':(exclude)scripts/**',':(exclude)tests/**',':(exclude)review/**']).decode().splitlines()
+          allowed={'map-briefing.js','maps.css','maps.html','maps.js'}
+          if not set(paths)<=allowed: raise SystemExit('Unexpected changes: '+str(paths))
+          for name in paths: shutil.copy2(name,pathlib.Path('_site')/name)
+          PY
+          git rev-parse HEAD > _site/site-revision.txt
+          python scripts/publication_manifest.py _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Publish complete site
+        id: deployment
+        uses: actions/deploy-pages@v4
