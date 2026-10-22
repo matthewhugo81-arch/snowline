@@ -18,6 +18,13 @@ export function frameWindow(urls,index,{ahead=2,behind=2,loop=false,direction=1}
 }
 // Begin just after the selected frame, then wrap to all earlier valid times.
 export function fullSequence(urls,index){return [...new Set([...urls.slice(index+1),...urls.slice(0,index+1)].filter(Boolean))];}
+export function arrowFrameWindow(urls,index,options={}){
+ const window=frameWindow(urls,index,options);
+ const reverse=frameWindow(urls,index,{...options,ahead:1,behind:0,direction:-(options.direction??1)}).upcoming;
+ // Both arrow directions should be ready before preparing farther hours.
+ window.upcoming=[...new Set([window.upcoming[0],...reverse,...window.upcoming].filter(url=>url&&window.keep.has(url)))];
+ return window;
+}
 
 // A frame owns its raster AND enabled vector overlays. They are prepared behind
 // the opaque basemap, then promoted together; we never blend forecast times.

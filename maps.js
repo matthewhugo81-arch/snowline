@@ -22,8 +22,8 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,preci
 import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
-import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-zoom-cache';
-import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-retention-recovery';
+import {ForecastFrames,frameWindow,arrowFrameWindow,fullSequence} from './map-frames.js?v=20261022-arrow-priority';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-arrow-priority';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
@@ -419,7 +419,7 @@ function panelCache(panel,model,field){
 function warmUpcoming(panel){
  if(panel.restyling||!panel.frameCache)return;
  const accumulation=accumulationHours(panelSelection(state,panel.key).field);
- const window=frameWindow(panel.frameURLs,state.index,accumulation?{ahead:1,behind:1,loop:false}:frameBudget());
+ const window=arrowFrameWindow(panel.frameURLs,state.index,accumulation?{ahead:1,behind:1,loop:false}:frameBudget());
  panel.frameCache.warm({...window,all:accumulation?window.upcoming:fullSequence(panel.frameURLs,state.index),delay:accumulation?250:0});
 }
 async function prepareSelection(index,valid=()=>true){
@@ -432,6 +432,9 @@ async function prepareSelection(index,valid=()=>true){
  imageryCache.setForeground(choices.flatMap(({key,model,field})=>{
   const panel=panels[key],cache=panelCache(panel,model,field),url=panel.frameURLs[index];
   return url?[url,...cache.decorate(url).map(group=>group.source.url)]:[];
+ }),choices.flatMap(({key})=>{
+  const panel=panels[key],cache=panel.frameCache;
+  return [...frameWindow(panel.frameURLs,index,frameBudget()).keep].flatMap(url=>[url,...cache.decorate(url).map(group=>group.source.url)]);
  }));
  imageryCache.setSequence(choices.flatMap(({key})=>{
   const panel=panels[key],cache=panel.frameCache;
