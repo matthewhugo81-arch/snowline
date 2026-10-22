@@ -33,7 +33,7 @@ function menuField(key){
  if(/^vertical_motion_\d+hPa$/.test(key))return key===VERTICAL_MOTION;
  return true;
 }
-const GROUPS = ['Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Ensemble probabilities','Temperature anomalies','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Marine','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
+const GROUPS = ['Ensemble probabilities','Combined weather','Winter Analysis','Ensemble mean','Ensemble spread','Temperature anomalies','Temperature','Accumulated precipitation','Rain & snow','Wind','Cloud & visibility','Instability & moisture','Derived diagnostics','Soil','Solar radiation','Marine','Upper-air temperature','Upper-air wind','Upper-air humidity','Geopotential height'];
 // Reference rain colours, with a white dry band for a clean map background.
 // The white 0–<0.5 mm band is opaque; missing grid data remains missing.
 export const PRECIPITATION_SCALE = {
@@ -86,7 +86,7 @@ export function variableGroup(key){
  if(productField(key))return productField(key).group;
  if(/^ocean_|^sea_(ice|level|water)_/.test(key))return 'Marine';
  if(/^vertical_motion_\d+hPa$/.test(key))return 'Derived diagnostics';
- if(isTypeField(key)||key===THETA_SYMBOLS||key==='snowfall_probability')return 'Winter Analysis';
+ if(isTypeField(key)||key===THETA_SYMBOLS)return 'Winter Analysis';
  if(accumulationHours(key))return 'Accumulated precipitation';
  if(key===WEATHER_COMPOSITE)return 'Combined weather';
  if(DIAGNOSTIC_KEYS.includes(key))return 'Derived diagnostics';
@@ -148,7 +148,7 @@ export function describeVariable(key,OM){
  if(key!=='cloud_cover_2m'&&/^cloud_cover_\d+(hPa|m)$/.test(key))return {key,name:key.match(/\d+/)[0]+(key.endsWith('hPa')?' hPa':' m')+' cloud cover',group:'Cloud & visibility',unit:'%',...CLOUD_COVER_SCALE,note:'Native model cloud fraction at the stated level; pressure surfaces can lie below terrain.'};
  if(/^vertical_motion_\d+hPa$/.test(key))return pressureMotionField(key);
  if(key==='snowfall_probability')return {
-  key,name:'Snow risk · member snowfall probability',group:'Winter Analysis',unit:'%',
+  key,name:'Snow risk · member snowfall probability',group:'Rain & snow',unit:'%',
   stops:[0,10,25,50,75,90,100],colors:['#ffffff','#d9f0ff','#8fc8f5','#5879db','#7652bd','#a63498','#720c68'],
   contourValues:[10,25,50,75,90],contourLabel:'10, 25, 50, 75 and 90%',
   note:'Percentage of MOGREPS members forecasting falling snow at an average rate of at least 0.1 mm/hour liquid-water equivalent over the stated period. This is a raw member fraction, not a calibrated probability, settling-snow risk or snow depth. Missing members leave a gap; they are never counted as dry.'
@@ -208,6 +208,9 @@ export function compareFields(a,b){
  if(variableGroup(a.key)==='Ensemble probabilities'){
   const duration=(a.periodHours??Infinity)-(b.periodHours??Infinity);
   if(duration)return duration;
+  const cold=key=>key.match(/^ens_temperature_le(m?)(\d+)c_/);
+  const ac=cold(a.key),bc=cold(b.key);
+  if(ac&&bc)return Number(bc[2])*(bc[1]?-1:1)-Number(ac[2])*(ac[1]?-1:1);
  }
  const ap=a.key.match(/_(\d+)hPa$/),bp=b.key.match(/_(\d+)hPa$/);
  return ap&&bp?Number(bp[1])-Number(ap[1]):a.name.localeCompare(b.name,'en',{numeric:true});

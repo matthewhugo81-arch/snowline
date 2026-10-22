@@ -35,12 +35,12 @@ import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-unit
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261022-three-hour-runs';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261022-briefing-products';
+import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261022-layer-order';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-concise-names';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-three-hour-runs';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-responsive-layers';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
@@ -713,14 +713,14 @@ async function refreshLiveRuns(){
  finally{checkingLiveRuns=false;}
 }
 
-async function resolvePanelRun(item,load){
+async function resolvePanelRun(item,load,options){
  const request=requestedRun(item),model=sourceModel(item.model);
  if(productField(item.field)&&productChoices(model).some(f=>f.key===item.field)){
   const meta=await loadProducts(model,load,followLatest[item.key]?null:state.metas[item.model]?.reference_time);
   if(!meta.variables.includes(item.field))throw Error('This ensemble product is not yet published for the selected run.');
   return {meta:{...meta,normalMenuMeta:state.metas[item.model]?.normalMenuMeta??state.metas[item.model]},latest:meta,previous:null,key:selectedRunKey(model,meta)};
  }
- return mapRunCatalogue.select(request,load);
+ return mapRunCatalogue.select(request,load,options);
 }
 async function configure(force=false){
  failedSelection=null;
@@ -773,7 +773,7 @@ async function configurePanel(key,model,follow){
   const requestedField=panelSelection(state,key).field;
   const requested={key,model,field:requestedField};
   const oldFollow=followLatest[key];followLatest[key]=follow;
-  let result;try{result=await resolvePanelRun(requested,metadataLoader(false));}catch(error){followLatest[key]=oldFollow;throw error;}
+  let result;try{result=await resolvePanelRun(requested,metadataLoader(false),{deferPrevious:true});}catch(error){if(selection===panel.selectionGeneration)followLatest[key]=oldFollow;throw error;}
   if(selection!==panel.selectionGeneration)return;
   requestedTime=Date.parse(state.times[state.index])||requestedTime;
   state[property]=result.key;followLatest[key]=follow;
@@ -781,7 +781,13 @@ async function configurePanel(key,model,follow){
   $('map-model'+suffix).value=sourceModel(result.key);
   updateRunMenus([result]);extendCatalogue(fields,[result.meta],OM,settings);populateVariables(key);
   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(result.key),meta:result.latest}}));
-  showRunUpdates();refreshTimeline();await setTime();
+  // Refresh only this panel's older-run choices once archive discovery finishes.
+  // A later model/layer choice must never be overwritten by that background work.
+  result.completion?.then(pair=>{
+   if(selection!==panel.selectionGeneration||state[property]!==result.key||productField(panelSelection(state,key).field))return;
+   renderRunSelector($('map-run'+suffix),sourceModel(result.key),pair,state.metas[result.key],{followLatest:followLatest[key]});
+  }).catch(()=>{/* The next live check retries; the selected run is already verified. */});
+  showRunUpdates();refreshTimeline();setTime();
  }catch(error){
   if(selection!==panel.selectionGeneration)return;
   $('map-model'+suffix).value=sourceModel(state[property]);
@@ -822,7 +828,7 @@ for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],
    requestedTime=meta.variable_valid_times[chosen].map(Date.parse).reduce((best,t)=>Math.abs(t-requestedTime)<Math.abs(best-requestedTime)?t:best);
    extendCatalogue(fields,[merged],OM,settings);populateVariables(key);showRunUpdates('Ensemble products · '+runLabel(meta));
    renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(selection.model),{latest:meta},meta,{followLatest:followLatest[key],product:true});
-   refreshTimeline();await setTime();
+   refreshTimeline();setTime();
   }catch(error){e.target.value=selection.field;status(error.message);$('map-error-'+key).textContent=error.message;$('map-error-'+key).hidden=false;}
   finally{if(generation===panels[key].selectionGeneration){e.target.disabled=false;panels[key].configuring=false;}}
   return;
@@ -942,7 +948,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261022-weekday-headers').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261022-layer-order').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

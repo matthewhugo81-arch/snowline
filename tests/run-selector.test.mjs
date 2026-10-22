@@ -29,6 +29,33 @@ test('two panels select the same model independently and share discovery',async(
  assert.equal(fieldDataURL(incoming.meta,'temperature_2m',ref(20)),null);
 });
 
+test('complete latest layers are ready before slow archive discovery; older choices still finish',async()=>{
+ let release,archiveStarted=false;
+ const gate=new Promise(resolve=>release=resolve),load=async()=>({});
+ const catalogue=createRunCatalogue({loadModel:async()=>run(6),loadRun:async()=>{archiveStarted=true;await gate;return run(0);}});
+ const selected=await catalogue.select('ecmwf_ifs',load,{deferPrevious:true});
+ assert.equal(selected.meta.reference_time,ref(6));assert.equal(archiveStarted,true);
+ assert.equal(selected.previous,null);assert.ok(selected.completion);
+ let finished=false;selected.completion.then(()=>finished=true);await Promise.resolve();assert.equal(finished,false);
+ release();assert.equal((await selected.completion).previous.reference_time,ref(0));
+ assert.equal((await catalogue.catalogue('ecmwf_ifs',load)).previous.reference_time,ref(0));
+});
+
+test('fast layer selection never skips incomplete-run fallback or an explicitly pinned archive',async()=>{
+ for(const [key,latest]of [['ecmwf_ifs',run(6,false,2)],[selectedRunKey('ecmwf_ifs',run(0)),run(6)],['ecmwf_ifs_previous',run(6)]]){
+  let release,started;const gate=new Promise(resolve=>release=resolve),entered=new Promise(resolve=>started=resolve);
+  const catalogue=createRunCatalogue({loadModel:async()=>latest,loadRun:async()=>{started();await gate;return run(0);}});
+  let finished=false;const pending=catalogue.select(key,async()=>({}),{deferPrevious:true}).then(r=>{finished=true;return r;});
+  await entered;await Promise.resolve();assert.equal(finished,false);
+  release();const selected=await pending;assert.equal(selected.meta.reference_time,ref(0));assert.equal(selected.completion,undefined);
+ }
+});
+
+test('fast layer discovery propagates a failed current-run check',async()=>{
+ const catalogue=createRunCatalogue({loadModel:async()=>{throw Error('Offline');}});
+ await assert.rejects(catalogue.select('ecmwf_ifs',async()=>({}),{deferPrevious:true}),/Offline/);
+});
+
 test('UKV completed-index hints cannot cross main and nowcast run families',async()=>{
  for(const [model,newest,hint,previous] of [['ukmo_uk_deterministic_2km',9,8,6],['ukmo_uk_deterministic_2km_nowcast',10,9,8]]){
   const requested=[];

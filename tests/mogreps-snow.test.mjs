@@ -12,7 +12,7 @@ const native={reference_time:t(0),completed:true,variables:['precipitation_proba
 const snow={format_version:1,reference_time:t(0),completed:false,variables:['snowfall_probability'],valid_times:[1,3,63].map(t),intervals:Object.fromEntries([1,3,63].map(h=>[t(h),1])),member_count:3,threshold_mm_per_hour:.1};
 const loader=(url)=>Promise.resolve(url.includes(model.snowDomain)?snow:native);
 
-test('snow probability is a separate Winter Analysis field with its actual periods',async()=>{
+test('snow probability follows precipitation in Rain & snow with its actual periods',async()=>{
  const meta=await loadSpatialModel(model.id,loader),fields=[],settings={colorScales:{}};
  assert.equal(fieldSource(meta,'snowfall_probability',t(63)).domain,model.snowDomain);
  assert.match(fieldDataURL(meta,'snowfall_probability',t(63)),/ensemble-data\/snowline_mogreps_uk\/2026\/10\/14\/0000Z\//);
@@ -20,9 +20,9 @@ test('snow probability is a separate Winter Analysis field with its actual perio
  assert.equal(fieldDataURL(meta,'snowfall_probability',t(2)),null);
  assert.equal(fieldIntervalHours(meta,'snowfall_probability',t(63)),1,'A missing frame is not a 60-hour accumulation');
  extendCatalogue(fields,[meta],OM,settings);
- assert.equal(availableFields(fields,[meta])[0].key,'snowfall_probability');
+ assert.deepEqual(availableFields(fields,[meta]).map(f=>f.key),['precipitation_probability','snowfall_probability']);
  const field=describeVariable('snowfall_probability',OM);
- assert.equal(field.group,'Winter Analysis');assert.equal(field.unit,'%');
+ assert.equal(field.group,'Rain & snow');assert.equal(field.unit,'%');
  assert.match(field.note,/falling snow/);assert.match(field.note,/not a calibrated probability/);
  const preset={id:field.key,field:field.key,required:[field.key]};
  assert.deepEqual(briefingTimes(meta,preset,model,'native'),snow.valid_times);
