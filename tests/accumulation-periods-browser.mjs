@@ -53,7 +53,7 @@ try{
    await page.locator('#compare-maps').uncheck();
    if(viewport.width<650)await page.locator('#mobile-return-map').click();
    await page.locator('#map-variable').selectOption(key(24));
-   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('VALID 12 Oct 12:00 to 13 Oct 12:00 UTC'));
+   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('VALID Mon 12 Oct 12:00 to Tue 13 Oct 12:00 UTC'));
    const normalTitle=await page.locator('#panel-label-a').textContent();
    assert.equal((normalTitle.match(/VALID/g)||[]).length,1);assert.equal((normalTitle.match(/24 h/g)||[]).length,1);assert.ok(!normalTitle.includes('Valid Tue'));
    assert.equal(await page.evaluate(()=>window.fixtureMapInfo['map-a']().title),normalTitle,'Saved normal chart uses the same period');
@@ -72,7 +72,7 @@ try{
    assert.deepEqual(await ends(),['2026-10-13T12:00:00.000Z','2026-10-14T12:00:00.000Z']);
    assert.match(await page.locator('#briefing-grid h3').first().textContent(),/12 Oct.*12:00.*13 Oct.*12:00/);
    assert.equal(await page.locator('#briefing-next').isDisabled(),true);
-   const expectedPeriod='VALID 12 Oct 12:00 to 13 Oct 12:00 UTC';
+   const expectedPeriod='VALID Mon 12 Oct 12:00 to Tue 13 Oct 12:00 UTC';
    assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · '+expectedPeriod);
    assert.equal(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),'T+024');
    const exported=JSON.parse(await page.locator('#briefing-grid img').first().getAttribute('data-fixture-export'));

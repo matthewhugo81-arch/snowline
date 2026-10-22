@@ -27,7 +27,7 @@ test('only selected products load; data URLs pin the snapshot, not the moving br
  assert.equal(sourceVariable(m,key),key);
 });
 test('native grids and interval labels remain defined',()=>{
- assert.equal(PRODUCT_DOMAINS.length,4);assert.match(forecastValidity(key,time),/12:00 to 22 Oct 00:00 UTC/);
+ assert.equal(PRODUCT_DOMAINS.length,4);assert.match(forecastValidity(key,time),/12:00 to Thu 22 Oct 00:00 UTC/);
 });
 test('ordinary model loading and publication do not import or run new processing',async()=>{
  const sources=await readFile(new URL('../map-sources.js',import.meta.url),'utf8');assert.ok(!sources.includes('loadProducts'));
@@ -67,7 +67,7 @@ test('probability menus sort all periods together, including native EC probabili
   const byKey=new Map(mixed.map(f=>[f.key,f]));
   assert.deepEqual(briefingPresets(meta,mixed).map(p=>byKey.get(p.key).periodHours),expected);
  }
- assert.match(forecastValidity('ens_rain_ge10mm_6h','2026-10-22T00:00:00Z'),/21 Oct 18:00 to 22 Oct 00:00 UTC/);
+ assert.match(forecastValidity('ens_rain_ge10mm_6h','2026-10-22T00:00:00Z'),/Wed 21 Oct 18:00 to Thu 22 Oct 00:00 UTC/);
 });
 
 test('briefing offers optional products before any product metadata has loaded',async()=>{

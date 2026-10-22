@@ -126,7 +126,7 @@ try{
    assert.equal(await page.locator('#map-run option').count(),1,'Only the published product run is offered');
    assert.match(await page.locator('#map-run option').textContent(),/06Z · ensemble products$/);
    assert.match(await page.locator('#panel-label-a').textContent(),anomaly===anomalies[0]?/24 hr Minimum Temperature Anomaly for Fri 23rd/:/24 hr Maximum Temperature Anomaly for Thu 22nd/);
-   assert.match(await page.locator('#panel-label-a').textContent(),/09:00 to 23 Oct 09:00 UTC/);
+   assert.match(await page.locator('#panel-label-a').textContent(),/09:00 to Fri 23 Oct 09:00 UTC/);
    assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
    assert.equal(await page.locator('#map-start-time option:checked').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
@@ -159,7 +159,7 @@ try{
   await page.locator('#map-variable').selectOption(key);await ready();
   assert.equal(await page.locator('#map-variable').inputValue(),key);
   assert.match(await page.evaluate(()=>window.productPanels.a.url),/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
-  assert.match(await page.locator('#panel-label-a').textContent(),/12:00 to 22 Oct 00:00 UTC/);
+  assert.match(await page.locator('#panel-label-a').textContent(),/12:00 to Thu 22 Oct 00:00 UTC/);
   await comparisonLayout(2);
   assert.equal(await page.locator('.timeline-panel-value').first().textContent(),'Wed 21 Oct 12:00 → Thu 22 Oct 00:00');
   // The common timeline changes but the other panel remains a normal source.

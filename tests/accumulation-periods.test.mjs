@@ -51,7 +51,7 @@ test('three different initializations share one absolute period rather than thre
  const result=fixedAccumulationPeriods(common,24,time(13));
  assert.deepEqual(result.times,[37,61,85,109].map(time));
  const captions=runs.map(m=>briefingCaption(m,p,result.times[0]));
- assert.equal(forecastValidity(p.field,result.times[0]),'VALID 12 Oct 13:00 to 13 Oct 13:00 UTC');
+ assert.equal(forecastValidity(p.field,result.times[0]),'VALID Mon 12 Oct 13:00 to Tue 13 Oct 13:00 UTC');
  assert.ok(captions.every(c=>/^T\+\d+$/.test(c)),'Lead times do not repeat the valid period');
  assert.equal(new Set(captions.map(c=>c.split(' · ')[0])).size,3);
 });
