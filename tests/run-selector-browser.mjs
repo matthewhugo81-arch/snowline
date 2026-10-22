@@ -53,7 +53,7 @@ try{
     }
     return r.fulfill({status:meta?200:404,contentType:'application/json',body:JSON.stringify(meta??{})});
    });
-   const ready=()=>page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid')&&document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:45000});
+   const ready=()=>page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.toLowerCase().includes('valid')&&document.querySelector('#animation-status').textContent.startsWith('Ready'),{},{timeout:45000});
    const tick=()=>page.evaluate(async()=>{window.fixtureClock+=61000;sessionStorage.setItem('fixture-clock',String(window.fixtureClock));await Promise.all(window.fixtureRefreshers.map(fn=>fn()));});
    const selectRun=async(selector,h)=>{await page.locator(selector).selectOption(choice(id,h));await ready();};
    const assertCompletedLabel=async(selector,h)=>{

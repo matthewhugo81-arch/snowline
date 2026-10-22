@@ -43,7 +43,7 @@ try{
   });
   try{
    const start=performance.now();await page.goto(origin+'/maps.html?time=2026-10-13T12:00:00Z');
-   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});const firstMs=performance.now()-start;
+   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.toLowerCase().includes('valid'),{},{timeout:40000});const firstMs=performance.now()-start;
    const opt=await page.locator('#map-variable option').evaluateAll(os=>os.filter(o=>o.value.startsWith('precipitation_total')).map(o=>({key:o.value,disabled:o.disabled})));
    assert.deepEqual(opt,periods.map(h=>({key:key(h),disabled:h>54})), 'All windows are explicit; no extended run substitute');
    assert.equal(await page.evaluate(()=>window.fixtureRequests.some(r=>decodeURIComponent(r.url).includes('precipitation_total'))),false,'No accumulation grid work before selection');
@@ -55,7 +55,7 @@ try{
    await page.screenshot({path:`review-output/accumulation-${viewport.width}.png`});
    metrics.push({viewport:viewport.width,syntheticFirstMapMs:Math.round(firstMs),syntheticSelected24hMs:Math.round(performance.now()-accumStart)});
    if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').check();if(viewport.width<650)await page.locator('#mobile-return-map').click();
-   await page.locator('#map-variable-b').selectOption('temperature_2m');await page.waitForFunction(()=>document.querySelector('#panel-label-b').textContent.includes('Valid'));
+   await page.locator('#map-variable-b').selectOption('temperature_2m');await page.waitForFunction(()=>document.querySelector('#panel-label-b').textContent.toLowerCase().includes('valid'));
    assert.match(await page.locator('#panel-label-a').textContent(),/13 Oct.*12:00/);assert.match(await page.locator('#panel-label-b').textContent(),/13 Oct.*12:00/);
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);

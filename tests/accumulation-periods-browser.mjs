@@ -40,7 +40,7 @@ try{
   });
   try{
    await page.goto(origin+'/maps.html?time=2026-10-13T12:00:00Z');
-   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.toLowerCase().includes('valid'),{},{timeout:40000});
    await page.evaluate(async()=>{
     const {Map}=await import('/vendor/maplibre-gl.mjs');const fit=Map.prototype.fitBounds;window.fixtureFits=[];
     Map.prototype.fitBounds=function(bounds,options){window.fixtureFits.push({map:this.getContainer().id,bounds});return fit.call(this,bounds,options);};
@@ -157,7 +157,7 @@ try{
    assert.equal(await page.locator('#briefing-preset').inputValue(),'temperature','The selected comparison chart carries back into sequence');
    await page.locator('#briefing-model').selectOption(UKV);await readySequence();
    await page.locator('#briefing-preset').selectOption('weather');await readySequence();
-   assert.equal(await page.locator('#briefing-time-heading').textContent(),'Starting time');
+   assert.equal(await page.locator('#briefing-time-heading').textContent(),'Forecast time / period · UTC');
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
    await page.locator('#briefing-model').selectOption('gfs_global');await readySequence();
    await page.locator('#briefing-interval').selectOption('6');await readySequence();

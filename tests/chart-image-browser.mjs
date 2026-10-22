@@ -26,7 +26,7 @@ try{
   await page.route('https://openmeteo.s3.amazonaws.com/**',r=>{const u=r.request().url(),ok=u.includes('/'+UKV+'/')&&(u.endsWith('latest.json')||u.endsWith('in-progress.json')||u.includes('/0600Z/meta.json'));return r.fulfill({status:ok?200:404,contentType:'application/json',body:JSON.stringify(ok?meta:{error:true})});});
   await page.route('**/ensemble-data/*/latest.json',r=>r.fulfill({status:404,contentType:'application/json',body:'{}'}));
   await page.goto(origin+'/maps.html?time=2026-10-12T07:00:00Z');
-  await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+  await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.toLowerCase().includes('valid'),{},{timeout:40000});
   await page.evaluate(async()=>{const {Map}=await import('/vendor/maplibre-gl.mjs');window.fixtureLayers=[];window.fixtureOpacity=[];const paint=Map.prototype.setPaintProperty;Map.prototype.setPaintProperty=function(id,name,value){if(name==='raster-opacity'&&value>0)window.fixtureOpacity.push({briefing:this.getContainer().classList.contains('briefing-renderer'),id,value});return paint.call(this,id,name,value);};const original=Map.prototype.addLayer;Map.prototype.addLayer=function(layer,before){window.fixtureLayers.push(structuredClone(layer));if(layer.id==='coast-line'&&this.getContainer().classList.contains('briefing-renderer'))window.fixtureChartMap=this;return original.call(this,layer,before);};});
   const map=page.locator('#map-a .maplibregl-canvas'),menu=page.locator('.chart-image-menu'),copy=menu.getByRole('menuitem',{name:'Copy image'}),save=menu.getByRole('menuitem',{name:'Save image'});
   const right=async(target=map)=>{

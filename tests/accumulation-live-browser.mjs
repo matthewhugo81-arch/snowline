@@ -25,7 +25,7 @@ try{
   return route.fulfill({status:404,body:'{}'});
  });
  const initial=performance.now();await page.goto(origin+'/maps.html?time='+encodeURIComponent(end));
- await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('Valid'),{},{timeout:120000});
+ await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.toLowerCase().includes('valid'),{},{timeout:120000});
  reports.push({phase:'ordinary-temperature',ms:Math.round(performance.now()-initial),omRequests});
  await page.locator('#map-mslp-a').uncheck();await page.waitForTimeout(300);
  for(const h of [6,24]){
