@@ -6,8 +6,8 @@ import {BRIEFING_AREAS} from '../map-briefing-data.js';
 
 test('HadUK maxima belong to the starting day and minima to the ending day',()=>{
  for(const [end,startDay,endDay] of [['2026-10-23T09:00:00Z','Thu, 22 Oct 2026','Fri, 23 Oct 2026'],['2026-11-01T09:00:00Z','Sat, 31 Oct 2026','Sun, 1 Nov 2026'],['2027-01-01T09:00:00Z','Thu, 31 Dec 2026','Fri, 1 Jan 2027']]){
-  assert.ok(forecastValidity('ens_temperature_max_anomaly',end).startsWith('Maximum for '+startDay+' · VALID '));
-  assert.ok(forecastValidity('ens_temperature_min_anomaly',end).startsWith('Minimum for '+endDay+' · VALID '));
+  assert.ok(forecastValidity('ens_temperature_max_anomaly',end).startsWith('Attributed to '+startDay+' · VALID '));
+  assert.ok(forecastValidity('ens_temperature_min_anomaly',end).startsWith('Attributed to '+endDay+' · VALID '));
   assert.match(forecastValidity('ens_temperature_max_anomaly',end),/09:00 to .*09:00 UTC$/);
  }
 });

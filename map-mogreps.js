@@ -1,7 +1,7 @@
 // Precipitation is supplied by Open-Meteo; snowfall probabilities are counted
 // directly from the Met Office's native member files by build_mogreps_snow.py.
 export const MOGREPS_MODELS = [
- {id:'ukmo_uk_ensemble_2km',name:'MOGREPS-UK 2 km · precipitation & snow probability',ensemble:true,regional:true,snowDomain:'snowline_mogreps_uk',
+ {id:'ukmo_uk_ensemble_2km',name:'MOGREPS-UK 2 km',ensemble:true,regional:true,snowDomain:'snowline_mogreps_uk',
   ensembleNote:'MOGREPS-UK uses only 3 members from this hourly run: grid probabilities are 0, 33, 67 or 100%. Map shading can interpolate between grid cells. Runs are not time-lagged together.'}
 ];
 

@@ -18,7 +18,7 @@ export function forecastValidity(field,time){
  if(/^ens_temperature_(min|max)_anomaly$/.test(field)){
   const minimum=field==='ens_temperature_min_anomaly';
   const day=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(minimum?end:start);
-  return (minimum?'Minimum':'Maximum')+' for '+day+' · '+period;
+  return 'Attributed to '+day+' · '+period;
  }
  return period;
 }

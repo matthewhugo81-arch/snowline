@@ -6,11 +6,11 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity} from './map-validity.js?v=20261022-product-dates';
+import {forecastValidity} from './map-validity.js?v=20261022-attribution';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
-import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261014-clean-symbols';
+import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261022-attribution';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
@@ -39,7 +39,7 @@ import {sourceVariable,extendCatalogue,availableFields,variableGroup,PRECIPITATI
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
-import {MAP_MODELS as MODELS} from './map-models.js?v=20261020-run-selector';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-attribution';
 import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-product-dates';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
