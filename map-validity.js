@@ -14,5 +14,11 @@ export function forecastValidity(field,time){
  if(!Number.isFinite(end.getTime()))return '';
  if(!hours)return 'Valid '+instant.format(end)+' UTC';
  const start=new Date(end.getTime()-hours*3600000),year=start.getUTCFullYear()!==end.getUTCFullYear();
- return 'VALID '+periodStamp(start,year)+' to '+periodStamp(end,year)+' UTC';
+ const period='VALID '+periodStamp(start,year)+' to '+periodStamp(end,year)+' UTC';
+ if(/^ens_temperature_(min|max)_anomaly$/.test(field)){
+  const minimum=field==='ens_temperature_min_anomaly';
+  const day=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(minimum?end:start);
+  return (minimum?'Minimum':'Maximum')+' for '+day+' · '+period;
+ }
+ return period;
 }

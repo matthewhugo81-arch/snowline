@@ -6,7 +6,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity} from './map-validity.js?v=20261021-haduk-anomalies';
+import {forecastValidity} from './map-validity.js?v=20261022-product-dates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -40,7 +40,7 @@ import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261020-run-selector';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261021-harmonie-pressure';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-product-dates';
 import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
@@ -305,6 +305,7 @@ function syncTimeline(index){
  $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');
  if($('map-start-time'))$('map-start-time').value=time;
  $('map-time-label').textContent=stamp(time);
+ $('map-time-label').previousElementSibling.textContent=panelSelections(state).some(p=>productField(p.field))?'VALID / PERIOD END · UTC':'VALID TIME · UTC';
  syncArrowButtons(index);
 }
 function pauseAnimation({cancelNavigation=true}={}){
@@ -638,9 +639,9 @@ function metadataLoader(force){
  return url=>{if(!requests.has(url))requests.set(url,cachedJSON(url,{force,kind:'metadata',ttl:60000}));return requests.get(url);};
 }
 function updateRunMenus(results){
- for(const {key,model} of panelSelections(state)){
-  const result=results.find(item=>sourceModel(item.key)===sourceModel(model));
-  if(result&&state.metas[model])renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(model),result,state.metas[model],{followLatest:followLatest[key]});
+ for(const {key,model,field} of panelSelections(state)){
+  const result=results.find(item=>sourceModel(item.key)===sourceModel(model)&&!!item.meta?.productOnly===!!productField(field));
+  if(result&&state.metas[model])renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(model),result,state.metas[model],{followLatest:followLatest[key],product:!!productField(field)});
  }
 }
 function showRunUpdates(message=''){
@@ -653,22 +654,22 @@ async function refreshLiveRuns(){
  if(document.hidden||briefingActive||checkingLiveRuns||$('reload-maps').disabled)return;
  if(!state.times.length)return configure(true);
  checkingLiveRuns=true;
- const generation=state.generation,selected=panelSelections(state).filter(p=>!productField(p.field));
+ const generation=state.generation,selected=panelSelections(state);
  if(!selected.length){checkingLiveRuns=false;return;}
  try{
   const load=metadataLoader(true);
   // Panels can share a model and initialization while having different intent:
   // one may follow the latest complete cycle and another deliberately pin it.
-  const results=await Promise.allSettled(selected.map(item=>mapRunCatalogue.select(requestedRun(item),load)));
+  const results=await Promise.allSettled(selected.map(item=>resolvePanelRun(item,load)));
   if(generation!==state.generation||briefingActive||document.hidden)return;
   const next={...state.metas};let changed=false,failed=false;
   results.forEach((result,index)=>{
-   const {key,model}=selected[index],previous=state.metas[model];
+   const {key,model,field}=selected[index],previous=state.metas[model];
    if(result.status==='rejected'){failed=true;next[model]=previous;return;}
-   const meta=retainProductSources(retainRunProgress(previous,result.value.meta),previous),id=selectedRunKey(model,meta);
+   const meta=productField(field)?(Date.parse(result.value.meta.reference_time)<Date.parse(previous.reference_time)?previous:result.value.meta):retainProductSources(retainRunProgress(previous,result.value.meta),previous),id=selectedRunKey(model,meta);
    next[id]=meta;
    state['model'+(key==='a'?'':key.toUpperCase())]=id;
-   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(model),meta:result.value.latest}}));
+   if(!productField(field))document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(model),meta:result.value.latest}}));
    if(id!==model||runSignature(meta)!==runSignature(previous))changed=true;
   });
   const retryPromotion=failedSelection&&selected.some(({key})=>followLatest[key]&&panels[key].displayedModel!==panelSelection(state,key).model);
@@ -793,14 +794,14 @@ for(const [id,property]of [['map-variable','field'],['map-variable-b','fieldB'],
    state.metas={...state.metas,[normalKey]:merged};state[property]=chosen;
    requestedTime=meta.variable_valid_times[chosen].map(Date.parse).reduce((best,t)=>Math.abs(t-requestedTime)<Math.abs(best-requestedTime)?t:best);
    extendCatalogue(fields,[merged],OM,settings);populateVariables(key);showRunUpdates('Ensemble products · '+runLabel(meta));
-   const runSelect=$('map-run'+(key==='a'?'':'-'+key));if(![...runSelect.options].some(o=>o.value===normalKey)){const option=document.createElement('option');option.value=normalKey;option.textContent=runLabel(meta)+' · ensemble products';runSelect.append(option);}runSelect.value=normalKey;
+   renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(selection.model),{latest:meta},meta,{followLatest:followLatest[key],product:true});
    refreshTimeline();await setTime();
   }catch(error){e.target.value=selection.field;status(error.message);$('map-error-'+key).textContent=error.message;$('map-error-'+key).hidden=false;}
   finally{if(generation===panels[key].selectionGeneration){e.target.disabled=false;panels[key].configuring=false;}}
   return;
  }
  state[property]=chosen;
- if(property!=='interval'&&state.metas[selection.model]?.productOnly){await configurePanel(key,sourceModel(selection.model),true);return;}
+ if(property!=='interval'&&(productField(selection.field)||state.metas[selection.model]?.productOnly)){await configurePanel(key,sourceModel(selection.model),true);return;}
 
  try{refreshTimeline();setTime();}
  catch(error){
