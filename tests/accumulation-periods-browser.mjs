@@ -53,7 +53,7 @@ try{
    await page.locator('#compare-maps').uncheck();
    if(viewport.width<650)await page.locator('#mobile-return-map').click();
    await page.locator('#map-variable').selectOption(key(24));
-   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('VALID Mon 12 Oct 12:00 to Tue 13 Oct 12:00 UTC'));
+   await page.waitForFunction(()=>document.querySelector('#panel-label-a').textContent.includes('VALID Tue 13 Oct 1200 UTC'));
    const normalTitle=await page.locator('#panel-label-a').textContent();
    assert.equal((normalTitle.match(/VALID/g)||[]).length,1);assert.equal((normalTitle.match(/24 h/g)||[]).length,1);assert.ok(!normalTitle.includes('Valid Tue'));
    assert.equal(await page.evaluate(()=>window.fixtureMapInfo['map-a']().title),normalTitle,'Saved normal chart uses the same period');
