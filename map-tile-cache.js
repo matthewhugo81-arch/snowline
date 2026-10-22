@@ -195,8 +195,9 @@ export class ForecastTileCache{
     if(generation===this.generation&&!entry.durable&&this.memory.get(key)!==entry)this.limit(entry.storageReason);
    });
  }
- setForeground(urls){
+ setForeground(urls,nearby=[]){
   this.foreground=[...new Set(urls)];
+  this.nearby=[...new Set(nearby)];
   for(const job of this.pending.values())job.background=!this.isForeground(job.url);
   this.drain();
  }
@@ -209,7 +210,9 @@ export class ForecastTileCache{
    let index=this.renderQueue.findIndex(entry=>!entry.job.background);
    if(index<0){
     if([...this.rendering].filter(entry=>entry.job.background).length>=this.backgroundConcurrency)return;
-    index=0;
+    // Adjacent rendered frames outrank distant disk preloads across all panels.
+    index=this.renderQueue.findIndex(entry=>this.nearby?.some(source=>entry.job.url===source||entry.job.url.startsWith(source+'/')));
+    if(index<0)index=0;
    }
    const entry=this.renderQueue.splice(index,1)[0];if(!entry)return;
    this.rendering.add(entry);entry.start();
