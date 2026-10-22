@@ -8,16 +8,16 @@ on selection, with no new ordinary-startup requests.
 
 ## Probability definitions
 
-- Gusts: >50, >60 or >70 knots over 12 or 24 hours. MOGREPS uses every hourly
+- Gusts: >50, >60 or >70 knots over 6, 12 or 24 hours (GEFS: 12/24 only). MOGREPS uses every hourly
   maximum. ECMWF uses available interval maxima at three-hour output steps;
   early intervals cover only one hour, so peaks between outputs can be missed.
   GEFS uses instantaneous gust outputs every three hours. EC/GEFS must not be
   described as equivalent to complete hourly MOGREPS maxima.
-- Rain: >=1, >=10, >=25 or >=50 mm over 12 or 24 hours. ECMWF subtracts native
+- Rain: >=1, >=10, >=25 or >=50 mm over 6, 12 or 24 hours. ECMWF subtracts native
   snowfall water equivalent from total precipitation, member by member.
   MOGREPS uses rainfall fields, including the separate convective component for
   MOGREPS-G.
-- Snow: >=0.1, >=1, >=5 or >=10 mm liquid-water equivalent over 12 or 24 hours.
+- Snow: >=0.1, >=1, >=5 or >=10 mm liquid-water equivalent over 6, 12 or 24 hours.
   MOGREPS-G includes both resolved and convective snowfall. No fixed snow/liquid
   ratio, snow-depth difference or settling inference is used.
 - MOGREPS-UK air temperature: minimum <=0, <=-2, <=-5 or <=-10°C during
@@ -43,6 +43,12 @@ Extrema/sums are calculated before counting members. Missing members or source
 intervals prevent publication; missing cells stay missing. Source GRIB packing
 error bounds permit only small negative rounding residuals to be clipped when
 differencing cumulative precipitation or subtracting snowfall from total water.
+
+Six-hour gust/rain/snow products are available for ECMWF ENS, MOGREPS-UK
+and MOGREPS-G at six-hour endpoints. Existing 12/24-hour products keep their
+12-hour endpoints. Cold-temperature probabilities remain 24-hour 09–09 UTC
+products. Probability menus sort by duration (6, then 12, then 24 hours),
+including native ECMWF 24-hour precipitation probabilities.
 
 ## Loading and publication
 

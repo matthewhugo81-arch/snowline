@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productChoices,verifyProduct,loadProducts,PRODUCT_BASE,productPath} from '../map-ensemble-products.js';
-import {variableGroup,sourceVariable,describeVariable} from '../map-catalogue.js';
+import {variableGroup,sourceVariable,describeVariable,availableFields,compareFields} from '../map-catalogue.js';
 import {forecastValidity} from '../map-validity.js';
 const reference='2026-10-21T12:00:00Z',time='2026-10-22T00:00:00Z',key='ens_gust_gt50kt_12h';
 const meta=()=>({format_version:1,domain:'snowline_mogreps_uk_products',reference_time:reference,member_count:18,source_cycles:Array.from({length:6},(_,i)=>new Date(Date.parse(reference)-i*3600000).toISOString()),variables:[key],valid_times:[time],variable_valid_times:{[key]:[time]},variable_intervals:{[key]:{[time]:{hours:12,start:reference,end:time}}}});
@@ -52,4 +52,20 @@ test('ECMWF anomalies cannot extend beyond Day 6',()=>{
   const m={...meta(),domain:'snowline_ecmwf_products',member_count:51,variables:[k],valid_times:[t],variable_valid_times:{[k]:[t]},variable_intervals:{[k]:{[t]:{hours:24,start:new Date(Date.parse(t)-86400000).toISOString(),end:t}}},anomaly_reference:{dataset:'HadUK-Grid',period:'1991-2020'}};
   assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),expected);
  }
+});
+
+test('probability menus sort all periods together, including native EC probabilities',async()=>{
+ const {briefingPresets}=await import('../map-briefing-data.js');
+ const native={key:'precipitation_probability_10mm_24h',name:'24 h precipitation ≥ 10 mm · probability',periodHours:24,group:'Ensemble probabilities'};
+ for(const model of ['ukmo_uk_ensemble_2km','snowline_mogreps_global','snowline_ecmwf_ensemble','snowline_gefs_ensemble']){
+  const fields=productChoices(model).filter(f=>f.group==='Ensemble probabilities');
+  assert.equal(fields.filter(f=>f.periodHours===6).length,model==='snowline_gefs_ensemble'?0:11);
+  const mixed=[native,...fields].reverse(),meta={domain:'snowline_ecmwf_extra_v2',variables:mixed.map(f=>f.key)};
+  const expected=mixed.map(f=>f.periodHours).sort((a,b)=>a-b);
+  assert.deepEqual(availableFields(mixed,[meta]).map(f=>f.periodHours),expected);
+  assert.deepEqual([...mixed].sort(compareFields).map(f=>f.periodHours),expected);
+  const byKey=new Map(mixed.map(f=>[f.key,f]));
+  assert.deepEqual(briefingPresets(meta,mixed).map(p=>byKey.get(p.key).periodHours),expected);
+ }
+ assert.match(forecastValidity('ens_rain_ge10mm_6h','2026-10-22T00:00:00Z'),/21 Oct 18:00 to 22 Oct 00:00 UTC/);
 });

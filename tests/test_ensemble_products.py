@@ -10,10 +10,49 @@ import numpy as np
 from ensemble_products import complete_window,probability,threshold_fields,lagged_cycles,member_extrema_anomaly,nonnegative_difference
 from ensemble_product_sources import MetOffice,GlobalGRIB
 from ensemble_products import cold_probability_fields,COLD_THRESHOLDS
-from build_ensemble_products import build,publish
+from build_ensemble_products import build,publish,probability_targets
 
 
 class Products(unittest.TestCase):
+    def test_six_hour_schedule_preserves_existing_periods_and_gefs(self):
+        kinds=['gust','rain','snow']
+        old={(h,k,p) for h in range(12,121,12) for p in (12,24) if h>=p for k in kinds}
+        for model in ('mogreps_uk','mogreps_g','ecmwf'):
+            tasks=probability_targets(model,120,kinds)
+            self.assertEqual({t for t in tasks if t[2]!=6},old)
+            self.assertEqual({h for h,k,p in tasks if p==6},set(range(6,121,6)))
+            self.assertEqual(len(tasks),len(set(tasks)))
+        self.assertEqual(set(probability_targets('gefs',120,kinds)),old)
+
+    def test_six_hour_ecmwf_totals_exclude_earlier_rain_and_snow(self):
+        source=GlobalGRIB('ecmwf',datetime(2026,10,21,12,tzinfo=timezone.utc),Path('unused'));calls=[]
+        def read(h,kind):
+            calls.append((h,kind));source.errors[(h,kind)]=0
+            return np.full((51,1,1),(20 if h==6 else 32) if kind=='precip' else (5 if h==6 else 7)),(0,h,'accum')
+        source.read=read
+        rain=source.window(6,12,'rain');snow=source.window(6,12,'snow')
+        np.testing.assert_equal(rain,10);np.testing.assert_equal(snow,2)
+        self.assertEqual(threshold_fields('rain',rain,6,51)['ens_rain_ge10mm_6h'][0,0],100)
+        self.assertEqual(threshold_fields('snow',snow,6,51)['ens_snow_ge5mm_6h'][0,0],0)
+        self.assertEqual(set(h for h,k in calls),{6,12})
+
+    def test_six_hour_mogreps_full_lagged_members_and_metadata(self):
+        run=datetime(2026,10,21,12,tzinfo=timezone.utc)
+        with TemporaryDirectory() as directory:
+            root=Path(directory);source=MetOffice('mogreps_uk',run,root/'cache');calls=[]
+            def read(cycle,h,kind):
+                lag=int((run-cycle).total_seconds()/3600);calls.append((lag,h,kind))
+                return np.full((3,1,1),1.),list(range(lag*3,lag*3+3))
+            source.read=read
+            with patch('build_ensemble_products.MetOffice',return_value=source),patch('build_ensemble_products.uk_nearest_indices',return_value=(np.array([[0]]),np.array([[0]]),np.array([[True]]))),patch('build_ensemble_products.write_frame',side_effect=lambda path,values:path.write_bytes(b'fixture')):
+                build('mogreps_uk',root,root/'cache',run,max_hour=6)
+            meta=json.loads((root/'snowline_mogreps_uk_products/latest.json').read_text())
+            self.assertTrue(meta['completed']);self.assertEqual(meta['member_count'],18)
+            self.assertEqual(len(meta['variables']),11)
+            end='2026-10-21T18:00:00Z'
+            self.assertEqual(meta['variable_intervals']['ens_rain_ge1mm_6h'][end],dict(start='2026-10-21T12:00:00Z',end=end,hours=6))
+            self.assertIn((5,11,'rain'),calls);self.assertNotIn((5,12,'rain'),calls)
+
     def test_cold_thresholds_include_equality_and_are_monotonic(self):
         a=np.array([[[0]], [[-2]], [[-5]], [[-10]], [[1]], [[-11]]],dtype=float)
         fields=cold_probability_fields(a,6)

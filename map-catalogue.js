@@ -1,4 +1,4 @@
-import {productField} from './map-ensemble-products.js?v=20261022-cold-probs';
+import {productField} from './map-ensemble-products.js?v=20261022-six-hour-probs';
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_REQUIRED_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
@@ -202,13 +202,18 @@ export function describeVariable(key,OM){
  if(key.startsWith('wind_speed_'))note+=' Shading, legend and readouts display mph; underlying spatial data remains in m/s. Arrows show flow direction.';
  return {key,name,group:variableGroup(key),unit:unit??raw.unit,note,stops,colors:raw.colors.map(hex)};
 }
+export function compareFields(a,b){
+ const group=GROUPS.indexOf(variableGroup(a.key))-GROUPS.indexOf(variableGroup(b.key));
+ if(group)return group;
+ if(variableGroup(a.key)==='Ensemble probabilities'){
+  const duration=(a.periodHours??Infinity)-(b.periodHours??Infinity);
+  if(duration)return duration;
+ }
+ const ap=a.key.match(/_(\d+)hPa$/),bp=b.key.match(/_(\d+)hPa$/);
+ return ap&&bp?Number(bp[1])-Number(ap[1]):a.name.localeCompare(b.name,'en',{numeric:true});
+}
 export function availableFields(fields,metas){
- return fields.filter(f=>!f.overlayOnly&&menuField(f.key)&&metas.some(m=>sourceVariable(m,f.key))).sort((a,b)=>{
-  const group=GROUPS.indexOf(variableGroup(a.key))-GROUPS.indexOf(variableGroup(b.key));
-  if(group)return group;
-  const ap=a.key.match(/_(\d+)hPa$/),bp=b.key.match(/_(\d+)hPa$/);
-  return ap&&bp?Number(bp[1])-Number(ap[1]):a.name.localeCompare(b.name,'en',{numeric:true});
- });
+ return fields.filter(f=>!f.overlayOnly&&menuField(f.key)&&metas.some(m=>sourceVariable(m,f.key))).sort(compareFields);
 }
 export function extendCatalogue(fields,metas,OM,settings){
  const keys=[...new Set(metas.flatMap(m=>m.variables??[]).map(canonicalVariable))];

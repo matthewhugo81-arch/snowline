@@ -64,13 +64,21 @@ def task_complete(record,task,model,kind,has_climatology):
     return required.issubset(record.get('variables',[]))
 
 
+def probability_targets(model,end_limit,kinds):
+    # Add six-hour windows without doubling the existing 12/24-hour schedule.
+    periods=(12,24) if model=='gefs' else (6,12,24)
+    return [(h,kind,period) for period in periods
+            for h in range(6 if period==6 else 12,end_limit+1,6 if period==6 else 12)
+            if h>=period for kind in kinds]
+
+
 def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
     run=run or latest_run(model);domain=f'snowline_{model}_products'
     folder=root/domain/run.strftime('%Y/%m/%d/%H00Z');folder.mkdir(parents=True,exist_ok=True)
     source=(GlobalGRIB if model in ('gefs','ecmwf') else MetOffice)(model,run,cache)
     kinds=['gust','precip','rain_occurrence','snow_occurrence'] if model=='gefs' else ['gust','rain','snow']
     end_limit=min(max_hour,114 if model=='mogreps_uk' else 120)
-    targets=[(h,kind,period) for h in range(12,end_limit+1,12) for period in (12,24) if h>=period for kind in kinds]
+    targets=probability_targets(model,end_limit,kinds)
     normal=None
     if model=='ecmwf':climatology=Path(climatology).with_name('haduk-extrema-1991-2020-ecmwf.npz') if climatology else None
     if model in ('mogreps_uk','ecmwf') and climatology and Path(climatology).exists():
