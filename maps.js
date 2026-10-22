@@ -1,4 +1,4 @@
-import {createLayoutRestore} from './map-layouts.js?v=20261022-restore-layouts';
+import {createLayoutRestore} from './map-layouts.js?v=20261022-restore-names';
 import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js?v=20261022-briefing-products';
 import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';

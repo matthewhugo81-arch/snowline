@@ -50,6 +50,9 @@ try{
   await page.locator('#layout-restore summary').click();await page.locator('#layout-name').fill('Monitor '+(i+1));await page.locator('#layout-save-name').click();await saved(page);await page.locator('#layout-restore summary').click();
  }
  const p=pages[0];
+ await p.evaluate(()=>{document.getElementById('layout-restore').open=true;document.getElementById('layout-name').value='Monitor 1 - typed immediately';});
+ await p.waitForTimeout(100);assert.equal(await p.locator('#layout-name').inputValue(),'Monitor 1 - typed immediately','Opening the menu must not overwrite an in-progress name');await p.locator('#layout-save-name').click();await p.locator('#layout-restore summary').click();
+
  await p.locator('#compare-maps').check();await ready(p);await p.locator('#map-comparison-count').selectOption('3');await ready(p);
  await p.locator('#map-model-b').selectOption('ukmo_uk_ensemble_2km');await ready(p);
  await p.locator('#map-variable-b').selectOption(six[0]);await ready(p);
