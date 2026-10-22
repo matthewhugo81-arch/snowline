@@ -1,3 +1,4 @@
+import {createLayoutRestore} from './map-layouts.js?v=20261022-restore-layouts';
 import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js?v=20261022-briefing-products';
 import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
@@ -20,7 +21,7 @@ import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-cov
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,precipitationTypeScales,installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
-import {setupMapSidebar} from './map-sidebar.js?v=20261020-layout-playback';
+import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
 import {ForecastFrames,frameWindow,fullSequence} from './map-frames.js?v=20261021-zoom-cache';
 import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-shared-cache';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
@@ -52,7 +53,8 @@ import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from '.
 const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
-setupMapSidebar({onLayoutChange:resizeMapLayout});
+const sidebar=setupMapSidebar({onLayoutChange:resizeMapLayout});
+const layoutRestore=await createLayoutRestore(),savedLayout=layoutRestore.initial;
 const UK=[-11,49,2.7,61.6];
 for(const area of MAP_AREAS){const option=document.createElement('option');option.value=area.id;option.textContent=area.name;$('map-area').append(option);}
 const currentArea=document.createElement('option');currentArea.value='current';currentArea.textContent='Current map area';$('map-area').append(currentArea);
@@ -160,6 +162,23 @@ if(params.get('model')&&MODELS.some(m=>m.id===sourceModel(params.get('model'))))
 // a separate user choice. Only a deliberate dated selection is pinned.
 const followLatest={a:!state.model.includes('@')&&!state.model.endsWith('_previous'),b:true,c:true};
 const requestedRun=({key,model})=>followLatest[key]?sourceModel(model):model;
+if(savedLayout){
+ state.compare=savedLayout.compare;state.comparisonCount=savedLayout.comparisonCount;state.interval=savedLayout.interval;state.opacity=savedLayout.opacity;
+ requestedTime=Date.parse(savedLayout.time)||requestedTime;
+ for(const [i,key]of ['a','b','c'].entries()){
+  const saved=savedLayout.panels[i];if(!saved||!MODELS.some(m=>m.id===sourceModel(saved.model)))continue;
+  const suffix=key==='a'?'':key.toUpperCase();state['model'+suffix]=saved.model;state['field'+suffix]=saved.field;followLatest[key]=saved.followLatest;
+  state.overlays[key]={contours:saved.contours,isobars:saved.isobars,grid:saved.grid};
+  for(const [control,setting]of [['contours','contours'],['mslp','isobars'],['grid','grid']])$('map-'+control+'-'+key).checked=saved[setting];
+ }
+ background=savedLayout.background;terrain=savedLayout.terrain;roads=savedLayout.roads;
+ $('map-background').value=background;$('map-terrain').checked=terrain;$('map-roads').checked=roads;
+ $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
+ if([...$('map-area').options].some(o=>o.value===savedLayout.area))$('map-area').value=savedLayout.area;
+ sidebar?.restore(savedLayout.sidebarCollapsed);
+ $('map-playback-speed').value=String(savedLayout.speed);
+}
+
 $('compare-maps').checked=state.compare;$('map-comparison-count').value=String(state.comparisonCount);$('comparison-count-control').hidden=!state.compare;
 for(const key of ['b','c']){$('panel-'+key).hidden=!panelVisible(key);$('layer-notes-'+key).hidden=!panelVisible(key);}
 const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
@@ -186,6 +205,8 @@ function makeMap(key){
  const map=new maplibregl.Map({container:'map-'+key,style:'https://tiles.openfreemap.org/styles/'+backgrounds[background],center:[-3,55.3],zoom:4.6,minZoom:1,maxZoom:10,fadeDuration:0,trackResize:false,renderWorldCopies:false,dragRotate:false,touchPitch:false,attributionControl:false});
  map.touchZoomRotate.disableRotation();
  map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');fitArea(map);
+ const camera=savedLayout?.panels[['a','b','c'].indexOf(key)]?.camera;if(camera)map.jumpTo({center:camera.slice(0,2),zoom:camera[2]});
+ map.on('moveend',()=>layoutRestore.changed());
  const panel={key,map,background,ready:new Promise(resolve=>map.once('style.load',resolve)),url:null,sourceId:null,version:0,loaded:false};panels[key]=panel;map.on('moveend',event=>{if(briefingActive||event.snowlineLayoutResize)return;++timeGeneration;viewportBounds();scheduleGridValues(panel);queueViewportRefresh();});map.on('movestart',event=>{if(event.originalEvent)$('map-area').value='current';if(briefingActive||event.snowlineLayoutResize)return;viewportRefresh.cancel();pauseAnimation();++timeGeneration;panel.frameCache?.moveStart();clearGridValues(panel);});
  // Geography starts with the map, independently of model metadata or frames.
  panel.coastline=coastlineController(map,{onState:()=>queueMicrotask(()=>updateOutlineStatus(panel))});
@@ -425,7 +446,7 @@ async function prepareSelection(index,valid=()=>true){
  if(prepared.some(item=>!item))return null;
  return valid()?prepared:null;
 }
-function setTime(){arrowNavigation.cancel();outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
+function setTime(){layoutRestore.changed();arrowNavigation.cancel();outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
 function stepTime(direction){
  if(!state.times.length)return;
  const shown=playing?state.times.indexOf(panels.a?.displayedTime):-1;
@@ -557,6 +578,7 @@ playback=new ForecastPlayback({
   if(phase==='paused')for(const {key}of panelSelections(state))scheduleGridValues(panels[key]);
  }
 });
+if(savedLayout)playback.interval=savedLayout.speed;
 $('map-playback-speed')?.addEventListener('change',event=>{playback.interval=Number(event.target.value);});
 $('retry-preload').addEventListener('click',()=>{
  const outlineFailed=panelSelections(state).some(({key})=>panels[key].coastline.state.status==='error');
@@ -951,7 +973,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261022-layer-order').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261022-restore-layouts').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;
@@ -963,10 +985,10 @@ function closeBriefing(){
  window.scrollTo(0,briefingScroll);
  (matchMedia('(max-width:650px)').matches?$('mobile-briefing'):$('open-briefing')).focus({preventScroll:true});
 }
-async function openBriefing(){
+async function openBriefing(restored){
  if(briefingActive)return;
  // Carry explicit area presets; retain the UK briefing default after free panning.
- const bounds=a.map.getBounds(),selection={model:state.model,followLatest:followLatest.a,menuMeta:state.metas[state.model]?.normalMenuMeta??state.metas[state.model],field:state.field,time:state.times[state.index],interval:$('map-forecast-interval').value,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
+ const bounds=a.map.getBounds(),selection=restored?.model?restored:{model:state.model,followLatest:followLatest.a,menuMeta:state.metas[state.model]?.normalMenuMeta??state.metas[state.model],field:state.field,time:state.times[state.index],interval:$('map-forecast-interval').value,area:$('map-area').value==='current'?'uk':$('map-area').value,bounds:[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()]};
  briefingScroll=window.scrollY;briefingActive=true;pauseAnimation();++timeGeneration;viewportRefresh.cancel();
  const opening=++briefingOpening;
  if($('expanded-map').open)$('expanded-map').close();
@@ -986,14 +1008,31 @@ async function openBriefing(){
     onClose:closeBriefing
    });
   }
-  $('briefing-loading').hidden=true;briefingView.open(selection);
+  $('briefing-loading').hidden=true;await briefingView.open(selection);
  }catch(error){if(opening!==briefingOpening||!briefingActive)return;closeBriefing();status('Briefing could not open. '+error.message);setTime();}
 }
 $('open-briefing').addEventListener('click',openBriefing);$('mobile-briefing').addEventListener('click',openBriefing);
 $('briefing-loading-close').addEventListener('click',closeBriefing);
 // Prepare the optional view when the user approaches either button.
 for(const id of ['open-briefing','mobile-briefing'])for(const event of ['pointerenter','focus'])$(id).addEventListener(event,()=>{void loadBriefing().catch(()=>{});});
+
+for(const key of ['a','b','c']){
+ $('toggle-panel-menu-'+key).hidden=!state.compare;
+ if(savedLayout?.panels[['a','b','c'].indexOf(key)])setPanelMenuExpanded(key,savedLayout.panels[['a','b','c'].indexOf(key)].expanded);
+}
 await configure();
+if(savedLayout?.briefing)await openBriefing(savedLayout.briefing);
+function captureLayout(){
+ // A pending or failed model switch must never replace a working saved setup.
+ if(!state.times.length||$('reload-maps').disabled||Object.values(panels).some(p=>p.configuring))return null;
+ const briefing=briefingActive?briefingView?.snapshot():null;if(briefingActive&&!briefing)return null;
+ return {version:1,panels:['a','b','c'].map(key=>{
+  const {model,field}=panelSelection(state,key),map=panels[key]?.map,center=map?.getCenter();
+  return {model:followLatest[key]?sourceModel(model):model,field,followLatest:followLatest[key],...state.overlays[key],expanded:$('toggle-panel-menu-'+key).getAttribute('aria-expanded')!=='false',camera:center?[center.lng,center.lat,map.getZoom()]:null};
+ }),compare:state.compare,comparisonCount:state.comparisonCount,interval:$('map-forecast-interval').value,time:state.times[state.index],area:$('map-area').value,background,terrain,roads,opacity:state.opacity,speed:playback.interval,sidebarCollapsed:sidebar?.collapsed(),briefing};
+}
+layoutRestore.start(captureLayout,layout=>layout.briefing?'Briefing - '+modelName(layout.briefing.model)+' - '+layout.briefing.count+' panels':layout.panels.slice(0,layout.compare?layout.comparisonCount:1).map(p=>modelName(p.model)+' / '+(fields.find(f=>f.key===p.field)?.name??p.field)).join(' | '));
+for(const event of ['change','click','input'])document.querySelector('main').addEventListener(event,()=>layoutRestore.changed());
 let liveRunTimer=setInterval(refreshLiveRuns,60000);
 window.addEventListener('pagehide',()=>clearInterval(liveRunTimer));
 window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(liveRunTimer);liveRunTimer=setInterval(refreshLiveRuns,60000);refreshLiveRuns();}});

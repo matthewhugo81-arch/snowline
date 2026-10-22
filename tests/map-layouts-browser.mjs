@@ -1,0 +1,96 @@
+import {createServer} from 'node:http';
+import {readFile,mkdir} from 'node:fs/promises';
+import {resolve,extname,sep} from 'node:path';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+const root=process.cwd(),types={'.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.html':'text/html','.json':'application/json'};
+const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!path.startsWith(root+sep))throw Error('Path');const body=await readFile(path);res.writeHead(200,{'Content-Type':types[extname(path)]??'application/octet-stream'});res.end(body);}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const origin='http://127.0.0.1:'+server.address().port;
+const source=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(source.match(/const fakeOM=(`[^]*?`);\r?\nconst geo=/)[1]);
+const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
+const reference='2026-10-21T12:00:00Z',time='2026-10-22T00:00:00Z',UK='ukmo_uk_ensemble_2km',key='ens_gust_gt50kt_12h',rain='ens_rain_ge10mm_12h',snow='ens_snow_ge1mm_12h';
+const native={completed:true,reference_time:reference,variables:['temperature_2m','precipitation'],valid_times:Array.from({length:25},(_,h)=>new Date(Date.parse(reference)+h*3600000).toISOString())};
+const productReference='2026-10-21T06:00:00Z';
+const product={format_version:1,domain:'snowline_mogreps_uk_products',completed:true,reference_time:productReference,member_count:18,source_cycles:Array.from({length:6},(_,i)=>new Date(Date.parse(productReference)-i*3600000).toISOString()),variables:[key,rain,snow],valid_times:[time],variable_valid_times:Object.fromEntries([key,rain,snow].map(k=>[k,[time]])),variable_intervals:Object.fromEntries([key,rain,snow].map(k=>[k,{[time]:{hours:12,start:reference,end:time}}]))};
+const six=['ens_gust_gt50kt_6h','ens_rain_ge10mm_6h','ens_snow_ge1mm_6h'];
+for(const k of six){product.variables.push(k);product.variable_valid_times[k]=[time];product.variable_intervals[k]={[time]:{hours:6,start:'2026-10-21T18:00:00Z',end:time}};}
+const anomalyTime='2026-10-23T09:00:00Z',anomalies=['ens_temperature_min_anomaly','ens_temperature_max_anomaly'];
+const cold=['0','m2','m5','m10'].map(t=>`ens_temperature_le${t}c_24h`);
+product.valid_times.push(anomalyTime);
+product.anomaly_reference={dataset:'HadUK-Grid',period:'1991-2020',statistic:'monthly normal of daily minimum/maximum',forecast_window:'24 hours ending 09 UTC'};
+for(const k of [...anomalies,...cold]){product.variables.push(k);product.variable_valid_times[k]=[anomalyTime];product.variable_intervals[k]={[anomalyTime]:{hours:24,start:'2026-10-22T09:00:00Z',end:anomalyTime}};}
+const sixTimes=Array.from({length:9},(_,i)=>new Date(Date.parse(time)+i*6*3600000).toISOString());
+for(const k of six){product.variable_valid_times[k]=sixTimes;product.variable_intervals[k]=Object.fromEntries(sixTimes.map(t=>[t,{hours:6,start:new Date(Date.parse(t)-21600000).toISOString(),end:t}]));}
+product.valid_times=[...new Set([...product.valid_times,...sixTimes])].sort();
+const snowDay='ens_snow_ge1mm_24h';product.variables.push(snowDay);product.variable_valid_times[snowDay]=[sixTimes[4]];product.variable_intervals[snowDay]={[sixTimes[4]]:{hours:24,start:time,end:sixTimes[4]}};
+
+const errors=[];
+async function fixtures(context){
+ context.on('page',page=>page.on('pageerror',e=>errors.push(e.message)));
+ await context.addInitScript(()=>{window.fixtureDelay=1;});
+ await context.route('**/vendor/index.mjs*',r=>r.fulfill({contentType:'text/javascript',body:fakeOM}));
+ await context.route('**/maps.js*',async r=>r.fulfill({contentType:'text/javascript',body:(await readFile('maps.js','utf8'))+'\nwindow.layoutState=state;window.layoutPanels=panels;window.flushLayout=()=>layoutRestore.save();'}));
+ await context.route('https://tiles.openfreemap.org/**',r=>r.fulfill({json:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'white'}}]}}));
+ await context.route('**/coastline.geojson',r=>r.fulfill({json:{type:'FeatureCollection',features:[]}}));
+ await context.route('https://openmeteo.s3.amazonaws.com/**',r=>r.fulfill({json:native}));
+ await context.route('**/ensemble-data/**',r=>r.fulfill({status:404,json:{error:true}}));
+ await context.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:product}));
+}
+const ready=page=>page.waitForFunction(()=>window.layoutState&&!document.getElementById('map-variable').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'),{},{timeout:60000});
+const briefingReady=page=>page.waitForFunction(()=>document.querySelector('#briefing-grid .briefing-card[data-ready="true"]')&&!document.querySelector('#briefing-grid .briefing-card:not([data-ready="true"])'),{},{timeout:60000});
+const saved=page=>page.waitForFunction(()=>location.search.includes('layout=')&&document.getElementById('layout-notice').textContent.startsWith('Saved automatically'),{},{timeout:10000});
+try{
+ const context=await browser.newContext({viewport:{width:1440,height:900}});await fixtures(context);
+ const pages=[];
+ for(let i=0;i<4;i++){
+  const page=await context.newPage();pages.push(page);await page.goto(origin+'/maps.html');await ready(page);
+  await page.locator('#map-forecast-interval').selectOption(['3','6','12','native'][i]);await ready(page);
+  await page.locator('#layout-restore summary').click();await page.locator('#layout-name').fill('Monitor '+(i+1));await page.locator('#layout-save-name').click();await saved(page);await page.locator('#layout-restore summary').click();
+ }
+ const p=pages[0];
+ await p.locator('#compare-maps').check();await ready(p);await p.locator('#map-comparison-count').selectOption('3');await ready(p);
+ await p.locator('#map-model-b').selectOption('ukmo_uk_ensemble_2km');await ready(p);
+ await p.locator('#map-variable-b').selectOption(six[0]);await ready(p);
+ await p.locator('#map-variable-c').selectOption('temperature_2m');await ready(p);
+ await p.locator('#map-contours-c').check();await p.locator('#toggle-panel-menu-b').click();
+ await p.locator('#map-area').selectOption('current');await p.evaluate(()=>window.layoutPanels.a.map.jumpTo({center:[-4,54],zoom:5.3}));
+ await p.locator('#toggle-map-sidebar').click();
+ await p.waitForTimeout(1000);await p.reload();await ready(p);
+ assert.equal(await p.locator('#map-comparison-count').inputValue(),'3');assert.equal(await p.locator('#compare-maps').isChecked(),true);
+ assert.equal(await p.locator('#map-model-b').inputValue(),UK);assert.equal(await p.locator('#map-variable-b').inputValue(),six[0]);
+ assert.equal(await p.locator('#map-variable-c').inputValue(),'temperature_2m');assert.equal(await p.locator('#map-contours-c').isChecked(),true);
+ assert.equal(await p.locator('#toggle-panel-menu-b').getAttribute('aria-expanded'),'false');assert.equal(await p.locator('#toggle-map-sidebar').getAttribute('aria-expanded'),'false');
+ assert.ok(Math.abs(await p.evaluate(()=>layoutPanels.a.map.getCenter().lng)+4)<.01);
+ assert.ok(Math.abs(await p.evaluate(()=>layoutPanels.a.map.getZoom())-5.3)<.01);
+ console.log('Three-panel models, optional product, overlays, camera and collapsed controls survive refresh');
+ for(let i=1;i<4;i++){await pages[i].reload();await ready(pages[i]);assert.equal(await pages[i].locator('#map-forecast-interval').inputValue(),['3','6','12','native'][i]);}
+ // A deliberately pinned run remains pinned; latest layouts store the base model.
+ const pinned=await pages[2].evaluate(()=>{const id=new URL(location.href).searchParams.get('layout'),key='snowline-map-layout-v1:'+id,entry=JSON.parse(localStorage.getItem(key));entry.layout.panels[0].model=window.layoutState.model;entry.layout.panels[0].followLatest=false;localStorage.setItem(key,JSON.stringify(entry));return window.layoutState.model;});
+ await pages[2].reload();await ready(pages[2]);assert.equal(await pages[2].evaluate(()=>window.layoutState.model),pinned);
+ assert.equal(await pages[2].evaluate(()=>JSON.parse(localStorage.getItem('snowline-map-layout-v1:'+new URL(location.href).searchParams.get('layout'))).layout.panels[0].followLatest),false);
+ const b=pages[1];await b.locator('#open-briefing').click();await briefingReady(b);await b.locator('#briefing-count').selectOption('9');await briefingReady(b);await b.locator('#briefing-toggle-controls').click();
+ await b.waitForTimeout(800);await b.reload();await briefingReady(b);
+ assert.equal(await b.locator('#briefing-count').inputValue(),'9');assert.equal(await b.locator('#briefing-control-section').isHidden(),true);console.log('Nine-panel Briefing survives refresh');
+ await p.locator('#layout-restore summary').click();assert.equal(await p.locator('#layout-list li').count(),4);
+ const restoreURL=await p.locator('#layout-list .layout-choice').filter({hasText:'Monitor 2'}).getAttribute('href');
+ const storage=await context.storageState();const originalId=new URL(p.url()).searchParams.get('layout');
+ await p.screenshot({path:'review-output/restore-layout-desktop.png'});
+ // A restarted browser has local storage and a restored/bookmarked URL, but no session storage.
+ await context.close();const restarted=await browser.newContext({viewport:{width:390,height:844},storageState:storage});await fixtures(restarted);
+ const phone=await restarted.newPage();await phone.goto(restoreURL);await briefingReady(phone);
+ assert.equal(await phone.locator('#briefing-count').inputValue(),'9');await phone.locator('#layout-restore summary').click();
+ const overflow=await phone.locator('.layout-menu').evaluate(e=>{const r=e.getBoundingClientRect();return r.left<0||r.right>innerWidth||r.bottom>innerHeight;});assert.equal(overflow,false);
+ await phone.screenshot({path:'review-output/restore-layout-phone.png'});
+ await phone.keyboard.press('Escape');assert.equal(await phone.locator('#layout-restore').getAttribute('open'),null);
+ // Opening another layout creates an independent tab, without inherited session identity.
+ const q=await restarted.newPage();await q.goto(origin+'/maps.html?layout='+originalId);await ready(q);assert.equal(await q.locator('#map-comparison-count').inputValue(),'3');
+ assert.notEqual(new URL(q.url()).searchParams.get('layout'),new URL(phone.url()).searchParams.get('layout'));
+ // Duplicating a tab can copy sessionStorage. It must acquire a new slot while the original stays active.
+ const qId=new URL(q.url()).searchParams.get('layout'),duplicate=await restarted.newPage();await duplicate.addInitScript(id=>sessionStorage.setItem('snowline-layout-tab',id),qId);await duplicate.goto(q.url());await ready(duplicate);
+ assert.notEqual(new URL(duplicate.url()).searchParams.get('layout'),qId);
+ assert.ok(await duplicate.evaluate(async()=>{const id=new URL(location.href).searchParams.get('layout');return (await navigator.locks.query()).held.some(lock=>lock.name==='snowline-layout-tab:'+id);}),'The duplicated tab owns its new slot too');
+ assert.equal(await q.locator('#map-comparison-count').inputValue(),'3');
+ assert.deepEqual(errors,[]);console.log('Four durable layouts, restart, separate tabs and mobile menu passed');await restarted.close();
+}finally{await browser.close();server.close();}

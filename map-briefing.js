@@ -137,6 +137,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  }
  function renderPage(){
   if(!active||!meta||!preset)return;cancel();
+  document.dispatchEvent(new Event('snowline-layout-ready'));
   if(!times.length){$('grid').replaceChildren();$('status').textContent='No common forecast times for this chart.';navigation();return;}
   const token=generation;controller=new AbortController();const signal=controller.signal;
   const selection={model:model.id,meta,preset,bounds:[...bounds()],size:[...chartSize()],background:$('background').value,appearance:getAppearance(),overlays:overlays()};
@@ -271,12 +272,20 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  });
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden)cancel();else if(meta){renderPage();refreshRun();}else configure();});
  window.addEventListener('pagehide',()=>{clearInterval(refreshTimer);cancel();images.clear();renderer?.destroy();renderer=null;});
- return {open(selection){$('background').value=getBackground();
+ return {snapshot(){
+  if(!active||!meta||!preset||!times[start])return null;
+  return {model:runKey??model.id,followLatest:!runKey,field:preset.id,time:times[start],interval,area:$('area').value,bounds:currentBounds,count:count(),contours:$('contours').checked,grid:$('grid-values').checked,controlsHidden:$('control-section').hidden};
+ },open(selection){$('background').value=getBackground();
   if(selection.menuMeta&&!selection.menuMeta.productOnly)normalMenus.set(sourceModel(selection.model),selection.menuMeta);
   history?.close();$('sequence').hidden=false;$('sequence-mode').setAttribute('aria-pressed','true');$('history-mode').setAttribute('aria-pressed','false');
   active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=accumulationHours(selection.field)&&selection.time?periodStart(selection.time,accumulationHours(selection.field)):null;requestedChart=selection.field??selection.preset??null;
   $('model').value=choices.some(item=>item.id===sourceModel(selection.model))?sourceModel(selection.model):choices[0].id;
   runKey=selection.followLatest===true?null:selection.model.includes('@')?selection.model:null;
-  $('area').value=selection.area??'uk';$('close').focus({preventScroll:true});configure();
+  $('area').value=selection.area??'uk';
+  if(selection.count)$('count').value=String(selection.count);
+  if(selection.contours!==undefined)$('contours').checked=selection.contours;
+  if(selection.grid!==undefined)$('grid-values').checked=selection.grid;
+  if(selection.controlsHidden!==undefined){$('control-section').hidden=selection.controlsHidden;$('toggle-controls').textContent=selection.controlsHidden?'Show controls':'Hide controls';$('toggle-controls').setAttribute('aria-expanded',String(!selection.controlsHidden));}
+  $('close').focus({preventScroll:true});return configure();
  },close};
 }

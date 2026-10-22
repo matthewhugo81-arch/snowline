@@ -22,4 +22,5 @@ export function setupMapSidebar({onLayoutChange=()=>{}}={}){
  });
  desktop.addEventListener('change',update);
  update();
+ return {collapsed:()=>collapsed,restore(value){collapsed=value===true;update();}};
 }
