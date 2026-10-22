@@ -54,6 +54,21 @@ test('ECMWF anomalies cannot extend beyond Day 6',()=>{
  }
 });
 
+test('UK and Ireland references load without changing palette, periods or older archives',()=>{
+ const k='ens_temperature_max_anomaly',t='2026-10-23T09:00:00Z';
+ const m={...meta(),domain:'snowline_ecmwf_products',member_count:51,variables:[k],valid_times:[t],variable_valid_times:{[k]:[t]},variable_intervals:{[k]:{[t]:{hours:24,start:'2026-10-22T09:00:00Z',end:t}}}};
+ for(const dataset of ['HadUK-Grid','HadUK-Grid + Met Eireann']){
+  m.anomaly_reference={dataset,period:'1991-2020'};
+  assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),true);
+ }
+ m.anomaly_reference.period='1981-2010';assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),false);
+ m.anomaly_reference={dataset:'unknown',period:'1991-2020'};assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),false);
+ for(const f of PRODUCT_FIELDS.filter(f=>f.group==='Temperature anomalies')){
+  assert.deepEqual(f.stops,[-10,-8,-6,-4,-2,0,2,4,6,8,10]);assert.equal(f.periodHours,24);
+  assert.match(f.note,/Met Éireann/);assert.match(f.note,/border discontinuity/);
+ }
+});
+
 test('probability menus sort all periods together, including native EC probabilities',async()=>{
  const {briefingPresets}=await import('../map-briefing-data.js');
  const native={key:'precipitation_probability_10mm_24h',name:'24 h precipitation ≥ 10 mm · probability',periodHours:24,group:'Ensemble probabilities'};

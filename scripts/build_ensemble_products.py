@@ -57,10 +57,12 @@ def write_frame(path,values):
     writer.close(writer.write_group(name='root',children=children));tmp.replace(path)
 
 
-def task_complete(record,task,model,kind,has_climatology):
+def task_complete(record,task,model,kind,has_climatology,revision=None):
     if task not in record.get('tasks',[]):return False
     required=set(COLD_THRESHOLDS) if model=='mogreps_uk' and kind=='min' else set()
-    if kind in ('min','max') and has_climatology:required.add(f'ens_temperature_{kind}_anomaly')
+    if kind in ('min','max') and has_climatology:
+        key=f'ens_temperature_{kind}_anomaly';required.add(key)
+        if revision and record.get('anomaly_revisions',{}).get(key)!=revision:return False
     return required.issubset(record.get('variables',[]))
 
 
@@ -79,11 +81,12 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
     kinds=['gust','precip','rain_occurrence','snow_occurrence'] if model=='gefs' else ['gust','rain','snow']
     end_limit=min(max_hour,114 if model=='mogreps_uk' else 120)
     targets=probability_targets(model,end_limit,kinds)
-    normal=None
+    normal=None;reference=None
     if model=='ecmwf':climatology=Path(climatology).with_name('haduk-extrema-1991-2020-ecmwf.npz') if climatology else None
     if model in ('mogreps_uk','ecmwf') and climatology and Path(climatology).exists():
-        from temperature_climatology import read_normals
+        from temperature_climatology import read_normals,anomaly_reference
         normal=read_normals(climatology,model)
+        reference=anomaly_reference(climatology,model)
     if model=='mogreps_uk' or normal is not None:
         anomaly_limit=min(max_hour,144) if model=='ecmwf' else end_limit
         extrema_kinds=('min','max') if normal is not None else ('min',)
@@ -98,7 +101,7 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
         record_path=path.with_suffix('.json')
         record=json.loads(record_path.read_text()) if record_path.exists() and path.exists() else {}
         task=f'{kind}-{period}'
-        if task_complete(record,task,model,kind,normal is not None):continue
+        if task_complete(record,task,model,kind,normal is not None,reference and reference['revision']):continue
         try:
             a=source.window(h-period,h,kind)
             if kind in ('min','max'):
@@ -120,12 +123,18 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
             write_frame(path,merged)
             intervals=record.get('intervals',{})
             for key in values:intervals[key]=dict(start=iso(valid-timedelta(hours=period)),end=iso(valid),hours=period)
-            atomic_json(record_path,dict(tasks=sorted(set(record.get('tasks',[])+[task])),variables=sorted(merged),intervals=intervals))
-            publish(root,folder,source,model,run,targets,normal is not None)
+            revisions=record.get('anomaly_revisions',{})
+            for key in values:
+                if key.endswith('_anomaly'):revisions[key]=reference['revision']
+            atomic_json(record_path,dict(tasks=sorted(set(record.get('tasks',[])+[task])),variables=sorted(merged),intervals=intervals,anomaly_revisions=revisions))
+            publish(root,folder,source,model,run,targets,normal is not None,reference)
             print(f'{model} T+{h} {task}: published {len(values)} grids',flush=True)
         except Exception as error:
             failures.append(f'T+{h} {task}: {error}');print(f'::warning::{model} {failures[-1]}',flush=True)
-    if not (folder/'meta.json').exists():raise RuntimeError('No verified products: '+('; '.join(failures[:2])))
+    # Refresh even when all tasks were reused or rebuilding hit its budget.
+    # Old-baseline anomalies must never be advertised as the new reference.
+    publish(root,folder,source,model,run,targets,normal is not None,reference)
+    if not (folder/'meta.json').exists() or not json.loads((folder/'meta.json').read_text()).get('variables'):raise RuntimeError('No verified products: '+('; '.join(failures[:2])))
     # Retain two product runs independently of the ordinary map archive.
     folders=sorted((root/domain).glob('*/*/*/*Z'),reverse=True)
     for old in folders[2:]:
@@ -133,21 +142,28 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
         shutil.rmtree(old)
 
 
-def publish(root,folder,source,model,run,targets,has_climatology):
+def publish(root,folder,source,model,run,targets,has_climatology,reference=None):
     records={}
     for f in folder.glob('*.om.json'):
         valid=f.name.split('.om')[0];valid=datetime.strptime(valid,'%Y-%m-%dT%H%M').replace(tzinfo=UTC)
         if not f.with_suffix('.png').exists():continue
-        records[iso(valid)]=json.loads(f.read_text())
+        record=json.loads(f.read_text())
+        if reference:
+            record['variables']=[k for k in record['variables'] if not k.endswith('_anomaly')
+                                 or record.get('anomaly_revisions',{}).get(k)==reference['revision']]
+        if record['variables']:records[iso(valid)]=record
+    # Do not replace a usable older publication when a new run produced no
+    # data. An existing obsolete snapshot must still be invalidated below.
+    if not records and not (folder/'meta.json').exists():return
     variables=sorted({k for r in records.values() for k in r['variables']})
     times=sorted(records)
-    completed=all(task_complete(records.get(iso(run+timedelta(hours=h)),{}),f'{kind}-{period}',model,kind,has_climatology) for h,kind,period in targets)
+    completed=all(task_complete(records.get(iso(run+timedelta(hours=h)),{}),f'{kind}-{period}',model,kind,has_climatology,reference and reference['revision']) for h,kind,period in targets)
     meta=dict(format_version=1,domain=f'snowline_{model}_products',reference_time=iso(run),completed=completed,variables=variables,valid_times=times,
               variable_valid_times={k:[t for t in times if k in records[t]['variables']] for k in variables},
               variable_intervals={k:{t:records[t]['intervals'][k] for t in times if k in records[t]['variables']} for k in variables},
               member_count=source.count,source_cycles=[iso(c) for c in getattr(source,'cycles',[run])],generated_at=iso(datetime.now(UTC)),
               method='Member-first complete windows; all members required at each cell; no probability averaging, neighbourhood smoothing or missing-as-zero.',
-              anomaly_reference={'dataset':'HadUK-Grid','period':'1991-2020','statistic':'monthly normal of daily minimum/maximum','forecast_window':'24 hours ending 09 UTC'} if has_climatology else None)
+              anomaly_reference=(reference or {'dataset':'HadUK-Grid','period':'1991-2020','statistic':'monthly normal of daily minimum/maximum','forecast_window':'24 hours ending 09 UTC'}) if has_climatology else None)
     atomic_json(folder/'meta.json',meta)
     latest=root/meta['domain']/'latest.json'
     if not latest.exists() or json.loads(latest.read_text())['reference_time']<=meta['reference_time']:atomic_json(latest,meta)

@@ -1,4 +1,4 @@
-import {productChoices} from './map-ensemble-products.js?v=20261022-briefing-products';
+import {productChoices} from './map-ensemble-products.js?v=20261022-ireland-anomalies';
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
@@ -6,7 +6,7 @@ import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accum
 import {directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
 import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261020-run-selector';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
-import {sourceVariable,availableFields,compareFields,variableGroup} from './map-catalogue.js?v=20261022-layer-order';
+import {sourceVariable,availableFields,compareFields,variableGroup} from './map-catalogue.js?v=20261022-ireland-anomalies';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 

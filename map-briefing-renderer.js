@@ -10,7 +10,7 @@ import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261020-run-selecto
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-briefing-products';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-ireland-anomalies';
 import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {briefingValueLabels} from './map-briefing-values.js?v=20261020-run-selector';
 
@@ -18,7 +18,7 @@ import {compositeSettings as briefingSettings,compositeUnderlay,WEATHER_COMPOSIT
 import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261014-interaction-audit';
 import {fieldSource} from './map-sources.js?v=20261020-run-selector';
-import {sourceVariable} from './map-catalogue.js?v=20261020-ifs-coverage';
+import {sourceVariable} from './map-catalogue.js?v=20261022-ireland-anomalies';
 import {forecastInputWork} from './map-work-queue.js';
 import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261020-native-levels';
 export {briefingSettings};

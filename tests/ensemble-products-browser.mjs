@@ -19,7 +19,7 @@ for(const k of six){product.variables.push(k);product.variable_valid_times[k]=[t
 const anomalyTime='2026-10-23T09:00:00Z',anomalies=['ens_temperature_min_anomaly','ens_temperature_max_anomaly'];
 const cold=['0','m2','m5','m10'].map(t=>`ens_temperature_le${t}c_24h`);
 product.valid_times.push(anomalyTime);
-product.anomaly_reference={dataset:'HadUK-Grid',period:'1991-2020',statistic:'monthly normal of daily minimum/maximum',forecast_window:'24 hours ending 09 UTC'};
+product.anomaly_reference={dataset:'HadUK-Grid + Met Eireann',period:'1991-2020',statistic:'monthly normal of daily minimum/maximum',forecast_window:'24 hours ending 09 UTC'};
 for(const k of [...anomalies,...cold]){product.variables.push(k);product.variable_valid_times[k]=[anomalyTime];product.variable_intervals[k]={[anomalyTime]:{hours:24,start:'2026-10-22T09:00:00Z',end:anomalyTime}};}
 const sixTimes=Array.from({length:9},(_,i)=>new Date(Date.parse(time)+i*6*3600000).toISOString());
 for(const k of six){product.variable_valid_times[k]=sixTimes;product.variable_intervals[k]=Object.fromEntries(sixTimes.map(t=>[t,{hours:6,start:new Date(Date.parse(t)-21600000).toISOString(),end:t}]));}

@@ -3,7 +3,7 @@
 The Weather layer menu contains **Ensemble probabilities** and **Temperature
 anomalies**. Temperature anomalies are restricted to MOGREPS-UK and ECMWF ENS.
 ECMWF anomalies stop at Day 6 (T+144), where complete 09–09 UTC windows end. The verified
-HadUK-Grid v1.3.2.0 1991–2020 baseline is installed; both extrema layers load
+HadUK-Grid v1.3.2.0 1991–2020 baseline and Met Éireann 1991–2020 Irish supplement are installed; both extrema layers load
 on selection, with no new ordinary-startup requests.
 
 ## Probability definitions
@@ -93,6 +93,16 @@ date's normal; maximum uses the start date's normal. This differs from the UKPP
 day/night charts against daily NCIC climatology and is explicitly labelled.
 For a future exact daily reference, derive smoothed calendar-day normals from
 the historical daily HadUK files and validate their observation windows.
+
+The Republic of Ireland uses the verified Met Éireann V2 1991–2020 monthly
+extrema grids. Existing UK values are preserved, including Northern Ireland.
+Both models still subtract the normal from the mean of genuine, complete
+member extrema. Missing forecast members or baseline cells remain missing.
+The Irish reference adds no browser download or runtime processing dependency.
+See `climatology/README.md` for reproducible preparation, provenance, border
+precedence, attribution and differences between the two observational datasets.
+Completed tasks record the baseline fingerprint; changing the reference rebuilds
+only extrema tasks. Metadata excludes stale anomalies during partial rebuilding.
 
 ## Validation
 

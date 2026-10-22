@@ -1,0 +1,35 @@
+{
+  "dataset": "Met Eireann",
+  "period": "1991-2020",
+  "source_url": "https://www.met.ie/cms/assets/uploads/2024/07/IE_TEMP_9120_V2.zip",
+  "archive_sha256": "f8ec55433fef2d6f0c9876e0c6b8c7c6bc50290c67ed31151c705dbd478da463",
+  "source_crs": "EPSG:29902",
+  "sources": {
+    "min": {
+      "file": "IE_TMIN_9120_V2.txt",
+      "sha256": "9219851842aac5b56a610fcabab201e67660cb1f1da7a7ad64fa0d6c2992cd5a"
+    },
+    "max": {
+      "file": "IE_TMAX_9120_V2.txt",
+      "sha256": "3247967a45601fb180bda8f9540a8c1596eb2288cdca981faa798f4b9b4bd7f3"
+    }
+  },
+  "source_points": 70091,
+  "artifacts": {
+    "mogreps_uk": {
+      "file": "met-eireann-extrema-1991-2020.npz",
+      "sha256": "63c4d7683158d86975d5460c70355b6605bdff8ee06ede996d1925b89474f186",
+      "land_cells": 17536,
+      "bytes": 590029
+    },
+    "ecmwf": {
+      "file": "met-eireann-extrema-1991-2020-ecmwf.npz",
+      "sha256": "2e9c0db86ad4538b9a9d11f79c6d4424fb98c2be4409a469e836e1a0ce7b7367",
+      "land_cells": 210,
+      "bytes": 23154
+    }
+  },
+  "licence": "https://creativecommons.org/licenses/by/4.0/",
+  "licence_notice": "https://www.met.ie/about-us/specialised-services/open-data",
+  "method": "Native MOGREPS: containing supplied 1 km cell. ECMWF: mean of supplied 1 km land points per 0.25 degree cell. Existing finite HadUK pairs always take precedence."
+}

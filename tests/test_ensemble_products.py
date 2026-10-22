@@ -10,7 +10,7 @@ import numpy as np
 from ensemble_products import complete_window,probability,threshold_fields,lagged_cycles,member_extrema_anomaly,nonnegative_difference
 from ensemble_product_sources import MetOffice,GlobalGRIB
 from ensemble_products import cold_probability_fields,COLD_THRESHOLDS
-from build_ensemble_products import build,publish,probability_targets
+from build_ensemble_products import build,publish,probability_targets,task_complete
 
 
 class Products(unittest.TestCase):
@@ -106,6 +106,33 @@ class Products(unittest.TestCase):
                     build('mogreps_uk',root,root/'cache',run,max_hour=24,climatology=normal)
                     self.assertEqual(calls,[],'Complete retained tasks require no source download')
                     self.assertTrue(json.loads((folder/'meta.json').read_text())['completed'])
+                    if has_normal:
+                        normal.write_bytes(b'new verified baseline fixture')
+                        calls.clear()
+                        build('mogreps_uk',root,root/'cache',run,max_hour=24,climatology=normal)
+                        self.assertEqual(calls,[(0,24,'min'),(0,24,'max')],
+                                         'Baseline upgrade rebuilds extrema only; probabilities stay cached')
+
+    def test_publication_hides_stale_anomalies_during_partial_rebuild(self):
+        from types import SimpleNamespace
+        run=datetime(2026,10,21,9,tzinfo=timezone.utc)
+        key='ens_temperature_min_anomaly';rain='ens_rain_ge1mm_24h'
+        record=dict(tasks=['min-24','rain-24'],variables=[key,rain],
+                    anomaly_revisions={key:'old'},intervals={key:{},rain:{}})
+        self.assertFalse(task_complete(record,'min-24','ecmwf','min',True,'new'))
+        self.assertTrue(task_complete(record,'rain-24','ecmwf','rain',True,'new'))
+        with TemporaryDirectory() as directory:
+            root=Path(directory);folder=root/'run';folder.mkdir()
+            (folder/'2026-10-22T0900.om.png').write_bytes(b'fixture')
+            path=folder/'2026-10-22T0900.om.json';path.write_text(json.dumps(record))
+            reference=dict(dataset='HadUK-Grid + Met Eireann',period='1991-2020',revision='new')
+            publish(root,folder,SimpleNamespace(count=51),'ecmwf',run,[(24,'min',24)],True,reference)
+            meta=json.loads((folder/'meta.json').read_text())
+            self.assertEqual(meta['variables'],[rain]);self.assertFalse(meta['completed'])
+            # Even an anomaly-only old snapshot must stop exposing its old data.
+            record['variables']=[key];path.write_text(json.dumps(record))
+            publish(root,folder,SimpleNamespace(count=51),'ecmwf',run,[(24,'min',24)],True,reference)
+            self.assertEqual(json.loads((folder/'meta.json').read_text())['variables'],[])
 
     def test_member_extrema_precede_probability(self):
         a=np.array([[[60]],[[0]]],dtype=float);b=np.array([[[0]],[[60]]],dtype=float)
