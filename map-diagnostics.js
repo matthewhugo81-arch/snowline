@@ -18,7 +18,7 @@ export function diagnosticVariable(meta,key){
 export function diagnosticField(key){
  if(key===THETA_W)return {key,name:'850 hPa theta-w (wet-bulb potential temperature)',group:'Derived diagnostics',unit:'°C',
   stops:[-1000,...Array.from({length:20},(_,i)=>-12+i*2)],colors:['#ffffff','#e6f3ff','#cce6ff','#4c66ff','#061cff','#0946ff','#0493ff','#01d1ff','#0ac2b3','#3fb66b','#09a516','#32c501','#a6dd00','#ffff00','#ffc903','#ff9900','#ff6600','#cc1c38','#a41c88','#500050','#000000'],
-  bands:true,legendLabels:['<−12',...Array.from({length:20},(_,i)=>String(-12+i*2)+(i===19?'+':''))],legendNote:'2°C colour bands; white below −12°C and black at 26°C or above.',
+  bands:true,legendLabels:['<−12','',...Array.from({length:19},(_,i)=>String(-10+i*2)+(i===18?'+':''))],legendNote:'2°C colour bands; white below −12°C and black at 26°C or above.',
   contourLabel:'2°C',note:'Derived 850 hPa wet-bulb potential temperature (theta-w), expressed in °C at 1000 hPa. Bolton / Davies-Jones approximation from same-time temperature and relative humidity over liquid water. Not 850 hPa air temperature. This pressure surface can lie below high terrain.'};
  if(/^relative_vorticity_(300|400)hPa$/.test(key))return {key,name:key.match(/\d+/)[0]+' hPa relative vorticity',group:'Derived diagnostics',unit:'10⁻⁵ s⁻¹',
   stops:[-40,-20,-10,-5,0,5,10,20,30,35,40],colors:['#279ecd','#51ccdf','#86e4db','#a4dfb5','#c8df65','#fbe075','#f7a439','#df5429','#bd2344','#b324bd','#7622ba'],contourValues:Array.from({length:41},(_,i)=>(i-20)*5),

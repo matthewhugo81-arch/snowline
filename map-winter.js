@@ -1,4 +1,4 @@
-import {THETA_W,diagnosticField,diagnosticVariable} from './map-diagnostics.js?v=20261022-theta-bands';
+import {THETA_W,diagnosticField,diagnosticVariable} from './map-diagnostics.js?v=20261022-theta-label';
 import {typeMethod,ESTIMATE_NOTE,NATIVE_NOTE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {SYMBOL_SIZE_NOTE} from './map-precipitation-glyphs.js?v=20261014-vw-refinement1';
 export const THETA_SYMBOLS='theta_w_precipitation_symbols';
