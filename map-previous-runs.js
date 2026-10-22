@@ -1,6 +1,6 @@
 import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-ec-periods';
+import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-cold-probs';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261020-run-selector';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';

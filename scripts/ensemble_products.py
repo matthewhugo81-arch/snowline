@@ -8,6 +8,15 @@ import numpy as np
 
 THRESHOLDS = {'gust': (50, 60, 70), 'rain': (1, 10, 25, 50),
               'snow': (.1, 1, 5, 10), 'precip': (1, 10, 25, 50)}
+COLD_THRESHOLDS = {f'ens_temperature_le{label}c_24h': threshold
+                   for label, threshold in [('0', 0), ('m2', -2), ('m5', -5), ('m10', -10)]}
+
+
+def cold_probability_fields(minima, count):
+    """Inclusive lower-tail probabilities of each member's complete 24h minimum."""
+    negative_minima = -np.asarray(minima)
+    return {key: probability(negative_minima, -threshold, count)
+            for key, threshold in COLD_THRESHOLDS.items()}
 
 
 def lagged_cycles(reference):

@@ -2,13 +2,72 @@ import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 import unittest
+from unittest.mock import patch
+from tempfile import TemporaryDirectory
+import json
 from datetime import datetime,timezone
 import numpy as np
 from ensemble_products import complete_window,probability,threshold_fields,lagged_cycles,member_extrema_anomaly,nonnegative_difference
 from ensemble_product_sources import MetOffice,GlobalGRIB
+from ensemble_products import cold_probability_fields,COLD_THRESHOLDS
+from build_ensemble_products import build,publish
 
 
 class Products(unittest.TestCase):
+    def test_cold_thresholds_include_equality_and_are_monotonic(self):
+        a=np.array([[[0]], [[-2]], [[-5]], [[-10]], [[1]], [[-11]]],dtype=float)
+        fields=cold_probability_fields(a,6)
+        for key,expected in zip(COLD_THRESHOLDS,[500/6,400/6,50,200/6]):
+            self.assertAlmostEqual(float(fields[key][0,0]),expected,places=4)
+        a[0,0,0]=np.nan
+        self.assertTrue(all(np.isnan(v[0,0]) for v in cold_probability_fields(a,6).values()))
+        with self.assertRaises(ValueError):cold_probability_fields(a,18)
+
+    def test_cold_probability_uses_member_minimum_not_mean_or_time_average(self):
+        a=np.array([[[-2]],[[4]]]);b=np.array([[[4]],[[-2]]])
+        minima=complete_window([(0,12,a),(12,24,b)],0,24,'min')
+        self.assertEqual(cold_probability_fields(minima,2)['ens_temperature_lem2c_24h'][0,0],100)
+        self.assertEqual(cold_probability_fields((a+b)/2,2)['ens_temperature_lem2c_24h'][0,0],0)
+
+    def test_cold_build_without_climatology_and_retained_task_upgrade(self):
+        run=datetime(2026,10,21,9,tzinfo=timezone.utc)
+        for has_normal in (False,True):
+            with self.subTest(has_normal=has_normal),TemporaryDirectory() as directory:
+                root=Path(directory);normal=root/'normal.npz'
+                if has_normal:normal.touch()
+                calls=[]
+                source=MetOffice('mogreps_uk',run,root/'cache')
+                def window(start,end,kind):
+                    calls.append((start,end,kind));return np.zeros((18,1,1),dtype=np.float32)
+                source.window=window
+                def frame(path,values):path.write_bytes(b'fixture')
+                with patch('build_ensemble_products.MetOffice',return_value=source),patch('build_ensemble_products.uk_nearest_indices',return_value=(np.array([[0]]),np.array([[0]]),np.array([[True]]))),patch('build_ensemble_products.write_frame',side_effect=frame),patch('temperature_climatology.read_normals',return_value={k:np.zeros((12,1,1)) for k in ('min','max')}):
+                    build('mogreps_uk',root,root/'cache',run,max_hour=24,climatology=normal)
+                    folder=root/'snowline_mogreps_uk_products/2026/10/21/0900Z'
+                    record_path=folder/'2026-10-22T0900.om.json'
+                    record=json.loads(record_path.read_text())
+                    self.assertTrue(set(COLD_THRESHOLDS).issubset(record['variables']))
+                    self.assertEqual(calls.count((0,24,'min')),1,'Minima shared by anomalies and probabilities')
+                    self.assertEqual('ens_temperature_min_anomaly' in record['variables'],has_normal)
+                    if has_normal:
+                        # Simulate the previous release's completed anomaly-only minimum task.
+                        record['variables']=[k for k in record['variables'] if k not in COLD_THRESHOLDS]
+                        record['intervals']={k:v for k,v in record['intervals'].items() if k not in COLD_THRESHOLDS}
+                        record_path.write_text(json.dumps(record))
+                        np.savez_compressed(folder/'024-min-24.npz',ens_temperature_min_anomaly=np.zeros((1,1)))
+                        publish(root,folder,source,'mogreps_uk',run,[(24,'min',24)],True)
+                        self.assertFalse(json.loads((folder/'meta.json').read_text())['completed'])
+                        calls.clear()
+                        build('mogreps_uk',root,root/'cache',run,max_hour=24,climatology=normal)
+                        self.assertEqual(calls,[(0,24,'min')])
+                        updated=json.loads(record_path.read_text())
+                        self.assertTrue(set(COLD_THRESHOLDS).issubset(updated['variables']))
+                        self.assertEqual(updated['tasks'].count('min-24'),1)
+                    calls.clear()
+                    build('mogreps_uk',root,root/'cache',run,max_hour=24,climatology=normal)
+                    self.assertEqual(calls,[],'Complete retained tasks require no source download')
+                    self.assertTrue(json.loads((folder/'meta.json').read_text())['completed'])
+
     def test_member_extrema_precede_probability(self):
         a=np.array([[[60]],[[0]]],dtype=float);b=np.array([[[0]],[[60]]],dtype=float)
         peak=complete_window([(0,6,a),(6,12,b)],0,12,'max')

@@ -14,9 +14,10 @@ const reference='2026-10-21T12:00:00Z',time='2026-10-22T00:00:00Z',UK='ukmo_uk_e
 const native={completed:true,reference_time:reference,variables:['temperature_2m','precipitation'],valid_times:Array.from({length:25},(_,h)=>new Date(Date.parse(reference)+h*3600000).toISOString())};
 const product={format_version:1,domain:'snowline_mogreps_uk_products',completed:true,reference_time:reference,member_count:18,source_cycles:Array.from({length:6},(_,i)=>new Date(Date.parse(reference)-i*3600000).toISOString()),variables:[key,rain,snow],valid_times:[time],variable_valid_times:Object.fromEntries([key,rain,snow].map(k=>[k,[time]])),variable_intervals:Object.fromEntries([key,rain,snow].map(k=>[k,{[time]:{hours:12,start:reference,end:time}}]))};
 const anomalyTime='2026-10-23T09:00:00Z',anomalies=['ens_temperature_min_anomaly','ens_temperature_max_anomaly'];
+const cold=['0','m2','m5','m10'].map(t=>`ens_temperature_le${t}c_24h`);
 product.valid_times.push(anomalyTime);
 product.anomaly_reference={dataset:'HadUK-Grid',period:'1991-2020',statistic:'monthly normal of daily minimum/maximum',forecast_window:'24 hours ending 09 UTC'};
-for(const k of anomalies){product.variables.push(k);product.variable_valid_times[k]=[anomalyTime];product.variable_intervals[k]={[anomalyTime]:{hours:24,start:'2026-10-22T09:00:00Z',end:anomalyTime}};}
+for(const k of [...anomalies,...cold]){product.variables.push(k);product.variable_valid_times[k]=[anomalyTime];product.variable_intervals[k]={[anomalyTime]:{hours:24,start:'2026-10-22T09:00:00Z',end:anomalyTime}};}
 try{
  for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
   const page=await browser.newPage({viewport}),errors=[],requests=[];
@@ -28,7 +29,7 @@ try{
   await page.route('**/coastline.geojson',r=>r.fulfill({json:{type:'FeatureCollection',features:[]}}));
   await page.route('https://openmeteo.s3.amazonaws.com/**',r=>r.fulfill({json:native}));
   await page.route('**/ensemble-data/**',r=>r.request().url().includes('/snowline_ecmwf_ensemble/')?r.fulfill({json:{...native,domain:'snowline_ecmwf_ensemble',format_version:1,member_count:51}}):r.fulfill({status:404,json:{error:true}}));
-  await page.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:r.request().url().includes('/snowline_ecmwf_products/')?{...product,domain:'snowline_ecmwf_products',member_count:51,source_cycles:[reference]}:product}));
+  await page.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:r.request().url().includes('/snowline_ecmwf_products/')?{...product,domain:'snowline_ecmwf_products',member_count:51,source_cycles:[reference],variables:product.variables.filter(k=>!cold.includes(k))}:product}));
   const ready=()=>page.waitForFunction(()=>!document.getElementById('map-variable').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'),{},{timeout:60000});
   await page.goto(origin+'/maps.html');await ready();
   if(viewport.width<651)await page.locator('#mobile-map-settings').click();
@@ -52,6 +53,13 @@ try{
   await page.evaluate(()=>window.productRefresh());await ready();
   assert.ok(requests.filter(u=>u.endsWith('publication.json')).length>beforeRefresh,'Product-only refresh rechecks publication');
   assert.equal(await page.locator('#map-variable').inputValue(),anomalies[1]);
+  for(const k of cold){
+   await page.locator('#map-variable').selectOption(k);await ready();
+   assert.equal(await page.locator('#map-variable').inputValue(),k);
+   assert.match(await page.locator('#panel-label-a').textContent(),/Minimum temperature ≤/);
+   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
+   assert.equal(await page.locator('#legend-title-a').textContent(),'%');
+  }
   await page.locator('#map-variable').selectOption('temperature_2m');await ready();
   await page.locator('#compare-maps').check();await ready();
   await page.locator('#map-model-b').selectOption(UK);await ready();
@@ -72,6 +80,7 @@ try{
   assert.ok(!(await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
   await page.locator('#compare-maps').uncheck();await ready();
   await page.locator('#map-model').selectOption('snowline_ecmwf_ensemble');await ready();
+  for(const k of cold)assert.equal(await page.locator(`#map-variable option[value="${k}"]`).count(),0);
   for(const anomaly of anomalies){
    await page.locator('#map-variable').selectOption(anomaly);await ready();
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('snowline_ecmwf_products/'));
