@@ -1,3 +1,4 @@
+import {productChoices} from './map-ensemble-products.js?v=20261022-briefing-products';
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {appearanceKey} from './map-appearance.js?v=20261013-shared-appearance';
@@ -5,7 +6,7 @@ import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accum
 import {directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
 import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261020-run-selector';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
-import {sourceVariable,availableFields,variableGroup} from './map-catalogue.js?v=20261022-six-hour-probs';
+import {sourceVariable,availableFields,compareFields,variableGroup} from './map-catalogue.js?v=20261022-briefing-products';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 
@@ -28,9 +29,11 @@ export {MAP_AREAS as BRIEFING_AREAS} from './map-areas.js?v=20261013-nw-europe-p
 // Named combinations remain shortcuts, but the main map catalogue determines
 // the choices in both briefing views. A missing optional pressure overlay must
 // never hide an otherwise available field.
-export function briefingPresets(meta,fields){
+export function briefingPresets(meta,fields,model=null){
  if(!fields)return BRIEFING_PRESETS.filter(preset=>preset.required.every(key=>sourceVariable(meta,key)));
- return availableFields(fields,[meta]).map(field=>{
+ const available=availableFields(fields,[meta]);
+ if(model)for(const field of productChoices(model))if(!available.some(f=>f.key===field.key))available.push(field);
+ return available.sort(compareFields).map(field=>{
   const named=BRIEFING_PRESETS.find(p=>field.key===WEATHER_COMPOSITE?p.id==='weather':p.id!=='weather'&&p.field===field.key);
   const pressure=!!sourceVariable(meta,'pressure_msl');
   const preset=named?{...named,required:named.id==='weather'?named.required:[named.field],...(!pressure?{name:field.name,note:field.note}:{})}:
