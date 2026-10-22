@@ -1,9 +1,11 @@
 // Keep prepared PNG/vector tiles on disk, with a small hot memory cache. MapLibre
 // can then recreate a distant frame without downloading/decoding the model again.
+import {cacheDiskBudget,SharedForecastStorage} from './map-cache-storage.js?v=20261022-shared-cache';
 const PREFIX='snowline-forecast-tiles-v1-';
 // Faster machines can prepare six tiles concurrently while two slots remain
 // available for the selected chart. Keep the existing budget on smaller devices.
-export function forecastRenderBudget({hardwareConcurrency=4,deviceMemory=4}={}){
+export function forecastRenderBudget({hardwareConcurrency=4,deviceMemory=4,mobile=false}={}){
+ if(mobile)return {concurrency:4,backgroundConcurrency:2};
  return {concurrency:8,backgroundConcurrency:hardwareConcurrency>=8&&deviceMemory>=4?6:4};
 }
 const abort=()=>new DOMException('Aborted','AbortError');
@@ -33,30 +35,57 @@ const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  signal.addEventListener('abort',cancelled,{once:true});
 });
 export class ForecastTileCache{
- constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=256*1024*1024,diskEntries=16384,maxAge=3600000,cacheVersion='render-20261021-complete-tiles',concurrency=8,backgroundConcurrency=4}={}){
+ constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=256*1024*1024,diskEntries=16384,maxAge=3600000,cacheVersion='render-20261021-complete-tiles',concurrency=8,backgroundConcurrency=4,coordinate=false,adaptive=false}={}){
   Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge,concurrency,backgroundConcurrency});
   this.renderQueue=[];this.rendering=new Set();this.foreground=null;
   this.diskStates=new WeakMap();
+  this.sharedStores=new WeakMap();
+  this.backgroundBudget=backgroundConcurrency;
+  this.coordinated=coordinate&&persistent&&!!globalThis.navigator?.locks&&!!globalThis.indexedDB;
+  this.isolated=coordinate&&!this.coordinated;
+  this.limitReason=null;
   this.contexts=new Map();this.contextSequence=0;this.retentionRevision=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
   // Run/field/style URLs and complete tile coordinates isolate pixels. A revision
   // invalidates releases; a rolling per-entry lifetime bounds source corrections
   // without throwing away a freshly prepared tile at the next clock hour.
-  this.session=persistent?'persistent-'+encodeURIComponent(cacheVersion):Date.now()+'-'+Math.random().toString(36).slice(2);
+  this.session=persistent&&!this.isolated?'persistent-'+encodeURIComponent(cacheVersion):Date.now()+'-'+Math.random().toString(36).slice(2);
   // Only remove this feature's abandoned caches, never other site data.
   storage?.keys().then(names=>Promise.all(names.filter(name=>name.startsWith(PREFIX)&&
-   (name.startsWith(PREFIX+'persistent-')?persistent&&!name.startsWith(PREFIX+this.session+'-'):
+   (name.startsWith(PREFIX+'persistent-')?false:
     Number(name.slice(PREFIX.length).split('-')[0])<Date.now()-172800000)).map(name=>storage.delete(name)))).catch(()=>{});
+  if(adaptive){
+   this.mobile=globalThis.navigator?.userAgentData?.mobile||globalThis.matchMedia?.('(max-width: 650px), (pointer: coarse)')?.matches;
+   this.budgetReady=Promise.resolve().then(()=>globalThis.navigator?.storage?.estimate()).catch(()=>null).then(estimate=>{
+    this.diskBytes=cacheDiskBudget({mobile:this.mobile,deviceMemory:globalThis.navigator?.deviceMemory,...estimate});
+    if(this.isolated)this.diskBytes=Math.min(this.diskBytes,256*1024*1024);
+    for(const entry of this.contexts.values())entry.shared?.update({budget:this.diskBytes});
+    this.onLimit();
+   });
+  }
  }
  setContext(context){
   if(context===this.context)return false;
-  this.resetPending();this.context=context;this.limited=false;
+  this.contexts.get(this.context)?.shared?.update({sequence:[],protected:[]});
+  this.resetPending();this.context=context;this.limited=false;this.limitReason=null;
   let entry=this.contexts.get(context);
   if(!entry){const name=PREFIX+this.session+'-'+(this.persistent?encodeURIComponent(context):++this.contextSequence);entry={name,disk:this.storage?.open(name).catch(()=>null)??Promise.resolve(null)};}
   this.contexts.delete(context);this.contexts.set(context,entry);
   this.name=entry.name;this.disk=entry.disk;
-  while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
-  if(this.persistent)entry.disk.then(async()=>{
+  if(this.coordinated&&!entry.shared){
+   entry.shared=new SharedForecastStorage({name:entry.name,store:entry.disk,budget:this.diskBytes,entries:this.diskEntries,onChange:()=>{
+    this.backgroundConcurrency=Math.max(1,Math.floor(this.backgroundBudget/Math.max(1,entry.shared.stats?.windows??1)));
+    clearTimeout(this.statsTimer);this.statsTimer=setTimeout(()=>this.onLimit(),150);
+   },onEvict:keys=>{
+    for(const key of keys){
+     const memoryKey=new URL(key).searchParams.get('key'),saved=this.memory.get(memoryKey);if(saved)saved.durable=false;
+     if(this.retainedRequest(key))this.limit('budget');
+    }
+   }});
+   entry.disk.then(store=>{if(store)this.sharedStores.set(store,entry.shared);}).catch(()=>{});
+  }
+  while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.shared?.close();if(!this.coordinated)old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
+  if(this.persistent&&!this.coordinated)entry.disk.then(async()=>{
    const active=new Set([...this.contexts.values()].map(item=>item.name));
    const others=(await this.storage?.keys()??[]).filter(name=>name.startsWith(PREFIX+this.session+'-')&&!active.has(name));
    await Promise.all(others.slice(0,Math.max(0,others.length+active.size-this.maxContexts)).map(name=>this.storage.delete(name)));
@@ -69,19 +98,23 @@ export class ForecastTileCache{
   this.pending.clear();this.writes.clear();this.memory.clear();this.bytes=0;
  }
  release(){
+  clearTimeout(this.statsTimer);for(const entry of this.contexts.values())entry.shared?.close();
   this.resetPending();
-  if(!this.persistent)for(const entry of this.contexts.values())entry.disk.then(()=>this.storage?.delete(entry.name)).catch(()=>{});
+  if(!this.persistent||this.isolated)for(const entry of this.contexts.values())entry.disk.then(()=>this.storage?.delete(entry.name)).catch(()=>{});
   this.contexts.clear();this.context=null;
   this.disk=null;this.name=null;
  }
- limit(){this.retentionRevision++;if(!this.limited){this.limited=true;this.onLimit();}}
+ limit(reason='storage-unavailable'){this.retentionRevision++;if(!this.limited||this.limitReason!==reason){this.limited=true;this.limitReason=reason;this.onLimit();}}
+ storageStatus(){return {...this.contexts.get(this.context)?.shared?.stats,budget:this.contexts.get(this.context)?.shared?.stats?.budget??this.diskBytes,reason:this.limitReason,coordinated:this.coordinated};}
+ setProtected(urls){this.protectedURLs=[...new Set(urls)];this.contexts.get(this.context)?.shared?.update({protected:this.protectedURLs});}
  setSequence(urls){
   const next=[...new Set(urls)].sort();
   if(JSON.stringify(next)===JSON.stringify(this.sequenceURLs))return;
   this.sequenceURLs=next;
+  this.contexts.get(this.context)?.shared?.update({sequence:next});
   // Changing model/layer frees obsolete sequence capacity. A cache that filled
   // during earlier analysis must not permanently stop every later selection.
-  if(this.limited){this.limited=false;this.onLimit();}
+  if(this.limited){this.limited=false;this.limitReason=null;this.onLimit();}
  }
  retainedRequest(request){
   if(!this.sequenceURLs)return true;
@@ -89,6 +122,8 @@ export class ForecastTileCache{
   return this.sequenceURLs.some(source=>url===source||url.startsWith(source+'/'));
  }
  async put(store,request,response,bytes,generation=this.generation){
+  const shared=this.sharedStores.get(store);
+  if(shared){await this.budgetReady;return shared.put(request,response,bytes);}
   if(!this.persistent)return store.put(request,response);
   let state=this.diskStates.get(store);
   if(!state){
@@ -115,7 +150,7 @@ export class ForecastTileCache{
     if(generation===this.generation&&this.retainedRequest(key)){
      const entry=this.memory.get(new URL(key).searchParams.get('key'));
      if(entry)entry.durable=false;
-     this.limit();
+     this.limit('budget');
     }
    }
    await store.put(request,response);state.entries.set(request,bytes);state.bytes+=bytes;
@@ -136,7 +171,7 @@ export class ForecastTileCache{
   this.memory.delete(key);this.memory.set(key,entry);this.bytes+=bytes;
   while(this.bytes>this.memoryBytes&&this.memory.size){
    const [first,item]=this.memory.entries().next().value;this.memory.delete(first);this.bytes-=item.bytes;
-   if(!item.durable&&!item.persisting)this.limit();
+   if(!item.durable&&!item.persisting)this.limit(item.storageReason??this.limitReason??'memory');
   }
   return entry;
  }
@@ -144,11 +179,11 @@ export class ForecastTileCache{
   // Display now; save separately. Keep pending writes bounded if storage stalls.
   const job={};this.writes.set(key,job);
   job.promise=Promise.resolve().then(()=>this.put(store,request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes','x-snowline-bytes':String(entry.bytes),'x-snowline-created':String(entry.created)}}),entry.bytes,generation))
-   .then(()=>{entry.durable=true;},()=>{/* Storage denial must not stop a map. */})
+   .then(()=>{entry.durable=true;},error=>{entry.storageReason=error?.cacheReason??(error?.name==='QuotaExceededError'?'browser-quota':'storage-unavailable');if(generation===this.generation)this.limit(entry.storageReason);})
    .finally(()=>{
     entry.persisting=false;
     if(this.writes.get(key)===job)this.writes.delete(key);
-    if(generation===this.generation&&!entry.durable&&this.memory.get(key)!==entry)this.limit();
+    if(generation===this.generation&&!entry.durable&&this.memory.get(key)!==entry)this.limit(entry.storageReason);
    });
  }
  setForeground(urls){
