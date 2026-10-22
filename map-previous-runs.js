@@ -1,6 +1,6 @@
 import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity} from './map-validity.js?v=20261014-interaction-audit';
+import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-ec-periods';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261020-run-selector';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
@@ -87,7 +87,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  }
  function timeLabel(time,labelTime=time){
   const count=selected().filter(meta=>previousRunHasChart(meta,preset(),time)).length;
-  return utc(labelTime)+(count<runCount()?' · '+count+'/'+runCount()+' runs':'');
+  return (labelTime!==time?utc(labelTime):[...new Set(selected().map(m=>forecastTimeLabel(preset().field,time,m)))].join(' / '))+(count<runCount()?' · '+count+'/'+runCount()+' runs':'');
  }
  function unavailableMessage(meta,p,time){
   const available=briefingTimes(meta,p,model,'native');
@@ -111,16 +111,16 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   const hours=accumulationHours(p.field);
   $('note').textContent=[hours?fixedPeriodNote(hours)+' Each displayed chart covers the identical start/end period.':p.note,'The full available range is shown; panels without data are marked individually.',previousRunPeriodNote(chosen,p,time)].filter(Boolean).join(' ');
   let loaded=0,failed=0,unavailable=0;const started=performance.now();
-  const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+(runCount()-unavailable)+' available charts ready'+(unavailable?' · '+unavailable+' run'+(unavailable===1?'':'s')+' without data at this time':'')+(failed?' · '+failed+' failed to load':loaded+unavailable===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(hours?' · Shared period: '+accumulationPeriod(p.field,time):' · Shared valid time: '+utc(time));};
+  const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+(runCount()-unavailable)+' available charts ready'+(unavailable?' · '+unavailable+' run'+(unavailable===1?'':'s')+' without data at this time':'')+(failed?' · '+failed+' failed to load':loaded+unavailable===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(hours?' · Shared period: '+accumulationPeriod(p.field,time):' · Valid time / periods: '+selected().map(m=>forecastTimeLabel(p.field,time,m)).filter((v,i,a)=>a.indexOf(v)===i).join(' / '));};
   const show=(c,src,meta)=>{
-   const description=model.name+' · Run '+runLabel(meta)+' · '+p.name+' · '+forecastValidity(p.field,time),subtitle=briefingCaption(meta,p,time);
+   const description=model.name+' · Run '+runLabel(meta)+' · '+p.name+' · '+forecastValidity(p.field,time,meta),subtitle=briefingCaption(meta,p,time);
    const info={title:description,subtitle,scales:chartScales(fields.find(f=>f.key===p.field),subtitle,p.id==='weather')};
    const img=document.createElement('img');img.src=src;img.alt=description;img.decoding='async';c.button.replaceChildren(img);c.button.disabled=false;c.card.dataset.ready='true';imageMenu?.registerImage(img,info);
    c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();};loaded++;
   };
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;delete c.card.dataset.unavailable;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;c.button.onclick=null;
-   c.title.textContent=model.name+' · '+forecastValidity(p.field,time);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
+   c.title.textContent=model.name+' · '+forecastValidity(p.field,time,meta);c.caption.textContent='Run '+runLabel(meta)+(meta.completed===false?' · updating':'')+' · '+briefingCaption(meta,p,time);c.button.replaceChildren(accumulationHours(p.field)?'Queued · waiting to prepare this total…':'Preparing this run…');c.button.disabled=true;
    if(!previousRunHasChart(meta,p,time)){
     c.card.dataset.unavailable='true';c.caption.textContent='Run '+runLabel(meta)+' · No chart for this '+(hours?'period':'time');c.button.replaceChildren(unavailableMessage(meta,p,time));unavailable++;return null;
    }

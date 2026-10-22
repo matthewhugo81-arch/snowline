@@ -57,7 +57,7 @@ def write_frame(path,values):
     writer.close(writer.write_group(name='root',children=children));tmp.replace(path)
 
 
-def build(model,root,cache,run=None,max_hour=120,budget=1500,climatology=None):
+def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
     run=run or latest_run(model);domain=f'snowline_{model}_products'
     folder=root/domain/run.strftime('%Y/%m/%d/%H00Z');folder.mkdir(parents=True,exist_ok=True)
     source=(GlobalGRIB if model in ('gefs','ecmwf') else MetOffice)(model,run,cache)
@@ -65,10 +65,12 @@ def build(model,root,cache,run=None,max_hour=120,budget=1500,climatology=None):
     end_limit=min(max_hour,114 if model=='mogreps_uk' else 120)
     targets=[(h,kind,period) for h in range(12,end_limit+1,12) for period in (12,24) if h>=period for kind in kinds]
     normal=None
-    if model=='mogreps_uk' and climatology and Path(climatology).exists():
+    if model=='ecmwf':climatology=Path(climatology).with_name('haduk-extrema-1991-2020-ecmwf.npz') if climatology else None
+    if model in ('mogreps_uk','ecmwf') and climatology and Path(climatology).exists():
         from temperature_climatology import read_normals
-        normal=read_normals(climatology)
-        targets += [(h,kind,24) for h in range(24,end_limit+1) if (run+timedelta(hours=h)).hour==9 for kind in ('min','max')]
+        normal=read_normals(climatology,model)
+        anomaly_limit=min(max_hour,144) if model=='ecmwf' else end_limit
+        targets += [(h,kind,24) for h in range(24,anomaly_limit+1) if (run+timedelta(hours=h)).hour==9 for kind in ('min','max')]
     # Publish near-term extrema alongside probabilities, not after the entire
     # probability horizon. Completed tasks are reused on the next build.
     targets.sort(key=lambda task:task[0])
@@ -84,7 +86,7 @@ def build(model,root,cache,run=None,max_hour=120,budget=1500,climatology=None):
             a=source.window(h-period,h,kind)
             if kind in ('min','max'):
                 date=valid if kind=='min' else valid-timedelta(hours=24)
-                values={f'ens_temperature_{kind}_anomaly':member_extrema_anomaly(a,normal[kind][date.month-1])}
+                values={f'ens_temperature_{kind}_anomaly':member_extrema_anomaly(a,normal[kind][date.month-1],source.count)}
             else:values=threshold_fields(kind,a,period,source.count)
             if model=='mogreps_uk':
                 iy,ix,inside=uk_nearest_indices()
@@ -133,6 +135,6 @@ def publish(root,folder,source,model,run,targets,has_climatology):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--check-runtime',action='store_true');p.add_argument('--max-hour',type=int,default=120);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--check-runtime',action='store_true');p.add_argument('--max-hour',type=int,default=144);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
     if a.check_runtime:runtime_check(a.model)
     else:build(a.model,a.output,a.cache,datetime.fromisoformat(a.run.replace('Z','+00:00')) if a.run else None,a.max_hour,a.budget,a.climatology)

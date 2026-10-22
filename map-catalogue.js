@@ -1,4 +1,4 @@
-import {productField} from './map-ensemble-products.js';
+import {productField} from './map-ensemble-products.js?v=20261022-ec-periods';
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_REQUIRED_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';

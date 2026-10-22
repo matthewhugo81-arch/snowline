@@ -275,3 +275,8 @@
 .map-canvases:has(#panel-b:not([hidden])) .panel-heading .panel-number{margin-bottom:0}
 .panel-controls:has(.panel-selectors[hidden]) .panel-heading{margin-bottom:0}
 @media(max-width:650px){.panel-menu-toggle{width:40px;height:40px}.panel-controls:has(.panel-selectors[hidden]){padding-bottom:7px}}
+
+/* Full valid periods must wrap rather than overflow the phone controls. */
+.time-heading strong{white-space:pre-line;overflow-wrap:anywhere;line-height:1.35}
+.time-heading>div{min-width:0;flex:1}
+.time-range>span{max-width:48%;white-space:pre-line;overflow-wrap:anywhere}

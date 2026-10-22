@@ -6,10 +6,10 @@ import {variableGroup,sourceVariable,describeVariable} from '../map-catalogue.js
 import {forecastValidity} from '../map-validity.js';
 const reference='2026-10-21T12:00:00Z',time='2026-10-22T00:00:00Z',key='ens_gust_gt50kt_12h';
 const meta=()=>({format_version:1,domain:'snowline_mogreps_uk_products',reference_time:reference,member_count:18,source_cycles:Array.from({length:6},(_,i)=>new Date(Date.parse(reference)-i*3600000).toISOString()),variables:[key],valid_times:[time],variable_valid_times:{[key]:[time]},variable_intervals:{[key]:{[time]:{hours:12,start:reference,end:time}}}});
-test('two headers, anomalies exclusively MOGREPS-UK, distinct rain/snow semantics',()=>{
- for(const model of ['snowline_ecmwf_ensemble','snowline_gefs_ensemble','snowline_mogreps_global'])assert.ok(productChoices(model).every(f=>f.group!=='Temperature anomalies'));
- assert.equal(productChoices('ukmo_uk_ensemble_2km').filter(f=>f.group==='Temperature anomalies').length,2);
- for(const f of PRODUCT_FIELDS){assert.equal(variableGroup(f.key),f.group);assert.equal(describeVariable(f.key,{}),f);}
+test('two headers, anomalies exclusively MOGREPS-UK and ECMWF ENS, distinct rain/snow semantics',()=>{
+ for(const model of ['snowline_gefs_ensemble','snowline_mogreps_global'])assert.ok(productChoices(model).every(f=>f.group!=='Temperature anomalies'));
+ for(const model of ['ukmo_uk_ensemble_2km','snowline_ecmwf_ensemble'])assert.equal(productChoices(model).filter(f=>f.group==='Temperature anomalies').length,2);
+ for(const f of PRODUCT_FIELDS){assert.equal(variableGroup(f.key),f.group);assert.deepEqual(describeVariable(f.key,{}),f);}
  assert.ok(productChoices('snowline_gefs_ensemble').some(f=>f.key==='ens_snow_occurrence_12h'));
  assert.ok(!productChoices('snowline_gefs_ensemble').some(f=>f.key==='ens_snow_ge1mm_12h'));
 });

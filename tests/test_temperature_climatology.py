@@ -13,6 +13,19 @@ from pyproj import Transformer
 
 
 class HadUKReference(unittest.TestCase):
+    def test_ecmwf_reference_matches_grid_and_original_provenance(self):
+        path=ROOT/'climatology/haduk-extrema-1991-2020-ecmwf.npz'
+        manifest=json.loads((path.parent/'manifest.json').read_text())
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),manifest['ecmwf_prepared_sha256'])
+        normals=read_normals(path,'ecmwf')
+        with np.load(path,allow_pickle=False) as z:
+            self.assertEqual(json.loads(str(z['provenance'])),manifest['sources'])
+            for a in normals.values():
+                self.assertEqual(a.shape,(12,69,105))
+                np.testing.assert_equal(np.isfinite(a),z['land_cell_count']>0)
+                self.assertTrue(np.all(np.isfinite(a).sum(axis=(1,2))>300))
+                self.assertTrue(np.isnan(a[:,0,0]).all())
+
     def test_verified_reference_and_source_provenance(self):
         path=ROOT/'climatology/haduk-extrema-1991-2020.npz'
         manifest=json.loads((path.parent/'manifest.json').read_text(encoding='utf8'))

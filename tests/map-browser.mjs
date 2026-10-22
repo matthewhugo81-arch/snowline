@@ -325,7 +325,7 @@ try{
    if(viewport.width<=650)await page.locator('#mobile-return-map').click();
    await page.locator('#next-time').click();await ready();
    const labels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
-   assert.equal(new Set(labels.map(label=>label.split('Valid ')[1])).size,1);
+   assert.equal(await page.evaluate(()=>new Set(Object.values(window.fixturePanels).map(p=>p.displayedTime)).size),1);
    if(viewport.width<=650)await page.locator('#mobile-map-settings').click();
    await page.locator('#map-comparison-count').selectOption('2');await ready();
    assert.equal(await page.locator('#panel-c').isVisible(),false);
@@ -509,7 +509,7 @@ try{
    console.log(JSON.stringify({viewport,threePanelControlsPassed:true,twelveHourMapsAndBriefingPassed:true,fullPanelHorizonsPassed:true,missingPanelPlaybackPassed:true,rapidArrowNavigationPassed:true}));
     continue;
    }
-   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'),{},{timeout:40000});
+   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.toLowerCase().includes('valid'),{},{timeout:40000});
    assert.equal(briefingRequests,0,'Optional briefing code must not compete with the first map frame');
    assert.equal(await page.locator('header .strap').count(),0);
    assert.equal(await page.locator('#open-briefing').textContent(),'Briefing View');
@@ -518,7 +518,7 @@ try{
    if(viewport.width>650){
     await page.locator('#compare-maps').check();
     await page.locator('#panel-b').waitFor({state:'visible'});
-    await page.waitForFunction(()=>['a','b'].every(key=>document.getElementById('panel-label-'+key).textContent.includes('Valid')));
+    await page.waitForFunction(()=>['a','b'].every(key=>document.getElementById('panel-label-'+key).textContent.toLowerCase().includes('valid')));
     selected=await selection();
     const width=(await page.locator('.map-stage').boundingBox()).width;
     await page.locator('#toggle-map-sidebar').click();
@@ -544,7 +544,7 @@ try{
     assert.equal(await page.locator('#map-settings-content').isVisible(),true);
     assert.equal(await page.locator('#toggle-map-sidebar').getAttribute('aria-expanded'),'true');
     await page.locator('#compare-maps').uncheck();
-    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Valid'));
+    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.toLowerCase().includes('valid'));
    }else{
     assert.equal(await page.locator('#toggle-map-sidebar').isVisible(),false);
    }
@@ -623,7 +623,7 @@ try{
    assert.equal(await page.locator('#map-mslp-b').isDisabled(),true);
    assert.equal(await page.locator('.map-error:visible').count(),0);
    const compositeLabels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
-   assert.equal(compositeLabels[0].split('Valid ')[1],compositeLabels[1].split('Valid ')[1]);
+   assert.equal(await page.evaluate(()=>window.fixturePanels.a.displayedTime),await page.evaluate(()=>window.fixturePanels.b.displayedTime));
    // UKV has instantaneous fields at initialization, but its first precipitation
    // interval ends one hour later. Explain that gap without hiding the other panel.
    await page.locator('#map-start-time').selectOption({index:0});
@@ -674,13 +674,13 @@ try{
    let firstHour=6;
    const selectTime=async value=>{
     await page.locator('#map-time').evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));},String(value));
-    await page.waitForFunction(hour=>document.getElementById('panel-label-a').textContent.split('Valid ')[1]?.includes(String(hour).padStart(2,'0')+':00'),value+firstHour);
+    await page.waitForFunction(hour=>new Date(window.fixturePanel.displayedTime).getUTCHours()===hour,value+firstHour);
    };
    // ICU versions differ on the comma after the weekday; the time must match.
-   const bothAt=time=>page.waitForFunction(time=>[...document.querySelectorAll('.map-panel:not([hidden]) .map-panel-label')].every(el=>el.textContent.split('Valid ')[1]?.replaceAll(',','')===time.replaceAll(',','')),time);
+   const bothAt=time=>page.waitForFunction(time=>[...document.querySelectorAll('.map-panel:not([hidden])')].every(el=>{const t=window.fixturePanels[el.id.slice(-1)].displayedTime;if(!t)return false;return new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(t)).replaceAll(',','')+' UTC'===time.replaceAll(',','');}),time);
    await selectTime(0);
    await page.locator('#play-map').click();
-   await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.split('Valid ')[1]?.includes('07:00'));
+   await page.waitForFunction(()=>new Date(window.fixturePanel.displayedTime).getUTCHours()===7);
    await page.locator('#play-map').click();
    const paused=await page.locator('#panel-label-a').textContent();await page.waitForTimeout(1000);
    assert.equal(await page.locator('#panel-label-a').textContent(),paused,'Pause must stop late commits');
@@ -690,12 +690,12 @@ try{
    firstHour=7;
    await page.waitForFunction(()=>document.getElementById('panel-label-a').textContent.includes('Precipitation'));
    await page.locator('#compare-maps').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
-   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.includes('Valid'));
+   await page.waitForFunction(()=>document.getElementById('panel-label-b').textContent.toLowerCase().includes('valid'));
    await selectTime(0);
    for(const value of [1,2,3]){
     await selectTime(value);
     const labels=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
-    assert.equal(labels[0].split('Valid ')[1],labels[1].split('Valid ')[1],'Comparison panels commit together');
+    assert.equal(await page.evaluate(()=>window.fixturePanels.a.displayedTime),await page.evaluate(()=>window.fixturePanels.b.displayedTime),'Comparison panels commit together');
    }
    // The reported cloud/rain comparison must recover a failed selected tile,
    // including exhaustion of tile retries, without a manual click or wrong time.
@@ -705,7 +705,7 @@ try{
    assert.ok(await page.evaluate(()=>window.fixtureFault.remaining<=0));
    assert.equal(await page.locator('.map-error:visible').count(),0,'A recovered frame has no stale error banner');
    const recovered=await page.locator('.map-panel:not([hidden]) .map-panel-label').allTextContents();
-   assert.equal(recovered[0].split('Valid ')[1],recovered[1].split('Valid ')[1]);
+   assert.equal(await page.evaluate(()=>window.fixturePanels.a.displayedTime),await page.evaluate(()=>window.fixturePanels.b.displayedTime));
    await page.evaluate(()=>window.fixtureFault=null);
    // Rapid jumps while background warming is unfinished cannot commit an old request.
    await page.locator('#map-time').evaluate(el=>{for(const value of ['20','40','6']){el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));}});

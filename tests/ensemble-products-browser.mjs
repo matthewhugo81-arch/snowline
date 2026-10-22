@@ -27,8 +27,8 @@ try{
   await page.route('https://tiles.openfreemap.org/**',r=>r.fulfill({json:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'white'}}]}}));
   await page.route('**/coastline.geojson',r=>r.fulfill({json:{type:'FeatureCollection',features:[]}}));
   await page.route('https://openmeteo.s3.amazonaws.com/**',r=>r.fulfill({json:native}));
-  await page.route('**/ensemble-data/**',r=>r.fulfill({status:404,json:{error:true}}));
-  await page.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:product}));
+  await page.route('**/ensemble-data/**',r=>r.request().url().includes('/snowline_ecmwf_ensemble/')?r.fulfill({json:{...native,domain:'snowline_ecmwf_ensemble',format_version:1,member_count:51}}):r.fulfill({status:404,json:{error:true}}));
+  await page.route('https://raw.githubusercontent.com/**',r=>r.fulfill({json:r.request().url().endsWith('publication.json')?{revision:'a'.repeat(40)}:r.request().url().includes('/snowline_ecmwf_products/')?{...product,domain:'snowline_ecmwf_products',member_count:51,source_cycles:[reference]}:product}));
   const ready=()=>page.waitForFunction(()=>!document.getElementById('map-variable').disabled&&document.getElementById('animation-status').textContent.startsWith('Ready'),{},{timeout:60000});
   await page.goto(origin+'/maps.html');await ready();
   if(viewport.width<651)await page.locator('#mobile-map-settings').click();
@@ -44,6 +44,8 @@ try{
    assert.match(await page.locator('#map-run option').textContent(),/12Z · ensemble products$/);
    assert.match(await page.locator('#panel-label-a').textContent(),anomaly===anomalies[0]?/Attributed to Fri, 23 Oct 2026/:/Attributed to Thu, 22 Oct 2026/);
    assert.match(await page.locator('#panel-label-a').textContent(),/09:00 to 23 Oct 09:00 UTC/);
+   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
+   assert.equal(await page.locator('#map-start-time option:checked').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
   }
   const beforeRefresh=requests.filter(u=>u.endsWith('publication.json')).length;
@@ -68,6 +70,14 @@ try{
   assert.equal(await page.locator('#map-variable').inputValue(),snow,'Reload retains the selected product');
   await page.locator('#map-variable').selectOption('temperature_2m');await ready();
   assert.ok(!(await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
+  await page.locator('#compare-maps').uncheck();await ready();
+  await page.locator('#map-model').selectOption('snowline_ecmwf_ensemble');await ready();
+  for(const anomaly of anomalies){
+   await page.locator('#map-variable').selectOption(anomaly);await ready();
+   assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('snowline_ecmwf_products/'));
+   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
+  }
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Full periods fit the viewport');
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({viewport,ordinaryStartupProductRequests:0,probabilitySwitching:true,directAnomalySelection:true,refreshAndReload:true,returnToOrdinaryChart:true,otherPanelWasLoaded:!!otherBefore.url}));
   await page.close();

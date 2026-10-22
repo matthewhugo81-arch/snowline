@@ -1,4 +1,4 @@
-import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js';
+import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js?v=20261022-ec-periods';
 import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
 import {UKMO_EARLY_DOMAINS} from './map-ukmo-early.js?v=20261021-early';
@@ -6,7 +6,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261019-coastline3';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity} from './map-validity.js?v=20261022-attribution';
+import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-ec-periods';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -166,7 +166,7 @@ const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
 if(params.has('lat')&&params.has('lon')&&Number.isFinite(initialLat)&&Number.isFinite(initialLon)&&Math.abs(initialLat)<=90&&Math.abs(initialLon)<=180){state.location={latitude:initialLat,longitude:initialLon};$('nav-charts').href='./?'+new URLSearchParams({lat:initialLat,lon:initialLon,time:params.get('time')??''});}
 function modelName(id){return MODELS.find(m=>m.id===sourceModel(id))?.name??id;}
 function panelRunLabel(model){return modelName(model)+' · '+runLabel(state.metas[model])+(state.metas[model]?.completed===false?' · updating':'');}
-function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · '+forecastValidity(field,time);}
+function forecastLabel(model,field,time){return panelRunLabel(model)+' · '+fields.find(f=>f.key===field).name+' · '+forecastValidity(field,time,state.metas[model]);}
 function status(message){$('map-status').textContent=message;}
 function usageUpdate(){$('usage-summary').textContent=usageText();}window.addEventListener('snowline-usage',usageUpdate);usageUpdate();
 const modelGroups=[
@@ -289,23 +289,27 @@ function updateOutlineStatus(panel){
  }
  updatePreloadStatus();
 }
+function timelineLabel(time){
+ const items=panelSelections(state).map(p=>({key:p.key,label:forecastTimeLabel(p.field,time,state.metas[p.model])}));
+ return new Set(items.map(p=>p.label)).size===1?items[0].label:items.map(p=>'Panel '+({a:1,b:2,c:3}[p.key])+': '+p.label).join('\n');
+}
 function refreshStartingTime(message='No forecast times available'){
  const select=$('map-start-time');if(!select)return;
- select.replaceChildren(...state.times.map(time=>new Option(stamp(time),time)));
+ select.replaceChildren(...state.times.map(time=>new Option(timelineLabel(time),time)));
  select.disabled=!state.times.length;
  if(state.times.length)select.value=state.times[state.index];
  else select.append(new Option(message,''));
- $('map-start-time-note').textContent=state.compare?'Choose a time for all panels; playback begins here.':'Choose a forecast time; playback begins here.';
+ $('map-start-time-note').textContent=state.compare?'Choose a forecast frame for all panels. Each period is shown in full; playback begins at this frame.':'Choose a forecast frame. Periods show their start and end; playback begins at this frame.';
 }
 function syncArrowButtons(index){
  $('previous-time').disabled=index<=0;$('next-time').disabled=index>=state.times.length-1;
 }
 function syncTimeline(index){
  const time=state.times[index];if(!time)return;
- $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',stamp(time)+' UTC');
+ $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',timelineLabel(time)+' UTC');
  if($('map-start-time'))$('map-start-time').value=time;
- $('map-time-label').textContent=stamp(time);
- $('map-time-label').previousElementSibling.textContent=panelSelections(state).some(p=>productField(p.field))?'VALID / PERIOD END · UTC':'VALID TIME · UTC';
+ $('map-time-label').textContent=timelineLabel(time);
+ $('map-time-label').previousElementSibling.textContent='VALID TIME · UTC';
  syncArrowButtons(index);
 }
 function pauseAnimation({cancelNavigation=true}={}){
@@ -431,7 +435,7 @@ async function loadTime(outlineSignal){
  const valid=()=>generation===timeGeneration&&state.times[index]===time&&state.index===index&&!mapsMoving();
  dismissLocation();requestedTime=Date.parse(time);
  // Advance the shared label only when each panel has its chart or an explicit gap.
- $('animation-status').textContent='Loading '+stamp(time)+' UTC…';
+ $('animation-status').textContent='Loading '+timelineLabel(time)+' UTC…';
  for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
  try{
   for(const {key,model,field}of panelSelections(state)){
@@ -632,7 +636,7 @@ function refreshTimeline(){
  $('map-time').disabled=false;$('play-map').disabled=false;
  state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
  refreshStartingTime();
- $('map-time').max=state.times.length-1;$('range-start').textContent=stamp(state.times[0]);$('range-end').textContent=stamp(state.times.at(-1));
+ $('map-time').max=state.times.length-1;$('range-start').textContent=timelineLabel(state.times[0]);$('range-end').textContent=timelineLabel(state.times.at(-1));
 }
 function metadataLoader(force){
  const requests=new Map();
@@ -915,7 +919,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261021-run-menu').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261022-ec-periods').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;
