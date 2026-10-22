@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 
 import check_ensemble_freshness as ensemble
 from mogreps_source import newest_complete_after
+from mogreps_uk_runs import select_three_hour_run
 
 DIRECT = {
     'mogreps': ('snowline_mogreps_uk', 'ukmo_uk_ensemble_2km'),
@@ -37,6 +38,9 @@ def native_meta(domain):
                 raise
     if not candidates:
         raise ValueError('No verified native run')
+    if domain == 'ukmo_uk_ensemble_2km':
+        base = 'https://openmeteo.s3.amazonaws.com/data_spatial/' + domain + '/'
+        return select_three_hour_run(candidates, lambda path: json.loads(ensemble.get(base + path)))
     return max(candidates, key=lambda m: (m['reference_time'], len(m['valid_times'])))
 
 

@@ -11,10 +11,11 @@ import requests
 from netCDF4 import Dataset
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).parents[1] / 'scripts'))
+
 spec = importlib.util.spec_from_file_location('snow', Path(__file__).parents[1] / 'scripts/build_mogreps_snow.py')
 snow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(snow)
-sys.path.insert(0, str(Path(__file__).parents[1] / 'scripts'))
 
 
 class RunSelectionTests(unittest.TestCase):

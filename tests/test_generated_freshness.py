@@ -33,6 +33,31 @@ class GeneratedFeedTests(unittest.TestCase):
         self.assertTrue(ready['refresh_needed'])
         self.assertEqual(ready['missing_source_hours'], [1, 2])
 
+    def test_hourly_upstream_indexes_do_not_trigger_rebuilds_between_three_hour_cycles(self):
+        calls = []
+        aligned = self.metadata()
+        def get(url):
+            calls.append(url)
+            if url.endswith('/in-progress.json'):
+                return json.dumps(self.metadata(self.reference + timedelta(hours=2))).encode()
+            if url.endswith('/latest.json') and 'data_spatial/' in url:
+                return json.dumps(self.metadata(self.reference + timedelta(hours=1))).encode()
+            if 'data_spatial/' in url:
+                self.assertIn('/0300Z/meta.json', url)
+            return json.dumps(aligned).encode()
+        with patch.object(f.ensemble, 'get', side_effect=get), patch.object(f, 'direct_hours', return_value=[]) as hours:
+            result = f.check_direct('mogreps', 'https://site.test', self.reference)
+        self.assertEqual(result['status'], 'current')
+        self.assertFalse(result['refresh_needed'])
+        self.assertEqual(result['source_reference'], aligned['reference_time'])
+        self.assertEqual(hours.call_args.args[2], [])
+        self.assertFalse(any('/0400Z/' in url or '/0500Z/' in url for url in calls))
+
+    def test_other_native_models_still_follow_their_latest_hour(self):
+        newest = self.metadata(self.reference + timedelta(hours=2))
+        with patch.object(f.ensemble, 'get', side_effect=[json.dumps(self.metadata()).encode(), json.dumps(newest).encode()]):
+            self.assertEqual(f.native_meta('another_model'), newest)
+
     def test_partial_same_run_checks_later_hours_and_does_not_loop_when_current(self):
         partial = self.metadata(hours=[1])
         self.assertFalse(self.check(partial, [1])['refresh_needed'])
