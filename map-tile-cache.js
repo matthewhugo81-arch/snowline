@@ -42,6 +42,7 @@ export class ForecastTileCache{
   this.sharedStores=new WeakMap();
   this.backgroundBudget=backgroundConcurrency;
   this.coordinated=coordinate&&persistent&&!!globalThis.navigator?.locks&&!!globalThis.indexedDB;
+  this.leaseCapable=persistent&&!!globalThis.navigator?.locks&&!!globalThis.indexedDB;
   this.isolated=coordinate&&!this.coordinated;
   this.limitReason=null;
   this.contexts=new Map();this.contextSequence=0;this.retentionRevision=0;
@@ -78,6 +79,12 @@ export class ForecastTileCache{
   if(!entry){const name=PREFIX+this.session+'-'+(this.persistent?encodeURIComponent(context):++this.contextSequence);entry={name,disk:this.storage?.open(name).catch(()=>null)??Promise.resolve(null)};}
   this.contexts.delete(context);this.contexts.set(context,entry);
   this.name=entry.name;this.disk=entry.disk;
+  // Briefing caches keep their own accounting, but still announce liveness so
+  // another tab cannot retire their cache version while charts are in use.
+  if(this.leaseCapable&&!this.coordinated&&!this.isolated&&!entry.lease){
+   entry.lease=new SharedForecastStorage({name:entry.name,store:entry.disk,budget:this.diskBytes});
+   entry.lease.lease().catch(()=>{});
+  }
   if(this.coordinated&&!entry.shared){
    entry.shared=new SharedForecastStorage({name:entry.name,store:entry.disk,budget:this.diskBytes,entries:this.diskEntries,onChange:()=>{
     this.backgroundConcurrency=Math.max(1,Math.floor(this.backgroundBudget/Math.max(1,entry.shared.stats?.windows??1)));
@@ -90,7 +97,7 @@ export class ForecastTileCache{
    }});
    entry.disk.then(store=>{if(store)this.sharedStores.set(store,entry.shared);}).catch(()=>{});
   }
-  while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.shared?.close();if(!this.coordinated)old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
+  while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.shared?.close();old.lease?.close();if(!this.coordinated)old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
   if(this.coordinated&&!this.cleanupTimer)this.cleanupTimer=setInterval(()=>this.cleanup(),60000);
   this.cleanup();
   if(this.persistent&&!this.coordinated)entry.disk.then(async()=>{
@@ -107,7 +114,7 @@ export class ForecastTileCache{
  }
  release(){
   clearInterval(this.cleanupTimer);this.cleanupTimer=null;
-  clearTimeout(this.statsTimer);for(const entry of this.contexts.values())entry.shared?.close();
+  clearTimeout(this.statsTimer);for(const entry of this.contexts.values()){entry.shared?.close();entry.lease?.close();}
   this.resetPending();
   if(!this.persistent||this.isolated)for(const entry of this.contexts.values())entry.disk.then(()=>this.storage?.delete(entry.name)).catch(()=>{});
   this.contexts.clear();this.context=null;
