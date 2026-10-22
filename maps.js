@@ -308,7 +308,19 @@ function syncTimeline(index){
  const time=state.times[index];if(!time)return;
  $('map-time').value=index;$('map-time').setAttribute('aria-valuetext',timelineLabel(time)+' UTC');
  if($('map-start-time'))$('map-start-time').value=time;
- $('map-time-label').textContent=timelineLabel(time);
+ const label=$('map-time-label'),timeline=label.closest('.map-timeline');
+ timeline.classList.toggle('comparison-timeline',state.compare);
+ if(state.compare){
+  const selections=panelSelections(state);
+  timeline.style.setProperty('--timeline-panels',selections.length);
+  label.replaceChildren(...selections.map(p=>{
+   const card=document.createElement('span'),name=document.createElement('span'),period=document.createElement('span');
+   card.className='timeline-panel-period';name.className='timeline-panel-name';period.className='timeline-panel-value';
+   name.textContent='Panel '+({a:1,b:2,c:3}[p.key]);
+   period.textContent=forecastTimeLabel(p.field,time,state.metas[p.model]).replaceAll(' at ',' ').replace(' to ',' → ');
+   card.append(name,period);return card;
+  }));
+ }else label.textContent=timelineLabel(time);
  $('map-time-label').previousElementSibling.textContent='VALID TIME · UTC';
  syncArrowButtons(index);
 }
@@ -636,7 +648,11 @@ function refreshTimeline(){
  $('map-time').disabled=false;$('play-map').disabled=false;
  state.index=state.times.reduce((best,t,i)=>Math.abs(Date.parse(t)-requestedTime)<Math.abs(Date.parse(state.times[best])-requestedTime)?i:best,0);
  refreshStartingTime();
- $('map-time').max=state.times.length-1;$('range-start').textContent=timelineLabel(state.times[0]);$('range-end').textContent=timelineLabel(state.times.at(-1));
+ $('map-time').max=state.times.length-1;
+ for(const [id,time,prefix] of [['range-start',state.times[0],'First frame'],['range-end',state.times.at(-1),'Last frame']]){
+  $(id).textContent=state.compare?prefix+' · '+stamp(time).replace(' at ',' '):timelineLabel(time);
+  $(id).title=timelineLabel(time)+' UTC';
+ }
 }
 function metadataLoader(force){
  const requests=new Map();

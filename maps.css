@@ -280,3 +280,27 @@
 .time-heading strong{white-space:pre-line;overflow-wrap:anywhere;line-height:1.35}
 .time-heading>div{min-width:0;flex:1}
 .time-range>span{max-width:48%;white-space:pre-line;overflow-wrap:anywhere}
+
+/* Comparison periods have their own row, clear of playback and loading status. */
+.comparison-timeline{display:grid;grid-template-columns:auto auto auto minmax(0,1fr);grid-template-rows:auto auto auto;gap:3px 8px}
+.comparison-timeline .time-heading{display:contents}
+.comparison-timeline .time-heading>div{grid-column:1/-1;grid-row:1;min-width:0}
+.comparison-timeline #map-time-label{display:grid;grid-template-columns:repeat(var(--timeline-panels),minmax(0,1fr));gap:8px;margin:3px 0 4px;text-align:left}
+.comparison-timeline .timeline-panel-period{display:block;padding:4px 8px;background:#253e53;border-radius:4px;min-width:0;letter-spacing:normal;text-align:left}
+.comparison-timeline .timeline-panel-name{font-size:9px;letter-spacing:.5px;text-align:left;color:#a8c5d7}
+.comparison-timeline .timeline-panel-value{font-size:12px;letter-spacing:normal;text-align:left;color:white;line-height:1.4;white-space:normal}
+.comparison-timeline #play-map{grid-column:1;grid-row:2}
+.comparison-timeline #previous-time{grid-column:2;grid-row:2}
+.comparison-timeline #next-time{grid-column:3;grid-row:2}
+.comparison-timeline #map-time{grid-column:4;grid-row:2;align-self:center;margin:0;min-width:0}
+.comparison-timeline #animation-status{grid-column:1/4;grid-row:3;max-width:180px;align-self:center;text-align:left}
+.comparison-timeline .time-range{grid-column:4;grid-row:3;min-width:0;align-items:start;gap:8px}
+.comparison-timeline .time-range>span{white-space:normal}
+.comparison-timeline #range-end{text-align:right}
+@media(max-width:650px){
+ .comparison-timeline #map-time-label{grid-template-columns:1fr;gap:3px}
+ .comparison-timeline .timeline-panel-period{display:grid;grid-template-columns:45px minmax(0,1fr);align-items:baseline;gap:5px;padding:3px 6px}
+ .comparison-timeline .timeline-panel-value{font-size:11px}
+ .comparison-timeline .time-range{grid-column:1/-1;grid-row:3}
+ .comparison-timeline #animation-status{grid-column:1/-1;grid-row:4;max-width:none;text-align:center}
+}

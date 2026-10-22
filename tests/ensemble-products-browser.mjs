@@ -52,6 +52,31 @@ try{
    assert.ok(periods.includes(6)&&periods.includes(12)&&periods.includes(24));
    assert.deepEqual(periods,[...periods].sort((a,b)=>a-b),'All probability durations stay grouped');
   };
+  const comparisonLayout=async(count)=>{
+   const cards=page.locator('.timeline-panel-period');
+   assert.equal(await cards.count(),count);
+   assert.deepEqual(await page.locator('.timeline-panel-name').allTextContents(),Array.from({length:count},(_,i)=>'Panel '+(i+1)));
+   assert.match(await page.locator('#range-start').textContent(),/^First frame/);
+   assert.match(await page.locator('#range-end').textContent(),/^Last frame/);
+   assert.doesNotMatch(await page.locator('.time-range').textContent(),/Panel \d/);
+   const issues=await page.evaluate(()=>{
+    const footer=document.querySelector('.map-timeline'),bounds=footer.getBoundingClientRect(),issues=[];
+    const elements=[...footer.querySelectorAll('.timeline-panel-period,#play-map,#previous-time,#next-time,#map-time,#animation-status,.time-range')];
+    for(const [i,element] of elements.entries()){
+     const box=element.getBoundingClientRect();
+     if(box.left<bounds.left||box.right>bounds.right+1||box.top<bounds.top||box.bottom>bounds.bottom+1)issues.push('Outside footer: '+element.className+'/'+element.id);
+     for(const other of elements.slice(i+1)){
+      const r=other.getBoundingClientRect();
+      if(Math.min(box.right,r.right)-Math.max(box.left,r.left)>1&&Math.min(box.bottom,r.bottom)-Math.max(box.top,r.top)>1)issues.push('Overlap: '+element.className+'/'+element.id+' with '+other.className+'/'+other.id);
+     }
+    }
+    for(const value of footer.querySelectorAll('.timeline-panel-value'))if(value.scrollWidth>value.clientWidth+1||value.scrollHeight>value.clientHeight+1)issues.push('Clipped period');
+    if(bounds.height>(innerWidth<651?245:160))issues.push('Footer too tall: '+bounds.height);
+    return issues;
+   });
+   assert.deepEqual(issues,[],count+' comparison periods must remain readable at '+viewport.width);
+   await page.locator('.map-timeline').screenshot({path:`review-output/comparison-timeline-${count}-${viewport.width}.png`});
+  };
   await page.goto(origin+'/maps.html');await ready();
   if(viewport.width<651)await page.locator('#mobile-map-settings').click();
   assert.equal(requests.filter(u=>u.includes('/ensemble-products/')).length,0,'Ordinary startup has no product requests');
@@ -135,6 +160,8 @@ try{
   assert.equal(await page.locator('#map-variable').inputValue(),key);
   assert.match(await page.evaluate(()=>window.productPanels.a.url),/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
   assert.match(await page.locator('#panel-label-a').textContent(),/12:00 to 22 Oct 00:00 UTC/);
+  await comparisonLayout(2);
+  assert.equal(await page.locator('.timeline-panel-value').first().textContent(),'Wed 21 Oct 12:00 → Thu 22 Oct 00:00');
   // The common timeline changes but the other panel remains a normal source.
   assert.ok(!(await page.evaluate(()=>window.productPanels.b.url)).includes('_products/'));
   await page.locator('#map-variable').selectOption(rain);await ready();
@@ -148,7 +175,12 @@ try{
   await page.locator('#map-comparison-count').selectOption('3');await ready();
   await page.locator('#map-model-c').selectOption(UK);await ready();await ordered('#map-variable-c');
   await page.locator('#map-variable-c').selectOption(six[0]);await ready();await ordered('#map-variable-c');
+  await page.locator('#map-variable').selectOption(key);await ready();
+  await page.locator('#map-variable-b').selectOption(six[1]);await ready();
+  await comparisonLayout(3);
+  assert.ok((await page.locator('.timeline-panel-value').allTextContents()).every(text=>text.includes(' → ')),'Three full periods fit without clipping');
   await page.locator('#compare-maps').uncheck();await ready();
+  assert.equal(await page.locator('.comparison-timeline').count(),0,'Single-panel footer returns to its original layout');
   await page.locator('#map-model').selectOption('snowline_ecmwf_ensemble');await ready();
   for(const k of cold)assert.equal(await page.locator(`#map-variable option[value="${k}"]`).count(),0);
   for(const anomaly of anomalies){
