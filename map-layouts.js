@@ -75,7 +75,10 @@ export async function createLayoutRestore(){
   }catch{notice.textContent='This browser could not save the layout. Check that site storage is allowed.';}
  }
  function changed(){if(!ready)return;dirty=true;clearTimeout(timer);timer=setTimeout(save,500);}
- host.addEventListener('toggle',()=>{if(host.open){save();render();name.value=customName;}});
+ // Native details toggle events are queued. Never reset text that the user
+ // may already have started entering while the menu opens.
+ name.value=customName;
+ host.addEventListener('toggle',()=>{if(host.open){save();render();}});
  document.getElementById('layout-save-name').addEventListener('click',()=>{customName=name.value.trim().slice(0,80);dirty=true;save();});
  document.addEventListener('pointerdown',event=>{if(!host.contains(event.target))host.open=false;});
  host.addEventListener('keydown',event=>{if(event.key==='Escape'){host.open=false;host.querySelector('summary').focus();}});
