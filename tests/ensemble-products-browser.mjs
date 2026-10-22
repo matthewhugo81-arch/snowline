@@ -40,10 +40,15 @@ try{
   for(const anomaly of anomalies){
    await page.locator('#map-variable').selectOption(anomaly);await ready();
    assert.equal(await page.locator('#map-variable').inputValue(),anomaly);
+   assert.equal(await page.locator('#map-run option').count(),1,'Only the published product run is offered');
+   assert.match(await page.locator('#map-run option').textContent(),/12Z · ensemble products$/);
+   assert.match(await page.locator('#panel-label-a').textContent(),anomaly===anomalies[0]?/Minimum for Fri, 23 Oct 2026/:/Maximum for Thu, 22 Oct 2026/);
    assert.match(await page.locator('#panel-label-a').textContent(),/09:00 to 23 Oct 09:00 UTC/);
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
   }
-  await page.locator('#reload-maps').click();await ready();
+  const beforeRefresh=requests.filter(u=>u.endsWith('publication.json')).length;
+  await page.evaluate(()=>window.productRefresh());await ready();
+  assert.ok(requests.filter(u=>u.endsWith('publication.json')).length>beforeRefresh,'Product-only refresh rechecks publication');
   assert.equal(await page.locator('#map-variable').inputValue(),anomalies[1]);
   await page.locator('#map-variable').selectOption('temperature_2m');await ready();
   await page.locator('#compare-maps').check();await ready();

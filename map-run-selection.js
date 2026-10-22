@@ -84,7 +84,17 @@ export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpati
 }
 export const mapRunCatalogue=createRunCatalogue();
 
-export function renderRunSelector(select,model,pair,selected,{followLatest=false}={}){
+export function renderRunSelector(select,model,pair,selected,{followLatest=false,product=false}={}){
+ if(product){
+  select.replaceChildren();
+  const option=document.createElement('option');
+  option.value=selectedRunKey(model,selected);
+  option.textContent=formatModelRun(selected)+' · ensemble products';
+  select.append(option);select.value=option.value;select.disabled=false;
+  select.dataset.preferredRun=option.value;
+  select.title='Ensemble product initialization in UTC. These products publish separately from ordinary model charts. Check latest runs to load the latest published products.';
+  return;
+ }
  const runs=[pair.latest,pair.previous,selected].filter(Boolean);
  const unique=[...new Map(runs.map(m=>[new Date(m.reference_time).toISOString(),m])).values()].sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time));
  select.replaceChildren();

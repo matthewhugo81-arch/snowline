@@ -126,6 +126,18 @@ test('run selector lists each real dated run once while following or holding a s
  assert.equal(select.value,values()[0]);assert.equal(select.dataset.preferredRun,values()[0]);
  assert.match(select.options[0].textContent,/12Z · Updating/);assert.match(select.title,/No completed run could be verified yet/);distinctDatedChoices();
 });
+test('product run selector excludes newer ordinary runs and uses consistent UTC formatting',t=>{
+ const original=globalThis.document;globalThis.document={createElement:()=>({})};
+ t.after(()=>{globalThis.document=original;});
+ const select={options:[],dataset:{},replaceChildren(){this.options=[];},append(option){this.options.push(option);}};
+ const selected=run(18);
+ renderRunSelector(select,'ukmo_uk_ensemble_2km',{latest:run(25),previous:run(24)},selected,{product:true});
+ assert.equal(select.options.length,1);
+ assert.equal(select.value,selectedRunKey('ukmo_uk_ensemble_2km',selected));
+ assert.match(select.options[0].textContent,/18Z · ensemble products$/);
+ assert.doesNotMatch(select.options[0].textContent,/1800Z|Complete|newest/);
+});
+
 test('failed intermediate cycles and stale responses never displace the last complete run',async()=>{
  const f=fixture();await f.catalogue.select('ecmwf_ifs',async()=>({}));
  f.data.set(ref(6),run(6,false,10));f.setLatest(run(12,false,3));
