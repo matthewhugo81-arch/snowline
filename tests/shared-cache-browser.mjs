@@ -62,6 +62,28 @@ try{
   const selected=await Promise.race([c.protocol({type:'image',url:'om://selected'},new AbortController()).then(()=>true),new Promise(r=>setTimeout(()=>r(false),1000))]);
   await new Promise(r=>setTimeout(r,20));unblock();await Promise.all([...c.writes.values()].map(w=>w.promise));c.release();return selected;
  });assert.equal(fast,true);
+ const cleanup=await pages[0].evaluate(async()=>{
+  const {cleanupObsoleteCaches}=await import('/map-cache-storage.js');
+  const active=cache.contexts.get('tiles').shared;
+  await active.lease();
+  const old='snowline-forecast-tiles-v1-persistent-obsolete-fixture-tiles';
+  await caches.open(old);
+  const options={storage:caches,db:active.db,locks:navigator.locks,prefix:'snowline-forecast-tiles-v1-',currentPrefix:'snowline-forecast-tiles-v1-persistent-four-windows-',grace:100};
+  const now=Date.now();
+  await cleanupObsoleteCaches({...options,now});
+  const graceProtected=(await caches.keys()).includes(old);
+  const db=await active.db;
+  const lease=async expires=>new Promise((resolve,reject)=>{const tx=db.transaction('clients','readwrite');tx.objectStore('clients').put({id:'old-tab-fixture',cache:old,expires});tx.oncomplete=resolve;tx.onerror=reject;});
+  await lease(now+10000);
+  await cleanupObsoleteCaches({...options,now:now+200});
+  const activeProtected=(await caches.keys()).includes(old);
+  await lease(0);
+  await cleanupObsoleteCaches({...options,now:now+400});
+  const removed=!(await caches.keys()).includes(old);
+  const currentProtected=(await caches.keys()).includes(cache.name);
+  return {graceProtected,activeProtected,removed,currentProtected};
+ });
+ assert.deepEqual(cleanup,{graceProtected:true,activeProtected:true,removed:true,currentProtected:true});
  const denied=await pages[0].evaluate(async()=>{
   const {ForecastTileCache}=await import('/map-tile-cache.js');
   const c=new ForecastTileCache(async()=>({data:new Uint8Array(4).buffer}),{persistent:true,coordinate:true,cacheVersion:'denied-disk',diskBytes:32});c.setContext('tiles');

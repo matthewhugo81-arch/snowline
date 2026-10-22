@@ -10,7 +10,7 @@ import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261020-run-selecto
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-ireland-ecmwf-range';
+import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-gefs-archive';
 import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {briefingValueLabels} from './map-briefing-values.js?v=20261020-run-selector';
 

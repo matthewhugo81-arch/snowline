@@ -16,6 +16,34 @@ const matches=(url,sources)=>{
 };
 export const cacheLimitError=reason=>Object.assign(Error(reason),{cacheReason:reason});
 
+// A version change must not strand whole caches on disk. Wait for a grace
+// period and honour the leases of older tabs before removing their version.
+export async function cleanupObsoleteCaches({storage,db,locks,prefix,currentPrefix,now=Date.now(),grace=120000}){
+ if(!storage||!locks||!db)return;
+ return locks.request('snowline-cache-cleanup',async()=>{
+  const database=await db;
+  for(const name of await storage.keys()){
+   if(!name.startsWith(prefix+'persistent-')||name.startsWith(currentPrefix))continue;
+   await locks.request('snowline-disk:'+name,async()=>{
+    const tx=database.transaction(['clients','totals'],'readonly'),done=complete(tx);
+    const [clients,marker]=await Promise.all([request(tx.objectStore('clients').getAll()),request(tx.objectStore('totals').get('cleanup:'+name))]);await done;
+    const active=clients.some(c=>c.cache===name&&c.expires>now);
+    if(active||!marker||now-marker.seen<grace){
+     if(active||!marker){const mark=database.transaction('totals','readwrite'),marked=complete(mark);mark.objectStore('totals').put({id:'cleanup:'+name,seen:now});await marked;}
+     return;
+    }
+    await storage.delete(name);
+    const clean=database.transaction(['tiles','totals','clients'],'readwrite'),cleaned=complete(clean);
+    const cursor=clean.objectStore('tiles').index('cache').openCursor(name);
+    cursor.onsuccess=()=>{const entry=cursor.result;if(entry){entry.delete();entry.continue();}};
+    clean.objectStore('totals').delete(name);clean.objectStore('totals').delete('cleanup:'+name);
+    for(const client of clients)if(client.cache===name)clean.objectStore('clients').delete(client.id);
+    await cleaned;
+   });
+  }
+ });
+}
+
 // Web Locks serialize only disk mutation. IndexedDB supplies authoritative
 // accounting across tabs, including ones that missed a BroadcastChannel event.
 // Tile bytes remain in CacheStorage; the index stores no weather data.
