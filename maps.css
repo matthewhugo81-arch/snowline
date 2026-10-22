@@ -320,3 +320,36 @@
  .comparison-timeline .time-range{grid-column:1/-1;grid-row:3}
  .comparison-timeline #animation-status{grid-column:1/-1;grid-row:4;max-width:none;text-align:center}
 }
+
+/* Compact navigation gives the recovered height to desktop maps. */
+.map-page header:has(.theme-control){padding:4px 10px;gap:12px}
+.map-page .brand{font-size:18px;gap:6px}
+.map-page .mark{font-size:26px}
+.map-page .map-heading{gap:8px}
+.map-page .map-heading h1{font-size:17px;letter-spacing:-.4px}
+.map-page .header-divider{font-size:18px}
+.map-page .page-nav{gap:4px}
+.map-page .page-nav>a{font-size:12px;padding:6px 8px;white-space:nowrap}
+.map-page .layout-restore{font-size:12px}
+.map-page .layout-restore>summary{padding:5px 8px}
+.map-page header .theme-control{font-size:11px;gap:5px;margin-left:0}
+.map-page header .theme-control select{font-size:12px;min-height:30px;padding:4px 6px}
+@media(min-width:651px){
+ .map-page header:has(.theme-control){height:42px}
+ .map-stage{height:calc(100dvh - 58px)}
+}
+@media(max-width:650px){
+ .map-page header:has(.theme-control){gap:3px 6px;padding:4px 8px}
+ .map-page .brand{font-size:17px}
+ .map-page .map-heading h1{font-size:15px}
+ .map-page .page-nav{gap:2px}
+ .map-page .page-nav>a{display:inline-flex;align-items:center;font-size:11px;padding:4px 6px;min-height:36px}
+ .map-page .layout-restore>summary{display:flex;align-items:center;padding:4px 6px;min-height:36px}
+ .map-page header .theme-control select{font-size:16px;min-height:36px;padding:4px}
+ .map-page .layout-menu{top:78px;max-height:calc(100dvh - 90px)}
+}
+@media(max-width:370px){
+ .map-page header .theme-control{font-size:0;gap:0}
+ .map-page header .theme-control select{width:82px}
+ .map-page .page-nav>a,.map-page .layout-restore>summary{padding-left:4px;padding-right:4px}
+}
