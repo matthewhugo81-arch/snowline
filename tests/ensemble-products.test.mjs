@@ -69,3 +69,12 @@ test('probability menus sort all periods together, including native EC probabili
  }
  assert.match(forecastValidity('ens_rain_ge10mm_6h','2026-10-22T00:00:00Z'),/21 Oct 18:00 to 22 Oct 00:00 UTC/);
 });
+
+test('briefing offers optional products before any product metadata has loaded',async()=>{
+ const {briefingPresets}=await import('../map-briefing-data.js');
+ const ordinary={variables:['precipitation_probability'],reference_time:reference,valid_times:[time]};
+ const choices=briefingPresets(ordinary,PRODUCT_FIELDS,'ukmo_uk_ensemble_2km');
+ for(const key of ['ens_gust_gt50kt_6h','ens_rain_ge10mm_12h','ens_snow_ge1mm_24h','ens_temperature_le0c_24h','ens_temperature_min_anomaly','ens_temperature_max_anomaly'])assert.ok(choices.some(p=>p.key===key));
+ assert.equal(briefingPresets(ordinary,PRODUCT_FIELDS,'snowline_ecmwf_ensemble').filter(p=>p.key.startsWith('ens_temperature_le')).length,0);
+ assert.equal(briefingPresets(ordinary,PRODUCT_FIELDS,'snowline_gefs_ensemble').filter(p=>p.group==='Temperature anomalies').length,0);
+});

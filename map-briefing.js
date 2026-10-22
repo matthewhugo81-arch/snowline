@@ -1,19 +1,20 @@
+import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261022-briefing-products';
 import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-six-hour-probs';
+import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-briefing-products';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261022-six-hour-probs';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261022-briefing-products';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261022-six-hour-probs';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261020-ens-loading';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261022-briefing-products';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261022-briefing-products';
 import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261022-six-hour-probs';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261022-briefing-products';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {chartScales} from './map-image-export.js?v=20261020-ifs-coverage';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261021-run-menu';
+import {mapRunCatalogue,sourceModel,selectedRunKey,selectedReference,renderRunSelector} from './map-run-selection.js?v=20261021-run-menu';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
@@ -48,6 +49,20 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  for(const preset of BRIEFING_PRESETS)$('preset').append(option(preset.id,preset.name));
  const images=new BriefingImages();
  let renderer,active=false,generation=0,controller,work=Promise.resolve(),model,meta,preset,times=[],start=0,interval='3',currentBounds,requestedTime,requestedStart=null,requestedChart=null,presets=[],runKey=null;
+ const normalMenus=new Map();
+ const modelName=()=>meta?.productOnly?model.name.split(' · ')[0]:model.name;
+ const menuPresets=()=>briefingPresets(meta?.productOnly?(normalMenus.get(model.id)??meta):meta,fields,model.id);
+ async function selectedMetadata(force){
+  const load=url=>loadJSON(url,{force});
+  const key=requestedChart??$('preset').value;
+  if(productChoices(model.id).some(f=>f.key===key)){
+   const [product,normal]=await Promise.all([loadProducts(model.id,load,runKey?selectedReference(runKey):null),normalMenus.has(model.id)?null:mapRunCatalogue.select(model.id,load).catch(()=>null)]);
+   if(normal)normalMenus.set(sourceModel(normal.key),normal.meta);
+   if(!product.variables.includes(key))throw Error('This chart is not yet published for this ensemble run. Choose another chart or retry after publication.');
+   return {meta:product,key:selectedRunKey(model.id,product)};
+  }
+  return mapRunCatalogue.select(runKey??model.id,load);
+ }
  const count=()=>Number($('count').value);
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
  const chartSize=()=>BRIEFING_AREAS.find(area=>area.id===$('area').value)?.size??[960,660];
@@ -134,10 +149,10 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   for(const time of visible){
    const card=document.createElement('article'),title=document.createElement('h3'),caption=document.createElement('p'),button=document.createElement('button'),placeholder=document.createElement('span');
    card.className='briefing-card';card.dataset.time=time;
-   title.textContent=model.name+' · '+periodTitle(time);caption.textContent=briefingCaption(meta,preset,time);
+   title.textContent=modelName()+' · '+periodTitle(time);caption.textContent=briefingCaption(meta,preset,time);
    button.type='button';button.className='briefing-chart';button.disabled=true;button.setAttribute('aria-label','Enlarge chart · '+forecastValidity(preset.field,time,meta));
    placeholder.textContent='Preparing chart…';button.append(placeholder);card.append(title,caption,button);$('grid').append(card);
-   const exportInfo={title:model.name+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · '+forecastValidity(selection.preset.field,time,selection.meta),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
+   const exportInfo={title:modelName()+' · '+runLabel(selection.meta)+' · '+selection.preset.name+' · '+forecastValidity(selection.preset.field,time,selection.meta),subtitle:briefingCaption(selection.meta,selection.preset,time),scales:chartScales(fields.find(f=>f.key===selection.preset.field),briefingCaption(selection.meta,selection.preset,time),selection.preset.id==='weather')};
    const show=src=>{const image=document.createElement('img');image.src=src;image.alt=exportInfo.title;image.decoding='async';button.replaceChildren(image);button.disabled=false;card.dataset.ready='true';imageMenu?.registerImage(image,exportInfo);button.onclick=()=>enlarge(src,time,exportInfo);loaded++;};
    const cached=images.get(key(time));if(cached)show(cached);
    cards.set(time,{show,card,placeholder});
@@ -172,17 +187,17 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(runKey&&sourceModel(runKey)!==model.id)runKey=null;
   $('grid').replaceChildren();$('legend').replaceChildren();$('run').textContent='Checking model run…';$('status').textContent='Checking available chart fields…';$('retry').hidden=true;
   try{
-   const selected=await mapRunCatalogue.select(runKey??model.id,url=>loadJSON(url,{force}));if(token!==generation||!active)return;
-   meta=selected.meta;if(runKey)runKey=selected.key;renderRunSelector($('run-select'),model.id,selected,meta,{followLatest:!runKey});
+   const selected=await selectedMetadata(force);if(token!==generation||!active)return;
+   meta=selected.meta;if(!meta.productOnly)normalMenus.set(model.id,meta);if(runKey)runKey=selected.key;renderRunSelector($('run-select'),model.id,selected,meta,{followLatest:!runKey,product:!!meta.productOnly});
    onMetadata(meta);
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:model.id,meta}}));
-   const available=presets=briefingPresets(meta,fields),previous=requestedChart??$('preset').value;
+   const available=presets=menuPresets(),previous=requestedChart??$('preset').value;
    requestedChart=null;briefingOptions($('preset'),available);
    if(!available.length)throw Error('This run does not supply the fields for these briefing charts. Choose another model.');
    $('preset').value=(available.find(item=>item.id===previous||item.key===previous)??available[0]).id;
-   $('run').textContent=model.name+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
+   $('run').textContent=modelName()+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
    controlsDisabled(false);timeline();renderPage();
-  }catch(error){if(token===generation){meta=null;$('run').textContent=model.name;$('status').textContent=error.message;controlsDisabled(true);$('retry').hidden=false;}}
+  }catch(error){if(token===generation){meta=null;$('run').textContent=model.name;$('status').textContent=error.message;controlsDisabled(true);$('preset').disabled=false;$('retry').hidden=false;}}
  }
  let refreshing=false;
  async function refreshRun(){
@@ -190,22 +205,22 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(!meta)return configure(true);
   refreshing=true;const selected=model.id,previous=meta,selectionKey=runKey;
   try{
-   const result=await mapRunCatalogue.select(runKey??model.id,url=>loadJSON(url,{force:true})),incoming=result.meta;
+   const result=await selectedMetadata(true),incoming=result.meta;
    if(!active||document.hidden||model.id!==selected||meta!==previous||runKey!==selectionKey)return;
-   const next=retainRunProgress(previous,incoming);
+   const next=retainRunProgress(previous,incoming);if(!next.productOnly)normalMenus.set(model.id,next);
    onMetadata(next);
-   renderRunSelector($('run-select'),model.id,result,next,{followLatest:!runKey});
+   renderRunSelector($('run-select'),model.id,result,next,{followLatest:!runKey,product:!!meta.productOnly});
    document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:selected,meta:next}}));
    if(runSignature(next)!==runSignature(previous)){
     rememberTime();meta=next;
-    const available=presets=briefingPresets(meta,fields),selection=$('preset').value;
+    const available=presets=menuPresets(),selection=$('preset').value;
     briefingOptions($('preset'),available);
-    if(!available.length){cancel();times=[];controlsDisabled(true);$('grid').replaceChildren();$('run').textContent=model.name+' · initialized '+runLabel(meta)+' · Updating';$('status').textContent='New run arriving; awaiting the fields for this chart.';return;}
+    if(!available.length){cancel();times=[];controlsDisabled(true);$('grid').replaceChildren();$('run').textContent=modelName()+' · initialized '+runLabel(meta)+' · Updating';$('status').textContent='New run arriving; awaiting the fields for this chart.';return;}
     $('preset').value=available.some(item=>item.id===selection)?selection:available[0].id;
     controlsDisabled(false);timeline();renderPage();
    }
-   $('run').textContent=model.name+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
-  }catch{if(active&&model.id===selected&&meta===previous&&runKey===selectionKey)$('run').textContent=model.name+' · initialized '+runLabel(meta)+' · Live check unavailable; retrying in one minute.';}
+   $('run').textContent=modelName()+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
+  }catch{if(active&&model.id===selected&&meta===previous&&runKey===selectionKey)$('run').textContent=modelName()+' · initialized '+runLabel(meta)+' · Live check unavailable; retrying in one minute.';}
   finally{refreshing=false;}
  }
  let refreshTimer=setInterval(refreshRun,60000);
@@ -214,6 +229,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  $('model').addEventListener('change',()=>{rememberTime();runKey=null;configure();});
  $('run-select').addEventListener('change',()=>{rememberTime();const select=$('run-select');runKey=select.value===select.dataset.preferredRun?null:select.value;configure();});
  for(const id of ['preset','interval'])$(id).addEventListener('change',()=>{
+  if(id==='preset')requestedChart=null;
+  if(id==='preset'&&(productField($('preset').value)||meta?.productOnly||!meta)){rememberTime();configure();return;}
   if(!meta)return;rememberTime();
   if(id==='interval')interval=$('interval').value;
   timeline();renderPage();
@@ -255,6 +272,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  document.addEventListener('visibilitychange',()=>{if(!active)return;if(document.hidden)cancel();else if(meta){renderPage();refreshRun();}else configure();});
  window.addEventListener('pagehide',()=>{clearInterval(refreshTimer);cancel();images.clear();renderer?.destroy();renderer=null;});
  return {open(selection){$('background').value=getBackground();
+  if(selection.menuMeta&&!selection.menuMeta.productOnly)normalMenus.set(sourceModel(selection.model),selection.menuMeta);
   history?.close();$('sequence').hidden=false;$('sequence-mode').setAttribute('aria-pressed','true');$('history-mode').setAttribute('aria-pressed','false');
   active=true;host.hidden=false;document.dispatchEvent(new CustomEvent('snowline-model-menu-ready'));currentBounds=selection.bounds;requestedTime=Date.parse(selection.time)||Date.now();interval=selection.interval??'3';requestedStart=accumulationHours(selection.field)&&selection.time?periodStart(selection.time,accumulationHours(selection.field)):null;requestedChart=selection.field??selection.preset??null;
   $('model').value=choices.some(item=>item.id===sourceModel(selection.model))?sourceModel(selection.model):choices[0].id;

@@ -66,6 +66,11 @@ publication cannot mix cached OM headers and new array chunks. Independent model
 failures retain the previous model snapshot. Source member files are scratch
 data and never uploaded.
 
+Briefing View offers the same optional product groups without requiring a main-map
+selection first. Selecting a product loads its separate metadata and uses its
+actual initialization, validity intervals and available frames for the panel
+sequence. Ordinary briefing charts make no optional-product requests.
+
 ## Installing the temperature baseline
 
 The following files were downloaded through the user's CEDA access on

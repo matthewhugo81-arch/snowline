@@ -1,5 +1,5 @@
 import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261020-run-selector';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261022-six-hour-probs';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261022-briefing-products';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261020-run-selector';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
