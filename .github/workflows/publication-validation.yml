@@ -2,7 +2,7 @@ name: Validate publication capacity
 on:
   pull_request:
     branches: [main]
-    paths: ['scripts/publication_manifest.py', 'scripts/publish_map_archive.py', 'tests/test_publication*.py', '.github/workflows/publish-maps.yml', '.github/workflows/publication-validation.yml']
+    paths: ['scripts/publication_manifest.py', 'scripts/publish_map_archive.py', 'scripts/prepare_optional_publication.py', 'tests/test_publication*.py', '.github/workflows/publish-maps.yml', '.github/workflows/publication-validation.yml']
 permissions:
   contents: read
 jobs:
@@ -28,4 +28,5 @@ jobs:
           done
           python scripts/publication_manifest.py _inventory --report-only
           python -c "from pathlib import Path; [p.rename(p.with_suffix('.om.png')) for p in Path('_inventory').rglob('*.om')]"
+          python scripts/prepare_optional_publication.py _inventory
           python scripts/publish_map_archive.py _inventory --plan-only

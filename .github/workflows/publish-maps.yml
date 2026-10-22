@@ -150,6 +150,8 @@ jobs:
         run: |
           gh auth setup-git --hostname github.com
           python scripts/publish_map_archive.py _site
+      - name: Exclude unfinished optional payloads without changing the conversion cache
+        run: python scripts/prepare_optional_publication.py _site
       - name: Measure unpacked size and skip unchanged publication
         id: publication
         run: python scripts/publication_manifest.py _site --live-url https://matthewhugo81-arch.github.io/snowline/publication.json
