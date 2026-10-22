@@ -18,15 +18,20 @@ from omfiles import OmFileWriter
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from knmi_cooldown import KNMIRateLimited, request_download_url
 
 DOMAIN = 'knmi_harmonie_arome_europe'
 API = 'https://api.dataplatform.knmi.nl/open-data/v1/datasets/harmonie_arome_cy43_p3/versions/1.0/files'
 SOURCE = 'https://dataplatform.knmi.nl/dataset/harmonie-arome-cy43-p3-1-0'
 GRID = dict(nx=676, ny=564, latMin=-13.6, lonMin=-13.5, dx=.05, dy=.05, southPoleLat=-35, southPoleLon=-8)
 
+class KNMIRetry(Retry):
+    RETRY_AFTER_STATUS_CODES = Retry.RETRY_AFTER_STATUS_CODES - {429}
+
 def session():
     s = requests.Session()
-    s.mount('https://', HTTPAdapter(max_retries=Retry(total=3, backoff_factor=2, status_forcelist=[429,500,502,503,504])))
+    # Handle 429 once at the API boundary and persist its cooldown across jobs.
+    s.mount('https://', HTTPAdapter(max_retries=KNMIRetry(total=3, backoff_factor=2, status_forcelist=[500,502,503,504])))
     return s
 
 def iso(t):
@@ -87,8 +92,7 @@ def build(root, run):
         r=s.get('https://developer.dataplatform.knmi.nl/open-data-api',timeout=30);r.raise_for_status()
         key=re.search(r'eyJvcmci[A-Za-z0-9]+',r.text)[0]
     filename=f'HARM43_V1_P3_{run:%Y%m%d%H}.tar'
-    r=s.get(API+'/'+filename+'/url',headers={'Authorization':key},timeout=30);r.raise_for_status()
-    url=r.json()['temporaryDownloadUrl']
+    url=request_download_url(s, API+'/'+filename+'/url', key, root/DOMAIN/'request-cooldown.json', registered=bool(os.environ.get('KNMI_API_KEY')))
     offset=0;hours=set()
     for _ in range(250):
         block=read_range(s,url,offset,1024*1024)
@@ -130,4 +134,9 @@ def main():
         if datetime.fromisoformat(json.loads(p.read_text())['reference_time'].replace('Z','+00:00')) < run-timedelta(hours=3):
             shutil.rmtree(p.parent)
 
-if __name__=='__main__': main()
+if __name__=='__main__':
+    try:
+        main()
+    except KNMIRateLimited as error:
+        print(f'::warning::{error}', flush=True)
+        raise SystemExit(75)

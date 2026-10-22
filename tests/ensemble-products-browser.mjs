@@ -9,7 +9,7 @@ const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+new U
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin='http://127.0.0.1:'+server.address().port;
 const source=await readFile('tests/map-browser.mjs','utf8'),fakeOM=vm.runInNewContext(source.match(/const fakeOM=(`[^]*?`);\r?\nconst geo=/)[1]);
-const browser=await chromium.launch({headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
+const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader','--use-angle=swiftshader']});
 const reference='2026-10-21T12:00:00Z',time='2026-10-22T00:00:00Z',UK='ukmo_uk_ensemble_2km',key='ens_gust_gt50kt_12h',rain='ens_rain_ge10mm_12h',snow='ens_snow_ge1mm_12h';
 const native={completed:true,reference_time:reference,variables:['temperature_2m','precipitation'],valid_times:Array.from({length:25},(_,h)=>new Date(Date.parse(reference)+h*3600000).toISOString())};
 const productReference='2026-10-21T06:00:00Z';
@@ -127,16 +127,16 @@ try{
    assert.equal(await page.locator('#map-run option').count(),1,'Only the published product run is offered');
    assert.match(await page.locator('#map-run option').textContent(),/06Z · ensemble products$/);
    assert.match(await page.locator('#panel-label-a').textContent(),anomaly===anomalies[0]?/24 hr Minimum Temperature Anomaly for Fri 23rd/:/24 hr Maximum Temperature Anomaly for Thu 22nd/);
-   assert.match(await page.locator('#panel-label-a').textContent(),/09:00 to Fri 23 Oct 09:00 UTC/);
-   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
-   assert.equal(await page.locator('#map-start-time option:checked').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
+   assert.match(await page.locator('#panel-label-a').textContent(),/VALID Fri 23 Oct 0900 UTC$/);
+   assert.equal(await page.locator('#map-time-label').textContent(),'Fri 23 Oct 0900');
+   assert.equal(await page.locator('#map-start-time option:checked').textContent(),'Fri 23 Oct 0900');
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('_products/'));
   }
   await ordered('#map-variable');
   for(const k of six){
    await page.locator('#map-variable').selectOption(k);await ready();
    await page.locator('#map-time').fill('0');await page.locator('#map-time').dispatchEvent('change');await ready();
-   assert.equal(await page.locator('#map-time-label').textContent(),'Wed 21 Oct at 18:00 to Thu 22 Oct at 00:00');
+   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct 0000');
    assert.equal(await page.locator('#legend-title-a').textContent(),'%');
    await ordered('#map-variable');
   }
@@ -149,7 +149,7 @@ try{
    await page.locator('#map-variable').selectOption(k);await ready();
    assert.equal(await page.locator('#map-variable').inputValue(),k);
    assert.match(await page.locator('#panel-label-a').textContent(),/Minimum temperature ≤/);
-   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
+   assert.equal(await page.locator('#map-time-label').textContent(),'Fri 23 Oct 0900');
    assert.equal(await page.locator('#legend-title-a').textContent(),'%');
   }
   await page.locator('#map-variable').selectOption('temperature_2m');await ready();
@@ -160,9 +160,9 @@ try{
   await page.locator('#map-variable').selectOption(key);await ready();
   assert.equal(await page.locator('#map-variable').inputValue(),key);
   assert.match(await page.evaluate(()=>window.productPanels.a.url),/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
-  assert.match(await page.locator('#panel-label-a').textContent(),/12:00 to Thu 22 Oct 00:00 UTC/);
+  assert.match(await page.locator('#panel-label-a').textContent(),/VALID Thu 22 Oct 0000 UTC$/);
   await comparisonLayout(2);
-  assert.equal(await page.locator('.timeline-panel-value').first().textContent(),'Wed 21 Oct 12:00 → Thu 22 Oct 00:00');
+  assert.equal(await page.locator('.timeline-panel-value').first().textContent(),'Thu 22 Oct 0000');
   // The common timeline changes but the other panel remains a normal source.
   assert.ok(!(await page.evaluate(()=>window.productPanels.b.url)).includes('_products/'));
   await page.locator('#map-variable').selectOption(rain);await ready();
@@ -179,7 +179,7 @@ try{
   await page.locator('#map-variable').selectOption(key);await ready();
   await page.locator('#map-variable-b').selectOption(six[1]);await ready();
   await comparisonLayout(3);
-  assert.ok((await page.locator('.timeline-panel-value').allTextContents()).every(text=>text.includes(' → ')),'Three full periods fit without clipping');
+  assert.deepEqual(await page.locator('.timeline-panel-value').allTextContents(),Array(3).fill('Thu 22 Oct 0000'),'All three panels show the same valid time without clipping');
   await page.locator('#compare-maps').uncheck();await ready();
   assert.equal(await page.locator('.comparison-timeline').count(),0,'Single-panel footer returns to its original layout');
   await page.locator('#map-model').selectOption('snowline_ecmwf_ensemble');await ready();
@@ -187,12 +187,12 @@ try{
   for(const anomaly of anomalies){
    await page.locator('#map-variable').selectOption(anomaly);await ready();
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('snowline_ecmwf_products/'));
-   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct at 09:00 to Fri 23 Oct at 09:00');
+   assert.equal(await page.locator('#map-time-label').textContent(),'Fri 23 Oct 0900');
   }
   for(const k of six){
    await page.locator('#map-variable').selectOption(k);await ready();
    await page.locator('#map-time').fill('0');await page.locator('#map-time').dispatchEvent('change');await ready();
-   assert.equal(await page.locator('#map-time-label').textContent(),'Wed 21 Oct at 18:00 to Thu 22 Oct at 00:00');
+   assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct 0000');
    await ordered('#map-variable');
   }
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Full periods fit the viewport');
