@@ -90,6 +90,7 @@ try{
  // Duplicating a tab can copy sessionStorage. It must acquire a new slot while the original stays active.
  const qId=new URL(q.url()).searchParams.get('layout'),duplicate=await restarted.newPage();await duplicate.addInitScript(id=>sessionStorage.setItem('snowline-layout-tab',id),qId);await duplicate.goto(q.url());await ready(duplicate);
  assert.notEqual(new URL(duplicate.url()).searchParams.get('layout'),qId);
+ assert.ok(await duplicate.evaluate(async()=>{const id=new URL(location.href).searchParams.get('layout');return (await navigator.locks.query()).held.some(lock=>lock.name==='snowline-layout-tab:'+id);}),'The duplicated tab owns its new slot too');
  assert.equal(await q.locator('#map-comparison-count').inputValue(),'3');
  assert.deepEqual(errors,[]);console.log('Four durable layouts, restart, separate tabs and mobile menu passed');await restarted.close();
 }finally{await browser.close();server.close();}

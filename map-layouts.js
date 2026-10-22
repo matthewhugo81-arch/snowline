@@ -42,10 +42,14 @@ export async function createLayoutRestore(){
  // Duplicated browser tabs can inherit sessionStorage. A lifetime lock gives
  // each active tab its own slot without polling or sharing mutable UI state.
  if(navigator.locks){
-  await new Promise(resolve=>{navigator.locks.request('snowline-layout-tab:'+id,{ifAvailable:true},lock=>{
-   if(!lock){id=crypto.randomUUID();resolve();return;}
-   return new Promise(done=>{release=done;resolve();});
-  }).catch(()=>{id=crypto.randomUUID();resolve();});});
+  for(;;){
+   const claimed=await new Promise(resolve=>{navigator.locks.request('snowline-layout-tab:'+id,{ifAvailable:true},lock=>{
+    if(!lock){resolve(false);return;}
+    return new Promise(done=>{release=done;resolve(true);});
+   }).catch(()=>resolve(null));});
+   if(claimed===true)break;
+   id=crypto.randomUUID();if(claimed===null)break;
+  }
  }else if(performance.getEntriesByType('navigation')[0]?.type!=='reload')id=crypto.randomUUID();
  try{sessionStorage.setItem('snowline-layout-tab',id);}catch{}
  let capture,describe,timer,ready=false,last='',customName=saved?.name??'',dirty=false;
