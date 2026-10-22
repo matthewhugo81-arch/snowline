@@ -27,7 +27,7 @@ when intentionally updating the baseline, then update its manifest/checksum.
 
 ECMWF ENS anomalies use `haduk-extrema-1991-2020-ecmwf.npz`: original valid 1 km HadUK land cells are averaged within each published 0.25-degree cell (-16 to 10 E, 46 to 63 N). Cells without UK observations stay missing. This matches spatial support approximately; it does not correct model elevation or forecast bias. The manifest records the prepared checksum and original source checksums.
 
-The forecast uses all 51 member extrema over complete 09-09 UTC windows. Native three-hour extrema are available through T+144. Later six-hour intervals cannot partition a 09-09 window, so these anomaly charts intentionally stop at the last complete window before that change; no interpolation or shifted observation period is substituted.
+The forecast uses all 51 member extrema. Existing 09–09 UTC windows are retained through the last complete three-hourly window before T+144. For 00/12 UTC ECMWF runs, later charts use explicitly labelled 00–00 UTC calendar days through the last complete day within T+360 (15 days). Three-hour and six-hour native extrema are combined only when they exactly partition the stated 24 hours; no interpolation or missing interval is substituted. Both extrema of a calendar day use its starting date for the monthly normal. The transition windows overlap by nine hours. The calendar-day window differs from the 09–09 UTC observation convention, which adds a definition mismatch beyond the existing model/observation differences. Older archives can retain the shorter horizon.
 
 ## Republic of Ireland supplement
 

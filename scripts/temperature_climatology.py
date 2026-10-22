@@ -99,7 +99,8 @@ def anomaly_reference(path,model):
     hashes=[hashlib.sha256(f.read_bytes()).hexdigest() for f in files]
     return dict(dataset='HadUK-Grid + Met Eireann' if len(files)>1 else 'HadUK-Grid',
                 period='1991-2020',statistic='monthly normal of daily minimum/maximum',
-                forecast_window='24 hours ending 09 UTC',
+                forecast_window=('24 hours ending 09 UTC through the last exact three-hourly window; then 00-00 UTC calendar days' if model=='ecmwf' else '24 hours ending 09 UTC'),
+                window_policy='09-to-00-utc-v1' if model=='ecmwf' else '09-utc',
                 coverage='UK and Republic of Ireland' if len(files)>1 else 'UK',
                 revision=hashlib.sha256(':'.join(hashes).encode()).hexdigest(),
                 inputs=[dict(file=f.name,sha256=h) for f,h in zip(files,hashes)])

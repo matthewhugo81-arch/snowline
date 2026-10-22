@@ -134,13 +134,17 @@ class GlobalGRIB:
 
     def window(self, start, end, kind):
         if kind in ('min','max'):
-            if self.model!='ecmwf' or end>144 or start%3 or end%3:
-                raise ValueError('Exact 09–09 UTC extrema require complete three-hour intervals through T+144')
+            limit=360 if self.run.hour in (0,12) else 144
+            if (self.model!='ecmwf' or start<0 or end>limit or start>=end or start%3 or end%3
+                or (end>144 and (end%6 or (start>144 and start%6)))):
+                raise ValueError('Extrema require exact native intervals: three-hourly to T+144, six-hourly thereafter')
             records=[]
-            for h in range(start+3,end+1,3):
+            cursor=start
+            while cursor<end:
+                h=cursor+(3 if cursor<144 else 6)
                 a,p=self.read(h,kind)
-                if tuple(p)!=(h-3,h,kind):raise ValueError('Incomplete or wrong extrema interval')
-                records.append((h-3,h,a))
+                if tuple(p)!=(cursor,h,kind):raise ValueError('Incomplete or wrong extrema interval')
+                records.append((cursor,h,a));cursor=h
             return complete_window(records,start,end,kind)
         if self.model == 'ecmwf' and kind in ('rain','snow','precip'):
             def amount(k):

@@ -74,7 +74,23 @@ def probability_targets(model,end_limit,kinds):
             if h>=period for kind in kinds]
 
 
-def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
+def extrema_targets(model,run,max_hour,kinds):
+    limit=min(max_hour,360 if model=='ecmwf' and run.hour in (0,12) else 144 if model=='ecmwf' else 114)
+    # Keep every existing 09–09 frame. After the last exact 09 UTC endpoint,
+    # use complete UTC calendar days; never split a six-hour extremum.
+    last_nine=max(h for h in range(24,145) if (run+timedelta(hours=h)).hour==9)
+    return [(h,kind,24) for h in range(24,limit+1)
+            if ((h<=144 and (run+timedelta(hours=h)).hour==9)
+                or (model=='ecmwf' and run.hour in (0,12) and h>last_nine and (run+timedelta(hours=h)).hour==0))
+            for kind in kinds]
+
+
+def extrema_reference_date(valid,kind):
+    # Both extrema of a 00–00 UTC day belong to its starting calendar date.
+    return valid-timedelta(hours=24) if kind=='max' or valid.hour==0 else valid
+
+
+def build(model,root,cache,run=None,max_hour=360,budget=1500,climatology=None):
     run=run or latest_run(model);domain=f'snowline_{model}_products'
     folder=root/domain/run.strftime('%Y/%m/%d/%H00Z');folder.mkdir(parents=True,exist_ok=True)
     source=(GlobalGRIB if model in ('gefs','ecmwf') else MetOffice)(model,run,cache)
@@ -88,9 +104,8 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
         normal=read_normals(climatology,model)
         reference=anomaly_reference(climatology,model)
     if model=='mogreps_uk' or normal is not None:
-        anomaly_limit=min(max_hour,144) if model=='ecmwf' else end_limit
         extrema_kinds=('min','max') if normal is not None else ('min',)
-        targets += [(h,kind,24) for h in range(24,anomaly_limit+1) if (run+timedelta(hours=h)).hour==9 for kind in extrema_kinds]
+        targets += extrema_targets(model,run,max_hour,extrema_kinds)
     # Publish near-term extrema alongside probabilities, not after the entire
     # probability horizon. Completed tasks are reused on the next build.
     targets.sort(key=lambda task:task[0])
@@ -107,7 +122,7 @@ def build(model,root,cache,run=None,max_hour=144,budget=1500,climatology=None):
             if kind in ('min','max'):
                 values=cold_probability_fields(a,source.count) if model=='mogreps_uk' and kind=='min' else {}
                 if normal is not None:
-                    date=valid if kind=='min' else valid-timedelta(hours=24)
+                    date=extrema_reference_date(valid,kind)
                     values[f'ens_temperature_{kind}_anomaly']=member_extrema_anomaly(a,normal[kind][date.month-1],source.count)
             else:values=threshold_fields(kind,a,period,source.count)
             if model=='mogreps_uk':
@@ -170,6 +185,6 @@ def publish(root,folder,source,model,run,targets,has_climatology,reference=None)
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--check-runtime',action='store_true');p.add_argument('--max-hour',type=int,default=144);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--model',required=True,choices=['gefs','ecmwf','mogreps_uk','mogreps_g']);p.add_argument('--output',type=Path,default=Path('ensemble-data'));p.add_argument('--cache',type=Path,default=Path('product-cache'));p.add_argument('--run');p.add_argument('--check-runtime',action='store_true');p.add_argument('--max-hour',type=int,default=360);p.add_argument('--budget',type=int,default=1500);p.add_argument('--climatology',default='climatology/haduk-extrema-1991-2020.npz');a=p.parse_args()
     if a.check_runtime:runtime_check(a.model)
     else:build(a.model,a.output,a.cache,datetime.fromisoformat(a.run.replace('Z','+00:00')) if a.run else None,a.max_hour,a.budget,a.climatology)

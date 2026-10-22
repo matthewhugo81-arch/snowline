@@ -1,4 +1,4 @@
-import {PRODUCT_BASE,productPath} from './map-ensemble-products.js?v=20261022-ireland-anomalies';
+import {PRODUCT_BASE,productPath} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 // GitHub Pages gzips .om responses, including byte ranges. A range into the
 // compressed representation cannot be decoded as an OM chunk. The deployment
 // uses a non-compressible MIME suffix for these already-compressed binary files.

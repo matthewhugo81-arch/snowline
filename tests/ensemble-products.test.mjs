@@ -46,11 +46,13 @@ test('cold thresholds are UK-only inclusive air-temperature probabilities with c
  m.variable_intervals[keys[0]][end].hours=12;
  assert.equal(verifyProduct(m,'ukmo_uk_ensemble_2km'),false);
 });
-test('ECMWF anomalies cannot extend beyond Day 6',()=>{
+test('ECMWF retains exact 09 UTC windows and accepts declared calendar days through Day 15',()=>{
  const k='ens_temperature_min_anomaly';
- for(const [t,expected] of [['2026-10-27T09:00:00Z',true],['2026-10-28T09:00:00Z',false]]){
-  const m={...meta(),domain:'snowline_ecmwf_products',member_count:51,variables:[k],valid_times:[t],variable_valid_times:{[k]:[t]},variable_intervals:{[k]:{[t]:{hours:24,start:new Date(Date.parse(t)-86400000).toISOString(),end:t}}},anomaly_reference:{dataset:'HadUK-Grid',period:'1991-2020'}};
+ for(const [t,expected] of [['2026-10-27T09:00:00Z',true],['2026-10-28T09:00:00Z',false],['2026-10-28T00:00:00Z',true],['2026-11-05T00:00:00Z',true],['2026-11-06T00:00:00Z',false],['2026-10-22T00:00:00Z',false]]){
+  const m={...meta(),domain:'snowline_ecmwf_products',member_count:51,variables:[k],valid_times:[t],variable_valid_times:{[k]:[t]},variable_intervals:{[k]:{[t]:{hours:24,start:new Date(Date.parse(t)-86400000).toISOString(),end:t}}},anomaly_reference:{dataset:'HadUK-Grid',period:'1991-2020',window_policy:'09-to-00-utc-v1'}};
   assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),expected);
+  delete m.anomaly_reference.window_policy;
+  if(t.endsWith('T00:00:00Z'))assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),false,'Legacy metadata cannot silently change its daily window');
  }
 });
 

@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 import json
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 import numpy as np
 from ensemble_products import complete_window,probability,threshold_fields,lagged_cycles,member_extrema_anomaly,nonnegative_difference
 from ensemble_product_sources import MetOffice,GlobalGRIB
@@ -191,12 +191,35 @@ class Products(unittest.TestCase):
 
     def test_ecmwf_complete_extrema_and_medium_range_boundary(self):
         source=GlobalGRIB('ecmwf',datetime(2026,10,21,12,tzinfo=timezone.utc),Path('unused'))
-        source.read=lambda h,k:(np.full((51,1,1),h),(h-3,h,k))
+        source.read=lambda h,k:(np.full((51,1,1),h),(h-(3 if h<=144 else 6),h,k))
         np.testing.assert_equal(source.window(117,141,'min'),120)
         np.testing.assert_equal(source.window(117,141,'max'),141)
+        np.testing.assert_equal(source.window(138,162,'min'),141)
+        np.testing.assert_equal(source.window(138,162,'max'),162)
+        np.testing.assert_equal(source.window(336,360,'min'),342)
+        np.testing.assert_equal(source.window(336,360,'max'),360)
         with self.assertRaises(ValueError):source.window(141,165,'max')
+        with self.assertRaises(ValueError):source.window(354,378,'max')
+        source.run=datetime(2026,10,21,6,tzinfo=timezone.utc)
+        with self.assertRaises(ValueError):source.window(144,168,'min')
         source.read=lambda h,k:(np.ones((51,1,1)),(h-1,h,k))
         with self.assertRaises(ValueError):source.window(21,45,'min')
+
+    def test_ecmwf_targets_retain_early_windows_and_reach_last_complete_utc_day(self):
+        from build_ensemble_products import extrema_targets,extrema_reference_date
+        for cycle,last,first_midnight in [(0,360,144),(12,348,156)]:
+            run=datetime(2026,10,22,cycle,tzinfo=timezone.utc)
+            targets=extrema_targets('ecmwf',run,360,('min','max'))
+            ends=[h for h,k,_ in targets if k=='min']
+            old=[h for h in range(24,145) if (run+timedelta(hours=h)).hour==9]
+            self.assertEqual(ends,old+list(range(first_midnight,last+1,24)))
+            self.assertEqual(len(targets),2*len(ends))
+            self.assertEqual(extrema_targets('ecmwf',run,120,('min',)),[(h,'min',24) for h in old if h<=120])
+        run=datetime(2026,10,22,tzinfo=timezone.utc)
+        self.assertTrue(all((run+timedelta(hours=h)).hour==9 and h<=114 for h,_,_ in extrema_targets('mogreps_uk',run,360,('min',))))
+        end=datetime(2026,11,1,tzinfo=timezone.utc)
+        for kind in ('min','max'):self.assertEqual(extrema_reference_date(end,kind).month,10)
+        self.assertEqual(extrema_reference_date(end+timedelta(hours=9),'min').month,11)
 
     def test_ecmwf_anomaly_requires_all_51_members(self):
         a=np.full((51,1,2),10.);a[50,0,1]=np.nan

@@ -34,6 +34,13 @@ test('maximum headers advance with the selected period without a duplicate layer
  for(const day of [11,12,13])assert.match(forecastValidity('ens_temperature_min_anomaly',`2026-10-${day}T09:00:00Z`),new RegExp('for [A-Za-z]+ '+day+'th - VALID'));
 });
 
+test('long-range midnight anomalies label the complete UTC day for both extrema',()=>{
+ for(const field of ['ens_temperature_min_anomaly','ens_temperature_max_anomaly']){
+  assert.match(forecastValidity(field,'2026-11-01T00:00:00Z'),/for Sat 31st \(00–00 UTC\) - VALID Sat 31 Oct 00:00 to Sun 1 Nov 00:00 UTC/);
+  assert.match(forecastValidity(field,'2027-01-01T00:00:00Z'),/for Thu 31st \(00–00 UTC\).*Thu 31 Dec 2026 00:00 to Fri 1 Jan 2027 00:00 UTC/);
+ }
+});
+
 test('rainfall header states one valid period, without repeating the duration or ending time',()=>{
  assert.equal(forecastValidity('precipitation_total_24h','2026-10-14T03:00:00Z'),'VALID Tue 13 Oct 03:00 to Wed 14 Oct 03:00 UTC');
  assert.equal(forecastValidity('precipitation_total_6h','2026-10-14T06:00:00Z'),'VALID Wed 14 Oct 00:00 to Wed 14 Oct 06:00 UTC');
