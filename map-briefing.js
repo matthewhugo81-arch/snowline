@@ -92,7 +92,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    gradient.style.background='linear-gradient(to right,'+stops.join(',')+')';
    if(field.bands){
     labels.classList.add('briefing-band-labels');
-    for(const [index,value]of scale.entries()){const label=document.createElement('span');label.textContent=field.categoryLabels?.[index+(field.legendStart??0)]??value+(index===scale.length-1&&!field.categorical?'+':'');labels.append(label);}
+    for(const text of chartScales(field)[0].labels){const label=document.createElement('span');label.textContent=text;labels.append(label);}
    }else{
     const low=document.createElement('span'),high=document.createElement('span');low.textContent=min+' '+unit;high.textContent=max+' '+unit;labels.append(low,high);
    }
