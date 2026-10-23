@@ -265,6 +265,59 @@ test('slow storage does not delay display or duplicate a just-evicted tile',asyn
  assert.equal(calls,2,'Wait for the existing write instead of rendering the tile again');cache.release();
 });
 
+test('a long save backlog retains every tile, reserves foreground capacity and resumes preloading',async()=>{
+ let finish,calls=0,maxWrites=0,maxPressure=0;
+ const gate=new Promise(resolve=>finish=resolve),disk=storage(),original=disk.open;
+ disk.open=async name=>{const store=await original(name),put=store.put;return {...store,put:async(...args)=>{await gate;return put(...args);}};};
+ const cache=new ForecastTileCache(async()=>{calls++;return bytes();},{storage:disk,memoryBytes:8});cache.setContext('view');cache.setForeground(['om://selected']);
+ const originalPersist=cache.persist.bind(cache);cache.persist=(...args)=>{originalPersist(...args);maxWrites=Math.max(maxWrites,cache.writes.size);};
+ const originalDrain=cache.drain.bind(cache);cache.drain=()=>{maxPressure=Math.max(maxPressure,cache.writes.size+cache.saveReservations.size);return originalDrain();};
+ const background=Array.from({length:64},(_,i)=>cache.prefetch(params('background/'+i),new AbortController()));
+ try{
+  await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(calls,24,'Background rendering waits before exhausting the save queue');
+  assert.equal(cache.limited,false);assert.equal(cache.bytes,8);
+  const selected=await read(cache,'selected');assert.deepEqual(new Uint8Array(selected.data),new Uint8Array([10,20,30,40]));
+  assert.equal(calls,25,'The selected chart uses reserved capacity while writes are stalled');
+  const again=await read(cache,'background/0');assert.equal(calls,25,'A pending save serves a revisited frame without waiting for disk');
+  new Uint8Array(again.data)[0]=99;assert.equal(new Uint8Array((await read(cache,'background/0')).data)[0],10);
+ }finally{finish();}
+ await Promise.all(background);await saved(cache);
+ assert.equal((await (await cache.disk).keys()).length,65);assert.equal(cache.limited,false);
+ assert.ok(maxWrites<=32);assert.ok(maxPressure<=33,'The reservation-to-write handover is bounded');
+ cache.memory.clear();cache.bytes=0;await read(cache,'background/40');assert.equal(calls,65,'All completed frames survive hot-memory eviction');cache.release();
+});
+
+test('a full selected multi-tile chart stays responsive when every disk write is stalled',async()=>{
+ let finish,calls=0;
+ const gate=new Promise(resolve=>finish=resolve),disk=storage(),original=disk.open;
+ disk.open=async name=>{const store=await original(name),put=store.put;return {...store,put:async(...args)=>{await gate;return put(...args);}};};
+ const cache=new ForecastTileCache(async()=>{calls++;return bytes();},{storage:disk,memoryBytes:256,maxPendingWrites:4});
+ cache.setContext('view');cache.setForeground(['om://selected']);
+ const background=Array.from({length:16},(_,i)=>cache.prefetch(params('background/'+i),new AbortController()));
+ try{
+  await new Promise(resolve=>setTimeout(resolve,20));assert.equal(calls,3);
+  const selected=Promise.all(Array.from({length:24},(_,i)=>read(cache,'selected/'+i)));
+  let timeout;try{await Promise.race([selected,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('Selected chart waited for disk saves')),250);})]);}finally{clearTimeout(timeout);}
+  assert.equal(calls,27);assert.equal(cache.writes.size,4,'Disk work remains bounded');
+  assert.equal(cache.limited,false);assert.ok(cache.bytes<=256);
+  await read(cache,'selected/8');assert.equal(calls,27,'Queued saves are reusable before they reach disk');
+ }finally{finish();}
+ await Promise.all(background);while(cache.writes.size)await saved(cache);
+ assert.equal((await(await cache.disk).keys()).length,40,'Every foreground and background tile is eventually saved');
+ cache.memory.clear();cache.bytes=0;await read(cache,'selected/8');assert.equal(calls,40);cache.release();
+});
+
+test('cancelled and failed renders release save reservations without stranding later frames',async()=>{
+ let fail;const cache=new ForecastTileCache((p,c)=>p.url==='om://blocked'?new Promise((resolve,reject)=>{fail=reject;c.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});}):Promise.resolve(bytes()),{storage:storage(),retries:0,maxPendingWrites:4});cache.setContext('old');
+ cache.setForeground(['om://next']);
+ const pending=read(cache,'blocked'),rejected=assert.rejects(pending,{name:'AbortError'});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(cache.saveReservations.size,1);
+ cache.setContext('new');await rejected;assert.equal(cache.saveReservations.size,0);await read(cache,'next');await saved(cache);
+ const failure=read(cache,'blocked'),failureCheck=assert.rejects(failure,/render failed/);await new Promise(resolve=>setImmediate(resolve));fail(Error('render failed'));await failureCheck;
+ assert.equal(cache.saveReservations.size,0);await read(cache,'later');await saved(cache);cache.release();
+});
+
 test('a delayed failed write reports limited storage only when its tile was evicted',async()=>{
  let fail;const cache=new ForecastTileCache(async()=>bytes(),{memoryBytes:4,storage:{keys:async()=>[],delete:async()=>{},open:async()=>({match:async()=>null,put:(key)=>key.includes('rain')?new Promise((resolve,reject)=>fail=reject):Promise.resolve()})}});cache.setContext('view');
  await read(cache,'rain');await read(cache,'snow');assert.equal(cache.limited,false);

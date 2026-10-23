@@ -35,8 +35,9 @@ const wait=(ms,signal)=>new Promise((resolve,reject)=>{
  signal.addEventListener('abort',cancelled,{once:true});
 });
 export class ForecastTileCache{
- constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=256*1024*1024,diskEntries=16384,maxAge=3600000,cacheVersion='render-20261021-complete-tiles',concurrency=8,backgroundConcurrency=4,coordinate=false,adaptive=false}={}){
-  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge,concurrency,backgroundConcurrency});
+ constructor(load,{storage=globalThis.caches,memoryBytes=32*1024*1024,onLimit=()=>{},retries=2,retryDelay=150,abortDelay=120,maxContexts=3,persistent=false,diskBytes=256*1024*1024,diskEntries=16384,maxAge=3600000,cacheVersion='render-20261021-complete-tiles',concurrency=8,backgroundConcurrency=4,maxPendingWrites=32,coordinate=false,adaptive=false}={}){
+  Object.assign(this,{load,storage,memoryBytes,onLimit,retries,retryDelay,abortDelay,maxContexts,persistent,diskBytes,diskEntries,maxAge,concurrency,backgroundConcurrency,maxPendingWrites});
+  this.saveReservations=new Set();
   this.renderQueue=[];this.rendering=new Set();this.foreground=null;
   this.diskStates=new WeakMap();
   this.sharedStores=new WeakMap();
@@ -110,7 +111,7 @@ export class ForecastTileCache{
  resetPending(){
   this.generation++;
   for(const job of this.pending.values()){clearTimeout(job.abortTimer);job.controller.abort();}
-  this.pending.clear();this.writes.clear();this.memory.clear();this.bytes=0;
+  this.pending.clear();this.writes.clear();this.saveReservations.clear();this.memory.clear();this.bytes=0;
  }
  release(){
   clearInterval(this.cleanupTimer);this.cleanupTimer=null;
@@ -193,13 +194,14 @@ export class ForecastTileCache{
  }
  persist(key,request,entry,store,generation,type){
   // Display now; save separately. Keep pending writes bounded if storage stalls.
-  const job={};this.writes.set(key,job);
+  const job={entry,generation};this.writes.set(key,job);
   job.promise=Promise.resolve().then(()=>this.put(store,request,new Response(type==='json'?JSON.stringify(entry.result.data):entry.result.data,{headers:{'x-snowline-type':type==='json'?'json':'bytes','x-snowline-bytes':String(entry.bytes),'x-snowline-created':String(entry.created)}}),entry.bytes,generation))
    .then(()=>{entry.durable=true;},error=>{entry.storageReason=error?.cacheReason??(error?.name==='QuotaExceededError'?'browser-quota':'storage-unavailable');if(generation===this.generation)this.limit(entry.storageReason);})
    .finally(()=>{
     entry.persisting=false;
     if(this.writes.get(key)===job)this.writes.delete(key);
     if(generation===this.generation&&!entry.durable&&this.memory.get(key)!==entry)this.limit(entry.storageReason);
+    this.drain();
    });
  }
  setForeground(urls,nearby=[]){
@@ -210,18 +212,35 @@ export class ForecastTileCache{
  }
  isForeground(url){return this.foreground.some(source=>url===source||url.startsWith(source+'/'));}
  drain(){
+  // Foreground pixels can finish even if disk writes are stalled. Keep those
+  // waiting saves in the bounded hot cache, and flush them as capacity returns.
+  for(const [key,entry]of this.memory){
+   if(this.writes.size>=this.maxPendingWrites)break;
+   if(!entry.save)continue;
+   const {request,store,generation,type}=entry.save;delete entry.save;
+   if(generation!==this.generation)continue;
+   entry.persisting=true;this.persist(key,request,entry,store,generation,type);
+  }
   // Bound native reads, worker renders and PNG encoding across all panels.
   // Background frames cannot fill the foreground slots. Cached bytes bypass
   // this queue altogether, and selecting a queued tile promotes its shared job.
   while(this.rendering.size<this.concurrency){
-   let index=this.renderQueue.findIndex(entry=>!entry.job.background);
+   // Reserve save capacity before generating more bytes. A busy disk must slow
+   // speculative rendering, not silently drop saves and invalidate the sequence.
+   // Keep capacity for selected tiles even when background writes are stalled.
+   const saving=this.writes.size+this.saveReservations.size;
+   const reserve=Math.min(this.concurrency,Math.max(1,Math.floor(this.maxPendingWrites/4)));
+   const hasRoom=entry=>!entry.job.background||!entry.job.canSave||this.saveReservations.has(entry.job)||saving<Math.max(1,this.maxPendingWrites-reserve);
+   let index=this.renderQueue.findIndex(entry=>!entry.job.background&&hasRoom(entry));
    if(index<0){
     if([...this.rendering].filter(entry=>entry.job.background).length>=this.backgroundConcurrency)return;
     // Adjacent rendered frames outrank distant disk preloads across all panels.
-    index=this.renderQueue.findIndex(entry=>this.nearby?.some(source=>entry.job.url===source||entry.job.url.startsWith(source+"/")));
-    if(index<0)index=0;
+    index=this.renderQueue.findIndex(entry=>hasRoom(entry)&&this.nearby?.some(source=>entry.job.url===source||entry.job.url.startsWith(source+"/")));
+    if(index<0)index=this.renderQueue.findIndex(hasRoom);
    }
+   if(index<0)return;
    const entry=this.renderQueue.splice(index,1)[0];if(!entry)return;
+   if(entry.job.canSave&&entry.job.background)this.saveReservations.add(entry.job);
    this.rendering.add(entry);entry.start();
   }
  }
@@ -249,6 +268,10 @@ export class ForecastTileCache{
   const key=JSON.stringify([params.type,params.url]),cached=this.memory.get(key);
   if(cached&&(!this.persistent||this.fresh(cached.created,params.url))){this.memory.delete(key);this.memory.set(key,cached);return cached.result;}
   if(cached){this.memory.delete(key);this.bytes-=cached.bytes;}
+  // A pending save still owns reusable bytes, even after hot-memory eviction.
+  // Selecting that frame must not wait for the disk or render it a second time.
+  const saving=this.writes.get(key);
+  if(saving?.generation===generation&&(!this.persistent||this.fresh(saving.entry.created,params.url)))return saving.entry.result;
   // CacheStorage keys are local lookup keys. No request is sent to this URL.
   const request='https://snowline-cache.invalid/tile?key='+encodeURIComponent(key);
   let store=await disk;
@@ -264,6 +287,8 @@ export class ForecastTileCache{
     this.remember(key,result,true,false,created);return result;
    }
   }catch(error){if(error.name==='AbortError')throw error;store=null;}
+  job.canSave=!!store;
+  try{
   let result;
   for(let attempt=0;;attempt++){
    if(controller.signal.aborted||generation!==this.generation)throw abort();
@@ -279,10 +304,12 @@ export class ForecastTileCache{
   }
   if(controller.signal.aborted||generation!==this.generation)throw abort();
   // Own the bytes before MapLibre transfers its copy to a worker.
-  const saved=copy(result),persisting=!!store&&this.writes.size<32;
+  const saved=copy(result),persisting=!!store&&this.writes.size<this.maxPendingWrites;
   const entry=this.remember(key,saved,false,persisting);
   if(persisting)this.persist(key,request,entry,store,generation,params.type);
+  else if(store)entry.save={request,store,generation,type:params.type};
   return saved;
+  }finally{this.saveReservations.delete(job);this.drain();}
  }
  protocol(params,consumer,{background=false,copyResult=true}={}){
   if(consumer.signal.aborted)return Promise.reject(abort());
