@@ -15,9 +15,10 @@ image-cache policies. It does not include the earlier scheduling experiment.
 
 ## Verification
 
-- 669 Node tests passed, including two-hour disk restoration, corrected source
+- 671 Node tests passed, including two-hour disk restoration, corrected source
   revisions, native reader invalidation, startup checks, cross-tab coordination,
-  failed checks/retry, immutable sources and unavailable persistent storage.
+  failed checks/retry, immutable sources, unavailable persistent storage and bounded
+  startup checks with correction detection after retry.
 - Desktop (1280 × 900) and mobile (390 × 844) map browser regressions passed,
   including run selection and appended forecast hours.
 - Live UKV / IFS 9 km / UKMO global cloud/precipitation/MSLP: all 154 available
@@ -45,5 +46,5 @@ The tested base is `9b30b633eb8b0117c8b4c97e4ba7f2e2ef537e6a`.
 The application entry-point versions change so a normal page refresh fetches the
 new modules. Existing tabs adopt this code on refresh; their first pass prepares
 imagery in the new cache namespace. Layouts and favourites are preserved.
-To roll back, revert the retention release commit and publish through the normal
+To roll back, revert the retention release commits and publish through the normal
 Pages workflow; keep later unrelated changes and forecast data intact.

@@ -32,7 +32,7 @@ test('failed checks retain imagery, remain due, and recover without pretending s
  let online=false,now=1000;const statuses=[];
  const retention=new ForecastRetention({store:store(),now:()=>now,fetch:async()=>{if(!online)throw Error('Offline');return response();},onStatus:message=>statuses.push(message)});
  await retention.initialize();await retention.observe(url,meta);const revision=retention.revision;now+=3600000;
- await retention.check();assert.equal(retention.sources.get(url).checked,1000);assert.equal(retention.revision,revision);assert.match(statuses.at(-1),/failed/);
+ await retention.check();assert.equal(retention.sources.get(url).checked,1000);assert.equal(retention.revision,revision);assert.match(statuses.at(-1),/incomplete/);
  online=true;await retention.check();assert.equal(retention.sources.get(url).checked,now);assert.match(statuses.at(-1),/checked for corrections/);
 });
 
@@ -73,4 +73,23 @@ test('default source checks preserve the native browser fetch receiver',async()=
 test('unavailable persistent storage falls back to private retention without reload loops',async()=>{
  const retention=new ForecastRetention({store:{getItem:()=>null,setItem:()=>{throw Error('Quota');}}});await retention.initialize();
  assert.equal(retention.persistent,false);assert.equal(await retention.observe(url,meta),true);assert.equal(retention.changed,false);
+});
+
+test('slow startup checks stop at a shared deadline and leave every unverified file due',async()=>{
+ let now=1000;const storage=store(),first=new ForecastRetention({store:storage,now:()=>now});await first.initialize();
+ for(let i=0;i<20;i++)await first.observe(url+'?frame='+i,meta);
+ now+=3600000;let calls=0;const statuses=[];
+ const next=new ForecastRetention({store:storage,now:()=>now,startupBudget:10,onStatus:message=>statuses.push(message),fetch:async(_url,{signal})=>{
+  calls++;return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true}));
+ }});
+ await next.initialize();assert.equal(calls,2);assert.equal(next.revision,first.revision);assert.equal(next.changed,false);
+ assert.ok([...next.sources.values()].every(entry=>entry.checked===1000));assert.match(statuses.at(-1),/incomplete/);
+ next.fetch=async()=>response();await next.check();assert.ok([...next.sources.values()].every(entry=>entry.checked===now));
+});
+
+test('a correction still invalidates after a timed-out startup check is retried',async()=>{
+ let now=1000;const storage=store(),first=new ForecastRetention({store:storage,now:()=>now});await first.initialize();await first.observe(url,meta);now+=3600000;
+ let changes=0;const next=new ForecastRetention({store:storage,now:()=>now,startupBudget:5,onChange:()=>changes++,fetch:async(_url,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}))});
+ await next.initialize();assert.equal(changes,0);assert.equal(next.revision,first.revision);
+ next.fetch=async()=>response('"corrected"');await next.check();assert.equal(changes,1);assert.notEqual(next.revision,first.revision);
 });

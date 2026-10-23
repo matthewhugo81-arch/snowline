@@ -7,11 +7,11 @@ const token=()=>globalThis.crypto?.randomUUID?.()??Date.now()+'-'+Math.random().
 const signature=({eTag,lastModified,fileSize})=>eTag?JSON.stringify(['etag',eTag,fileSize]):lastModified?JSON.stringify(['modified',lastModified,fileSize]):null;
 function storage(){try{return globalThis.localStorage;}catch{return null;}}
 export class ForecastRetention{
- constructor({store=storage(),fetch=globalThis.fetch?.bind(globalThis),now=Date.now,interval=300000,onChange=()=>{},onStatus=()=>{},maxSources=4096}={}){
+ constructor({store=storage(),fetch=globalThis.fetch?.bind(globalThis),now=Date.now,interval=300000,startupBudget=2500,onChange=()=>{},onStatus=()=>{},maxSources=4096}={}){
   // Without a cross-tab lock, keep a private page cache rather than risk losing
   // a source validator to concurrent localStorage writes from another window.
   if(globalThis.window&&!globalThis.navigator?.locks)store=null;
-  Object.assign(this,{store,fetch,now,interval,onChange,onStatus,maxSources});
+  Object.assign(this,{store,fetch,now,interval,startupBudget,onChange,onStatus,maxSources});
   this.sources=new Map();this.revision=token();this.changed=false;this.checking=null;
   this.persistent=!!store;
   if(store){try{const saved=JSON.parse(store.getItem(KEY)||'null');if(saved?.revision&&Array.isArray(saved.sources)){this.revision=saved.revision;this.sources=new Map(saved.sources);}}catch{this.store=null;this.persistent=false;this.revision=token();this.sources.clear();}}
@@ -64,22 +64,26 @@ export class ForecastRetention{
   };
   return true;
  }
- check({force=false}={}){
-  return this.checking??=this.validate(force).finally(()=>{this.checking=null;});
+ check({force=false,budget=Infinity}={}){
+  return this.checking??=this.validate(force,budget).finally(()=>{this.checking=null;});
  }
- async validate(force){
+ async validate(force,budget){
   if(this.changed)return;
   try{await this.lock(()=>this.sync());}catch{this.onStatus('Saved imagery available; source checks will retry.');return;}
   if(this.changed)return;
   const due=[...this.sources].filter(([,entry])=>force||this.now()-entry.checked>=this.interval);
   if(!due.length)return;
+  // A returning tab must not wait one network timeout for every saved file.
+  // Keep unverified entries due; the visible-page background check retries them.
+  const deadline=new AbortController();
+  const timer=Number.isFinite(budget)?setTimeout(()=>deadline.abort(),budget):null;
   let failed=0;
   const worker=async()=>{
-   while(due.length&&!this.changed){
+   while(due.length&&!this.changed&&!deadline.signal.aborted){
     const [url,entry]=due.shift();
     if(!entry.value){await this.lock(()=>{this.sync();this.invalidate('Refreshing imagery whose source cannot be verified.');});break;}
     try{
-     const response=await this.fetch(this.physicalURL(url),{method:'HEAD',cache:'no-cache',signal:AbortSignal.timeout(10000)});
+     const response=await this.fetch(this.physicalURL(url),{method:'HEAD',cache:'no-cache',signal:AbortSignal.any([AbortSignal.timeout(10000),deadline.signal])});
      if(!response.ok)throw Error('Source check failed');
      const value=signature({eTag:response.headers.get('etag'),lastModified:response.headers.get('last-modified'),fileSize:Number(response.headers.get('content-length'))});
      if(!value)throw Error('Source validation unavailable');
@@ -93,14 +97,14 @@ export class ForecastRetention{
    }
   };
   // Small metadata checks only; chart downloads keep their own render budget.
-  await Promise.all([worker(),worker()]);
-  if(!this.changed)this.onStatus(failed?'Saved imagery available; some source checks failed and will retry.':'Saved imagery checked for corrections.');
+  try{await Promise.all([worker(),worker()]);}finally{clearTimeout(timer);}
+  if(!this.changed)this.onStatus(failed||due.length?'Saved imagery available; source checks are incomplete and will retry.':'Saved imagery checked for corrections.');
  }
  async initialize(){
   // A returning page validates old pixels before assigning its cache namespace.
   const onChange=this.onChange;this.onChange=()=>{};
   try{await this.lock(()=>this.sync());}catch{this.store=null;this.persistent=false;this.revision=token();this.sources.clear();}
-  await this.check();this.changed=false;this.onChange=onChange;
+  await this.check({budget:this.startupBudget});this.changed=false;this.onChange=onChange;
  }
  start(target=globalThis.window){
   this.timer=setInterval(()=>{if(!globalThis.document?.hidden)void this.check();},60000);
