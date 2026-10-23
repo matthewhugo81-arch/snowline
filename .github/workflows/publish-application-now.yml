@@ -45,7 +45,7 @@ jobs:
           import pathlib, subprocess, shutil
           base='9a117653a860fd10e6b8464614af1e1597f5f056'
           paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD','--','.',':(exclude).github/**',':(exclude)scripts/**',':(exclude)tests/**',':(exclude)review/**']).decode().splitlines()
-          allowed={'map-startup.js','maps.html','maps.js'}
+          allowed={'map-startup.js','maps.html','maps.js','map-briefing.js'}
           if not set(paths)<=allowed: raise SystemExit('Unexpected changes: '+str(paths))
           for name in paths: shutil.copy2(name,pathlib.Path('_site')/name)
           PY

@@ -1,7 +1,7 @@
 import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastTimeLabel} from './map-validity.js?v=20261022-ireland-ecmwf-range';
+import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261022-ireland-ecmwf-range';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
 import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261022-retention-recovery';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -26,7 +26,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <label>Run<select id="briefing-run-select" disabled><option>Checking runs…</option></select></label>
  <label>Chart<select id="briefing-preset"></select></label>
  <label>Area<select id="briefing-area"></select></label>
- <label><span id="briefing-time-heading">Forecast time / period · UTC</span><select id="briefing-time"></select></label>
+ <label><span id="briefing-time-heading">Valid time · UTC</span><select id="briefing-time"></select></label>
  <label>Forecast interval<select id="briefing-interval"><option value="native">Hourly / all available</option><option value="3" selected>3 hourly</option><option value="6">6 hourly</option><option value="12">12 hourly</option></select></label>
  <label>Layout<select id="briefing-count"><option value="6">6 panels</option><option value="9">9 panels</option></select></label>
  <div class="briefing-overlays" role="group" aria-label="Briefing chart overlays"><label class="briefing-background">Map background<select id="briefing-background">${backgroundOptions}</select></label><label class="check-row"><input id="briefing-contours" type="checkbox" autocomplete="off"> Contours</label><label class="check-row"><input id="briefing-grid-values" type="checkbox" autocomplete="off"> Grid values</label></div>
@@ -111,7 +111,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   const native=briefingTimes(meta,preset,model,interval),hours=accumulationHours(preset.field);
   const regional=forecastInterval([model],interval).shortRange;
   configurePeriodInterval($('interval'),hours,interval,regional);
-  $('time-heading').textContent=hours?'Period start · UTC':'Forecast time / period · UTC';
+  $('time-heading').textContent=hours?'Period start · UTC':'Valid time · UTC';
   $('previous').textContent=hours?'Earlier periods':'Earlier charts';$('next').textContent=hours?'Later periods':'Later charts';
   if(hours){
    const periods=fixedAccumulationPeriods(native,hours,requestedStart??requestedTime);
