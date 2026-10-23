@@ -207,6 +207,18 @@ try{
    await ordered('#map-variable');
   }
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Valid time labels fit the viewport');
+  // Carry a probability into a model that has never loaded in this page.
+  const mogreps='snowline_mogreps_global',height='geopotential_height_500hPa_anomaly_mean';
+  const {MOGREPS_GLOBAL_DOMAIN}=await import('../map-mogreps-global.js');
+  const ordinary={format_version:2,domain:mogreps,completed:true,reference_time:reference,member_count:18,member_ids:Array.from({length:18},(_,i)=>i),threshold_mm_per_hour:.1,grid:MOGREPS_GLOBAL_DOMAIN.grid,variables:[height,'pressure_msl_mean'],valid_times:[time],variable_valid_times:{[height]:[time],pressure_msl_mean:[time]},anomaly_reference:{period:'1991-2020',level_hPa:500,units:'m'}};
+  await page.route('**/snowline_mogreps_global/**',r=>r.fulfill({json:ordinary}));
+  await page.route('https://raw.githubusercontent.com/**/snowline_mogreps_g_products/**',r=>r.fulfill({json:{...product,domain:'snowline_mogreps_g_products',variables:six}}));
+  await page.locator('#map-model').selectOption(mogreps);await ready();
+  assert.equal(await page.locator(`#map-variable option[value="${height}"]`).count(),1,'Switching models on a probability retains the height anomaly menu');
+  await page.reload();await ready();
+  assert.equal(await page.locator(`#map-variable option[value="${height}"]`).count(),1,'Restoring a probability on startup loads the normal ensemble catalogue');
+  await page.locator('#map-variable').selectOption(height);await ready();
+  assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('snowline_mogreps_global/'),'Height anomaly uses native data, not the probability run');
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({viewport,ordinaryStartupProductRequests:0,probabilitySwitching:true,directAnomalySelection:true,refreshAndReload:true,returnToOrdinaryChart:true,otherPanelWasLoaded:!!otherBefore.url}));
   await page.close();

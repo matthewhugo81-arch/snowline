@@ -748,9 +748,17 @@ async function refreshLiveRuns(){
 async function resolvePanelRun(item,load,options){
  const request=requestedRun(item),model=sourceModel(item.model);
  if(productField(item.field)&&productChoices(model).some(f=>f.key===item.field)){
-  const meta=await loadProducts(model,load,followLatest[item.key]?null:state.metas[item.model]?.reference_time);
+  // A probability can be restored on startup or carried into a new model.
+  // Load that model's ordinary catalogue independently of the product cycle.
+  // Menu metadata never becomes a data source for the selected probability.
+  const [meta,normal]=await Promise.all([
+   loadProducts(model,load,followLatest[item.key]?null:state.metas[item.model]?.reference_time),
+   loadSpatialModel(model,load).catch(()=>null)
+  ]);
   if(!meta.variables.includes(item.field))throw Error('This ensemble product is not yet published for the selected run.');
-  return {meta:{...meta,normalMenuMeta:state.metas[item.model]?.normalMenuMeta??state.metas[item.model]},latest:meta,previous:null,key:selectedRunKey(model,meta)};
+  const normalMenuMeta=normal??state.metas[item.model]?.normalMenuMeta??state.metas[item.model];
+  if(normalMenuMeta)extendCatalogue(fields,[normalMenuMeta],OM,settings);
+  return {meta:{...meta,normalMenuMeta},latest:meta,previous:null,key:selectedRunKey(model,meta)};
  }
  return mapRunCatalogue.select(request,load,options);
 }
