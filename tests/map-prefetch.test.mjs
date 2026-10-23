@@ -75,11 +75,11 @@ test('a cold foreground selection starts immediately while existing distant hour
  assert.ok(cache.frames.get('t4')?.pending,'The selected image starts without waiting for distant work');
  map.load(cache.frames.get('t4'));assert.equal((await selected).url,'t4');
  jobs.get('t1').resolve();jobs.get('t3').resolve();await flush();
- assert.deepEqual(started,['t1','t2','t3'],'A cold selection pauses new distant dispatch');
+ assert.deepEqual(started,['t1','t2','t3'],'The selected frame is already ready and needs no duplicate prefetch');
  assert.equal(cache.preloaded.size,5);assert.equal(cache.failures.size,0);assert.equal(cache.current.url,'t0');cache.clear();
 });
 
-test('rapid cold selections retain download progress and discard superseded display frames',async t=>{
+test('rapid cold selections continue background dispatch and discard superseded display frames',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});
  const map=new FakeMap(),started=[],jobs=new Map();
  const cache=new ForecastFrames(map,'a',{preloadConcurrency:2,prefetch:(url,controller)=>new Promise((resolve,reject)=>{
@@ -96,12 +96,32 @@ test('rapid cold selections retain download progress and discard superseded disp
  assert.equal(cache.preloaded.has('cached'),true,'Leaving the decoded window does not erase cached progress');
  for(const job of jobs.values())assert.equal(job.controller.signal.aborted,false);
  jobs.get('far1').resolve();await flush();assert.equal(cache.preloaded.has('far1'),true);
- assert.deepEqual(started,['far1','far2'],'Superseded warm generations cannot launch more work');
+ assert.deepEqual(started,['far1','far2','later'],'Navigation keeps the bounded background sequence moving');
  map.load(cache.frames.get('next3'));const results=await Promise.all(selections);
  assert.deepEqual(results.map(frame=>frame?.url??null),[null,null,'next3']);assert.equal(cache.failures.size,0);
  cache.show(results[2],.8,'linear');
  cache.warm({keep:new Set(['next3']),upcoming:[],all:['far1','far2','later'],delay:0});t.mock.timers.tick(0);await flush();
  assert.deepEqual(started,['far1','far2','later']);jobs.get('far2').resolve();jobs.get('later').resolve();await flush();cache.clear();
+});
+
+test('background sequence completes during sustained cold navigation without waiting for a display commit',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const map=new FakeMap(),jobs=new Map(),started=[];
+ const cache=new ForecastFrames(map,'navigation',{preloadConcurrency:1,prefetch:(url,controller)=>new Promise((resolve,reject)=>{
+  started.push(url);jobs.set(url,resolve);controller.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+ })});
+ cache.show(await loaded(cache,map,'now'),.8,'linear');
+ const sequence=Array.from({length:12},(_,i)=>'background-'+i);
+ cache.warm({keep:new Set(['now']),upcoming:[],all:sequence,delay:0});
+ // Even navigation before the dispatch timer fires must not erase the queue.
+ cache.focus('next',new Set(['now','next']));t.mock.timers.tick(0);await flush();
+ for(let i=0;i<sequence.length;i++){
+  cache.focus('cold-'+i,new Set(['now','cold-'+i]));
+  assert.equal(started.at(-1),sequence[i]);jobs.get(sequence[i])();await flush();
+  assert.ok(cache.prefetches.size<=1);
+ }
+ assert.deepEqual(started,sequence);assert.equal(cache.preloaded.size,13);
+ assert.equal(cache.current.url,'now');assert.equal(cache.failures.size,0);cache.clear();
 });
 
 test('a foreground target shares its in-flight tile without a new render or cancelled prefetch',async t=>{

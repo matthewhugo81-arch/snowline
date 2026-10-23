@@ -5,9 +5,12 @@ const PREFIX='snowline-forecast-tiles-v1-';
 // A preparation slot includes network waits, not just worker CPU time. Allow
 // capable desktops to overlap more reads while reserving four foreground slots.
 // Keep the existing budgets on mobile and lower-memory devices.
-export function forecastRenderBudget({hardwareConcurrency=4,deviceMemory=4,mobile=false}={}){
+export function forecastRenderBudget({hardwareConcurrency=4,deviceMemory,mobile=false}={}){
  if(mobile)return {concurrency:4,backgroundConcurrency:2};
- if(hardwareConcurrency>=8&&deviceMemory>=8)return {concurrency:16,backgroundConcurrency:12};
+ // Firefox does not expose deviceMemory. Missing information must not silently
+ // disable desktop throughput or halve the slots reserved for selected charts.
+ // Explicit low-memory reports and mobile devices retain their smaller budgets.
+ if(hardwareConcurrency>=8&&(deviceMemory==null||deviceMemory>=8))return {concurrency:16,backgroundConcurrency:12};
  return {concurrency:8,backgroundConcurrency:hardwareConcurrency>=8&&deviceMemory>=4?6:4};
 }
 const abort=()=>new DOMException('Aborted','AbortError');

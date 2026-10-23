@@ -32,6 +32,9 @@ test('source-validated retention restores disk pixels after two hours; a revisio
 test('faster devices prepare more tiles without taking the selected chart slots',async()=>{
  assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8,mobile:true}),{concurrency:4,backgroundConcurrency:2});
  assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8}),{concurrency:16,backgroundConcurrency:12});
+ assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8}),{concurrency:16,backgroundConcurrency:12});
+ assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:undefined}),{concurrency:16,backgroundConcurrency:12});
+ assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,mobile:true}),{concurrency:4,backgroundConcurrency:2});
  assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:4}),{concurrency:8,backgroundConcurrency:6});
  for(const device of [{},{hardwareConcurrency:4,deviceMemory:8},{hardwareConcurrency:16,deviceMemory:2}])assert.equal(forecastRenderBudget(device).backgroundConcurrency,4);
  const started=[],jobs=new Map();

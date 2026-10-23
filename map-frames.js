@@ -95,8 +95,8 @@ export class ForecastFrames{
  }
  async acquire(url,valid=()=>true){
   if(!valid())return null;
-  // Pause new speculative work while the selection prepares. Existing tile
-  // jobs finish once and can be shared with this foreground request.
+  // Keep the bounded sequence moving while selection prepares. Tile scheduling
+  // reserves foreground capacity and promotes work shared with this selection.
   if(!this.isReady(url))this.focus(url);
   for(let attempt=0;attempt<2&&valid();attempt++){
    const frame=this.prepare(url);frame.renewTimeout?.();
@@ -216,9 +216,10 @@ export class ForecastFrames{
   this.queue.splice(0,this.queue.length,...this.queue.filter(url=>urls.has(url)));this.onProgress();
  }
  // Navigation changes priority, not the model/run/view of existing downloads.
- // Keep their bounded jobs alive while pausing dispatch of more distant work.
+ // Keep both active jobs and their bounded dispatch alive. Stopping this queue
+ // until a selection commits starves it during repeated cold arrow presses.
  focus(url,keep=this.keep){
-  clearTimeout(this.timer);this.epoch++;this.queue=[];this.keep=keep;
+  this.keep=keep;
   for(const frame of [...this.frames.values()])if(frame!==this.current&&frame.url!==url&&!keep.has(frame.url))this.discard(frame);
  }
  stop(exceptURL,keep=new Set()){

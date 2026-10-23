@@ -23,8 +23,8 @@ import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,TYPE_KEYS,isTypeField,preci
 import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
-import {ForecastFrames,frameWindow,arrowFrameWindow,fullSequence} from './map-frames.js?v=20261022-arrow-priority';
-import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261023-frame-throughput';
+import {ForecastFrames,frameWindow,arrowFrameWindow,fullSequence} from './map-frames.js?v=20261023-navigation-queue';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261023-navigation-queue';
 import {ForecastRetention} from './map-retention.js?v=20261023-no-auto-refresh';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
