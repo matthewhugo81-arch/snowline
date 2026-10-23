@@ -7,11 +7,11 @@ const token=()=>globalThis.crypto?.randomUUID?.()??Date.now()+'-'+Math.random().
 const signature=({eTag,lastModified,fileSize})=>eTag?JSON.stringify(['etag',eTag,fileSize]):lastModified?JSON.stringify(['modified',lastModified,fileSize]):null;
 function storage(){try{return globalThis.localStorage;}catch{return null;}}
 export class ForecastRetention{
- constructor({store=storage(),fetch=globalThis.fetch?.bind(globalThis),now=Date.now,interval=300000,startupBudget=2500,onChange=()=>{},onStatus=()=>{},maxSources=4096}={}){
+ constructor({store=storage(),fetch=globalThis.fetch?.bind(globalThis),now=Date.now,interval=300000,startupBudget=2500,onChange=()=>{},onStatus=()=>{},maxSources=4096,deferChanges=false}={}){
   // Without a cross-tab lock, keep a private page cache rather than risk losing
   // a source validator to concurrent localStorage writes from another window.
   if(globalThis.window&&!globalThis.navigator?.locks)store=null;
-  Object.assign(this,{store,fetch,now,interval,startupBudget,onChange,onStatus,maxSources});
+  Object.assign(this,{store,fetch,now,interval,startupBudget,onChange,onStatus,maxSources,deferChanges});
   this.sources=new Map();this.revision=token();this.changed=false;this.checking=null;
   this.persistent=!!store;
   if(store){try{const saved=JSON.parse(store.getItem(KEY)||'null');if(saved?.revision&&Array.isArray(saved.sources)){this.revision=saved.revision;this.sources=new Map(saved.sources);}}catch{this.store=null;this.persistent=false;this.revision=token();this.sources.clear();}}
@@ -20,23 +20,43 @@ export class ForecastRetention{
  save(){this.store?.setItem(KEY,JSON.stringify({revision:this.revision,sources:[...this.sources]}));}
  sync(){
   if(!this.store)return;
+  if(this.deferChanges&&this.changed&&!this.initializing)return;
   const saved=JSON.parse(this.store.getItem(KEY)||'null');
   if(!saved){this.save();return;}
-  if(saved.revision!==this.revision){this.revision=saved.revision;this.sources=new Map(saved.sources??[]);this.changed=true;this.onChange('Another map tab found updated source data.');return;}
+  if(saved.revision!==this.revision){
+   if(!this.deferChanges||this.initializing){this.revision=saved.revision;this.sources=new Map(saved.sources??[]);}
+   this.changed=true;this.onChange('Another map tab found updated source data.');return;
+  }
   for(const [url,entry]of saved.sources??[]){const old=this.sources.get(url);if(!old||entry.checked>old.checked)this.sources.set(url,entry);}
  }
  invalidate(reason){
   if(this.changed)return;
+  if(this.deferChanges&&!this.initializing){
+   // Prepare a fresh namespace for the next deliberate page load. Open tabs
+   // keep their reader and tile identities; a storage event only shows a notice.
+   this.changed=true;
+   try{this.store?.setItem(KEY,JSON.stringify({revision:token(),sources:[]}));}catch{this.persistent=false;}
+   this.onChange(reason);return;
+  }
   this.changed=true;this.revision=token();this.sources.clear();
   try{this.save();}catch{this.persistent=false;}
   this.onChange(reason);
  }
  observe(url,metadata){return this.lock(()=>this.observeLocked(url,metadata));}
  observeLocked(url,metadata){
+  if(this.deferChanges&&this.changed&&!this.initializing){
+   if(immutable(url))return true;
+   const value=signature(metadata),old=this.sources.get(url);
+   // Previously opened readers and new run URLs can still be used. Reject a
+   // changed file instead of combining revised values with its old overlays.
+   if(old&&old.value!==value)return false;
+   if(!old&&this.sources.size<this.maxSources)this.sources.set(url,{value,checked:this.now()});
+   return true;
+  }
   if(this.changed)return false;
   if(immutable(url))return true;
   try{
-   this.sync();if(this.changed)return false;
+   this.sync();if(this.changed)return this.deferChanges?this.observeLocked(url,metadata):false;
    const value=signature(metadata),old=this.sources.get(url);
    // Unverifiable files get a conservative periodic refresh, never an unlimited
    // stale lifetime. Normal providers expose ETag or Last-Modified and length.
@@ -58,7 +78,10 @@ export class ForecastRetention{
   pool.withReader=(url,cache,callback)=>{
    const physical=this.physicalURL(url);
    return original(physical,cache,async reader=>{
-    if(!await this.observe(url,pool.backend(physical)))throw new DOMException('Source changed','AbortError');
+    if(!await this.observe(url,pool.backend(physical))){
+     if(this.deferChanges)throw Error('Weather source changed since this tab loaded. The existing chart has been kept.');
+     throw new DOMException('Source changed','AbortError');
+    }
     return callback(reader);
    });
   };
@@ -102,9 +125,9 @@ export class ForecastRetention{
  }
  async initialize(){
   // A returning page validates old pixels before assigning its cache namespace.
-  const onChange=this.onChange;this.onChange=()=>{};
+  const onChange=this.onChange;this.onChange=()=>{};this.initializing=true;
   try{await this.lock(()=>this.sync());}catch{this.store=null;this.persistent=false;this.revision=token();this.sources.clear();}
-  await this.check({budget:this.startupBudget});this.changed=false;this.onChange=onChange;
+  await this.check({budget:this.startupBudget});this.changed=false;this.initializing=false;this.onChange=onChange;
  }
  start(target=globalThis.window){
   this.timer=setInterval(()=>{if(!globalThis.document?.hidden)void this.check();},60000);

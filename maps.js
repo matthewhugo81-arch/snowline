@@ -25,7 +25,7 @@ import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
 import {ForecastFrames,frameWindow,arrowFrameWindow,fullSequence} from './map-frames.js?v=20261022-arrow-priority';
 import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261023-source-retention';
-import {ForecastRetention} from './map-retention.js?v=20261023-source-retention-2';
+import {ForecastRetention} from './map-retention.js?v=20261023-no-auto-refresh';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
@@ -93,7 +93,7 @@ installVerticalMotion(OM,settings);
 installPrecipitationType(OM,settings);
 installPrecipitationRates(OM,settings);
 const accumulationReader=installAccumulations(OM,settings);
-const retention=new ForecastRetention({onStatus:message=>{
+const retention=new ForecastRetention({deferChanges:true,onStatus:message=>{
  const element=$('source-check-status');if(element)element.textContent=message;
 }});
 await retention.initialize();
@@ -1064,13 +1064,7 @@ function captureLayout(){
 }
 layoutRestore.start(captureLayout,layout=>layout.briefing?'Briefing - '+modelName(layout.briefing.model)+' - '+layout.briefing.count+' panels':layout.panels.slice(0,layout.compare?layout.comparisonCount:1).map(p=>modelName(p.model)+' / '+(fields.find(f=>f.key===p.field)?.name??p.field)).join(' | '));
 retention.onChange=message=>{
- pauseAnimation();++timeGeneration;outlineWait?.abort();
- for(const panel of Object.values(panels))panel.frameCache?.stop();
- layoutRestore.changed();layoutRestore.save();
- $('animation-status').textContent=message+' Refreshing charts…';
- // Reset native, derived, and in-flight readers together. Merely deleting PNGs
- // would allow an old decoded field to recreate stale imagery after correction.
- location.reload();
+ $('source-check-status').textContent=message+' Existing charts are kept for this session.';
 };
 if(retention.changed)retention.onChange('Updated source data found.');
 else retention.start();
