@@ -88,12 +88,60 @@ try{
  await phone.screenshot({path:'review-output/restore-layout-phone.png'});
  await phone.keyboard.press('Escape');assert.equal(await phone.locator('#layout-restore').getAttribute('open'),null);
  // Opening another layout creates an independent tab, without inherited session identity.
- const q=await restarted.newPage();await q.goto(origin+'/maps.html?layout='+originalId);await ready(q);assert.equal(await q.locator('#map-comparison-count').inputValue(),'3');
+ const q=await restarted.newPage();await q.setViewportSize({width:1440,height:900});await q.goto(origin+'/maps.html?layout='+originalId);await ready(q);assert.equal(await q.locator('#map-comparison-count').inputValue(),'3');
  assert.notEqual(new URL(q.url()).searchParams.get('layout'),new URL(phone.url()).searchParams.get('layout'));
  // Duplicating a tab can copy sessionStorage. It must acquire a new slot while the original stays active.
  const qId=new URL(q.url()).searchParams.get('layout'),duplicate=await restarted.newPage();await duplicate.addInitScript(id=>sessionStorage.setItem('snowline-layout-tab',id),qId);await duplicate.goto(q.url());await ready(duplicate);
  assert.notEqual(new URL(duplicate.url()).searchParams.get('layout'),qId);
  assert.ok(await duplicate.evaluate(async()=>{const id=new URL(location.href).searchParams.get('layout');return (await navigator.locks.query()).held.some(lock=>lock.name==='snowline-layout-tab:'+id);}),'The duplicated tab owns its new slot too');
  assert.equal(await q.locator('#map-comparison-count').inputValue(),'3');
- assert.deepEqual(errors,[]);console.log('Four durable layouts, restart, separate tabs and mobile menu passed');await restarted.close();
+ console.log('Four durable layouts, restart, separate tabs and mobile menu passed');
+ // A favourite is a durable template; autosaving a working tab cannot alter it.
+ await q.locator('#layout-restore summary').click();await q.locator('#layout-name').fill('Daily model comparison');await q.locator('#layout-save-favourite').click();
+ const favouriteURL=await q.locator('#layout-favourites .layout-choice').first().getAttribute('href'),favouriteId=new URL(favouriteURL).searchParams.get('favourite');
+ const readFavourite=()=>q.evaluate(id=>JSON.parse(localStorage.getItem('snowline-map-favourite-v1:'+id)),favouriteId);
+ const template=await readFavourite();assert.equal(template.layout.comparisonCount,3);
+ await q.locator('#layout-startup').selectOption(favouriteId);
+ await q.locator('#layout-restore summary').click();await q.locator('#map-forecast-interval').selectOption('12');await ready(q);await q.waitForTimeout(650);
+ assert.deepEqual(await readFavourite(),template,'Automatic saving must leave the favourite unchanged');
+ await q.reload();await ready(q);assert.equal(await q.locator('#map-forecast-interval').inputValue(),'12');
+ await q.locator('#layout-restore summary').click();await q.locator('#layout-update-favourite').click();
+ assert.equal((await readFavourite()).layout.interval,'12');
+ // Renaming a favourite must survive autosaves from other monitor tabs.
+ const favouriteRow=q.locator('#layout-favourites li').filter({hasText:'Daily model comparison'});
+ await favouriteRow.getByRole('button',{name:'Rename',exact:true}).click();await favouriteRow.getByRole('textbox').fill('Monitor 1 – models');
+ await duplicate.locator('#map-forecast-interval').selectOption('6');await ready(duplicate);await duplicate.waitForTimeout(650);
+ assert.equal(await favouriteRow.getByRole('textbox').inputValue(),'Monitor 1 – models');await favouriteRow.getByRole('button',{name:'Save name',exact:true}).click();
+ assert.equal((await readFavourite()).name,'Monitor 1 – models');
+ // A fresh visit starts from the chosen favourite; it receives its own working ID.
+ const startPage=await restarted.newPage();await startPage.goto(origin+'/maps.html');await ready(startPage);
+ assert.equal(await startPage.locator('#compare-maps').isChecked(),true);assert.equal(await startPage.locator('#map-comparison-count').inputValue(),'3');assert.equal(await startPage.locator('#map-forecast-interval').inputValue(),'12');
+ assert.notEqual(new URL(startPage.url()).searchParams.get('layout'),new URL(q.url()).searchParams.get('layout'));
+ const explicitPage=await restarted.newPage();await explicitPage.goto(origin+'/maps.html?model='+UK);await ready(explicitPage);
+ assert.equal(await explicitPage.locator('#compare-maps').isChecked(),false,'Explicit model links override startup');
+ const extraPage=await restarted.newPage();await extraPage.goto(origin+'/maps.html?model='+UK);await ready(extraPage);
+ await explicitPage.locator('#layout-restore summary').click();
+ assert.equal(await explicitPage.locator('#layout-list li').count(),4);assert.equal(await explicitPage.locator('#layout-favourites .layout-choice').count(),1);
+ assert.equal(await explicitPage.evaluate(id=>localStorage.getItem('snowline-map-layout-v1:'+id),qId),null,'The oldest recent tab can be evicted without deleting its favourite');
+ // Opening a favourite link still works after its original recent tab was evicted.
+ await explicitPage.goto(favouriteURL);await ready(explicitPage);assert.equal(await explicitPage.locator('#map-comparison-count').inputValue(),'3');
+ await q.locator('#layout-restore summary').click();await q.locator('#layout-restore summary').click();
+ await q.screenshot({path:'review-output/favourite-layout-desktop.png'});
+ await phone.locator('#layout-restore summary').click();
+ await phone.waitForFunction(id=>document.getElementById('layout-startup').value===id,favouriteId);
+ assert.equal(await phone.locator('#layout-startup').inputValue(),favouriteId);
+ assert.equal(await phone.locator('.layout-menu').evaluate(e=>e.scrollWidth>e.clientWidth),false,'The menu must not scroll horizontally on a phone');
+ await phone.screenshot({path:'review-output/favourite-layout-phone.png'});
+ // Removing the chosen favourite also clears startup; working tabs remain usable.
+ q.once('dialog',dialog=>dialog.accept());await q.locator('#layout-favourites li').filter({hasText:'Monitor 1 – models'}).getByRole('button',{name:'Remove',exact:true}).click();
+ assert.equal(await q.locator('#layout-startup').inputValue(),'');assert.equal(await q.locator('#layout-update-favourite').isHidden(),true);
+ await explicitPage.goto(origin+'/maps.html');await ready(explicitPage);assert.equal(await explicitPage.locator('#compare-maps').isChecked(),false);
+ assert.deepEqual(errors,[]);console.log('Favourite snapshots, explicit updates, rename, startup precedence, eviction and removal passed');await restarted.close();
+ // Upgrade a browser with a named layout from the previous release.
+ const upgrade=await browser.newContext({viewport:{width:1440,height:900}});await fixtures(upgrade);
+ await upgrade.addInitScript(({entry,origin})=>{if(location.origin===origin&&!localStorage.getItem('upgrade-fixture')){localStorage.setItem('snowline-map-layout-v1:legacy',JSON.stringify({...entry,id:'legacy',name:'Monitor 2 and 3'}));localStorage.setItem('upgrade-fixture','1');}},{entry:template,origin});
+ const legacy=await upgrade.newPage();await legacy.goto(origin+'/maps.html?layout=legacy');await ready(legacy);await legacy.locator('#layout-restore summary').click();
+ assert.equal(await legacy.locator('#layout-favourites .layout-choice').count(),1);assert.ok((await legacy.locator('#layout-favourites').textContent()).includes('Monitor 2 and 3'));
+ await legacy.reload();await ready(legacy);await legacy.locator('#layout-restore summary').click();assert.equal(await legacy.locator('#layout-favourites .layout-choice').count(),1);
+ assert.deepEqual(errors,[]);console.log('Existing named layouts migrate once and retain their original restore links');await upgrade.close();
 }finally{await browser.close();server.close();}

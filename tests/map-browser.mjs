@@ -22,10 +22,15 @@ const fakeOM=`
  export const updateCurrentBounds=bounds=>{window.fixtureBounds=[...bounds];currentBounds=forecastReadBounds(bounds);};
  export const getValueFromLatLong=async()=>({value:10});
  export const getColorScale=key=>defaultOmProtocolSettings.colorScales[key]??fixtureScale(key.startsWith('geopotential_height_')?'m':'m/s');
- window.fixtureRequests=[];window.fixturePalettes=[];
+ // Cached charts survive the navigations below. Keep their palette evidence
+ // across those navigations too, deduplicated by style rather than forecast hour.
+ window.fixtureRequests=[];window.fixturePalettes=JSON.parse(sessionStorage.getItem('fixture-palettes')||'[]');
  const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOQSznxHwAEOAJKNKHrggAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
  export async function omProtocol(params,controller,settings){
-  if(params.type==='json')window.fixturePalettes.push({url:params.url,cloud:settings?.colorScales?.cloud_cover?.colors?.[0],rain:settings?.colorScales?.precipitation?.colors?.[0]});
+  if(!params.url.startsWith('om://fixture/')){
+   const palette={url:params.url.slice(params.url.indexOf('?')),cloud:settings?.colorScales?.cloud_cover?.colors?.[0],rain:settings?.colorScales?.precipitation?.colors?.[0]};
+   if(!window.fixturePalettes.some(item=>JSON.stringify(item)===JSON.stringify(palette))){window.fixturePalettes.push(palette);sessionStorage.setItem('fixture-palettes',JSON.stringify(window.fixturePalettes));}
+  }
   window.fixtureRequests.push({url:params.url,type:params.type});
   // A deterministic network hold lets separate click events overlap real
   // foreground/background work without relying on the machine's render speed.

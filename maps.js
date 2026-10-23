@@ -1,4 +1,4 @@
-import {createLayoutRestore} from './map-layouts.js?v=20261022-restore-names';
+import {createLayoutRestore} from './map-layouts.js?v=20261023-favourites';
 import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
