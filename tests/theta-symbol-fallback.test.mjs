@@ -13,6 +13,7 @@ test('theta fallback boundaries, missing data and native phase precedence',()=>{
  assert.deepEqual(precipitationSymbols({precipitation:.09,theta_w:-2},1,'unresolved'),[]);
  const parts=precipitationSymbols({precipitation:3,showers:1,theta_w:-2},1,'partitioned');
  assert.deepEqual(parts.map(g=>g.kind),['snow','snow']);assert.equal(parts.reduce((n,g)=>n+g.amount,0),3);
+ const snowSizes=[.1,.5,2,8].map(rate=>precipitationSymbols({precipitation:rate,showers:rate,theta_w:-1},1,'partitioned')[0].radius);assert.ok(snowSizes.every((r,i)=>!i||r>snowSizes[i-1]));
  let arcs=0,lines=0;const ctx={setLineDash(){},beginPath(){},arc(){arcs++;},moveTo(){},lineTo(){lines++;},stroke(){}};
  drawPrecipitationSymbols(ctx,parts,20,20);assert.equal(arcs,0);assert.equal(lines,8);
 });

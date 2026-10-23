@@ -11,7 +11,7 @@ export function thetaPhase(value){return Number.isFinite(value)?value<=0?'snow':
 export function precipitationSymbols(values,hours,recipe){
  const fallback=thetaPhase(values.theta_w);
  const resolve=kind=>recipe!=='icon'&&['other','precipitation','showers'].includes(kind)&&fallback!=='other'?fallback:kind;
- const glyph=(kind,amount,mechanism='unseparated')=>({kind:resolve(kind),mechanism,amount,rate:amount/hours,radius:resolve(kind)==='snow'&&mechanism==='convective'?Math.max(5,symbolRadius(amount/hours,true)):symbolRadius(amount/hours,mechanism==='convective')});
+ const glyph=(kind,amount,mechanism='unseparated')=>({kind:resolve(kind),mechanism,amount,rate:amount/hours,radius:resolve(kind)==='snow'&&mechanism==='convective'?2.25+symbolRadius(amount/hours,true)*(5.25/6.45):symbolRadius(amount/hours,mechanism==='convective')});
  const wet=g=>Number.isFinite(g.rate)&&g.rate>=.1;
  if(!Number.isFinite(hours)||!(hours>0))return [];
  if(recipe==='icon')return [glyph('rain',values.rain,'dynamic'),glyph('showers',values.showers,'convective'),glyph('snow',values.snowfall_water_equivalent,'snow')].filter(wet);
