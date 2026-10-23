@@ -1,6 +1,6 @@
 import {appearanceKey} from './map-appearance.js?v=20261023-revised-1c';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261022-ireland-ecmwf-range';
+import {forecastValidity,forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261023-night-labels';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261020-run-selector';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';

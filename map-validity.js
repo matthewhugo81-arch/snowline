@@ -45,8 +45,7 @@ export function forecastValidity(field,time,meta){
  if(temperatureAnomaly(field)){
   const minimum=field==='ens_temperature_min_anomaly';
   const calendarDay=start.getUTCHours()===0&&end.getUTCHours()===0;
-  const attributed=minimum&&!calendarDay?end:start;
-  const day=new Intl.DateTimeFormat('en-GB',{weekday:'short',timeZone:'UTC'}).format(attributed)+' '+ordinal(attributed.getUTCDate());
+  const day=new Intl.DateTimeFormat('en-GB',{weekday:minimum?'long':'short',timeZone:'UTC'}).format(start)+(minimum?' Night ':' ')+ordinal(start.getUTCDate());
   return '24 hr '+(minimum?'Minimum':'Maximum')+' Temperature Anomaly for '+day+(calendarDay?' (00–00 UTC)':'')+' - '+period;
  }
  return period;

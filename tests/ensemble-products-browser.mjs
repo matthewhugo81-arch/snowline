@@ -136,7 +136,7 @@ try{
    assert.equal(await page.locator('#map-variable').inputValue(),anomaly);
    assert.equal(await page.locator('#map-run option').count(),1,'Only the published product run is offered');
    assert.match(await page.locator('#map-run option').textContent(),/06Z · ensemble products$/);
-   assert.match(await page.locator('#panel-label-a').textContent(),anomaly===anomalies[0]?/24 hr Minimum Temperature Anomaly for Fri 23rd/:/24 hr Maximum Temperature Anomaly for Thu 22nd/);
+   assert.match(await page.locator('#panel-label-a').textContent(),anomaly===anomalies[0]?/24 hr Minimum Temperature Anomaly for Thursday Night 22nd/:/24 hr Maximum Temperature Anomaly for Thu 22nd/);
    assert.match(await page.locator('#panel-label-a').textContent(),/VALID Thu 22 Oct 0900-Fri 23 Oct 0900 UTC$/);
    assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct 0900-Fri 23 Oct 0900');
    assert.equal(await page.locator('#map-start-time option:checked').textContent(),'Thu 22 Oct 0900-Fri 23 Oct 0900');
@@ -207,7 +207,7 @@ try{
    assert.equal(await page.locator('#map-time-label').textContent(),'Thu 22 Oct 0900-Fri 23 Oct 0900');
    await page.locator('#map-start-time').selectOption(lastAnomalyTime);await ready();
    assert.equal(await page.locator('#map-time-label').textContent(),'Wed 4 Nov 0000-Thu 5 Nov 0000');
-   assert.match(await page.locator('#panel-label-a').textContent(),/for Wed 4th \(00–00 UTC\).*VALID Wed 4 Nov 0000-Thu 5 Nov 0000 UTC/);
+   assert.match(await page.locator('#panel-label-a').textContent(),/for (?:Wednesday Night 4th|Wed 4th) \(00–00 UTC\).*VALID Wed 4 Nov 0000-Thu 5 Nov 0000 UTC/);
    assert.match(await page.locator('#legend-interval-a').textContent(),/11-04 00:00 to 11-05 00:00 UTC/);
   }
   for(const k of six){

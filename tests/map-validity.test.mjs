@@ -19,10 +19,10 @@ test('native metadata bounds determine labels independently of playback cadence'
  assert.equal(forecastValidity(key,end,meta),'VALID Fri 23 Oct 18:00 to Sat 24 Oct 00:00 UTC');
 });
 
-test('HadUK maxima belong to the starting day and minima to the ending day',()=>{
- for(const [end,startDay,endDay] of [['2026-10-23T09:00:00Z','Thu 22nd','Fri 23rd'],['2026-11-01T09:00:00Z','Sat 31st','Sun 1st'],['2027-01-01T09:00:00Z','Thu 31st','Fri 1st']]){
+test('HadUK maxima belong to the starting day and minima to the starting night',()=>{
+ for(const [end,startDay,night] of [['2026-10-23T09:00:00Z','Thu 22nd','Thursday Night 22nd'],['2026-11-01T09:00:00Z','Sat 31st','Saturday Night 31st'],['2027-01-01T09:00:00Z','Thu 31st','Thursday Night 31st']]){
   assert.ok(forecastValidity('ens_temperature_max_anomaly',end).startsWith('24 hr Maximum Temperature Anomaly for '+startDay+' - VALID '));
-  assert.ok(forecastValidity('ens_temperature_min_anomaly',end).startsWith('24 hr Minimum Temperature Anomaly for '+endDay+' - VALID '));
+  assert.ok(forecastValidity('ens_temperature_min_anomaly',end).startsWith('24 hr Minimum Temperature Anomaly for '+night+' - VALID '));
   assert.match(forecastValidity('ens_temperature_max_anomaly',end),/09:00 to .*09:00 UTC$/);
  }
 });
@@ -31,13 +31,13 @@ test('maximum headers advance with the selected period without a duplicate layer
  const field='ens_temperature_max_anomaly';
  assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-23T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Thu 22nd - VALID Thu 22 Oct 09:00 to Fri 23 Oct 09:00 UTC');
  assert.equal(forecastChartTitle(field,'Maximum temperature anomaly \u00b7 24 h','2026-10-24T09:00:00Z'),'24 hr Maximum Temperature Anomaly for Fri 23rd - VALID Fri 23 Oct 09:00 to Sat 24 Oct 09:00 UTC');
- for(const day of [11,12,13])assert.match(forecastValidity('ens_temperature_min_anomaly',`2026-10-${day}T09:00:00Z`),new RegExp('for [A-Za-z]+ '+day+'th - VALID'));
+ for(const day of [11,12,13])assert.match(forecastValidity('ens_temperature_min_anomaly',`2026-10-${day+1}T09:00:00Z`),new RegExp('for [A-Za-z]+ Night '+day+'th - VALID'));
 });
 
 test('long-range midnight anomalies label the complete UTC day for both extrema',()=>{
  for(const field of ['ens_temperature_min_anomaly','ens_temperature_max_anomaly']){
-  assert.match(forecastValidity(field,'2026-11-01T00:00:00Z'),/for Sat 31st \(00–00 UTC\) - VALID Sat 31 Oct 00:00 to Sun 1 Nov 00:00 UTC/);
-  assert.match(forecastValidity(field,'2027-01-01T00:00:00Z'),/for Thu 31st \(00–00 UTC\).*Thu 31 Dec 2026 00:00 to Fri 1 Jan 2027 00:00 UTC/);
+  assert.match(forecastValidity(field,'2026-11-01T00:00:00Z'),new RegExp('for '+(field.includes('_min_')?'Saturday Night 31st':'Sat 31st')+' \\(00–00 UTC\\) - VALID Sat 31 Oct 00:00 to Sun 1 Nov 00:00 UTC'));
+  assert.match(forecastValidity(field,'2027-01-01T00:00:00Z'),new RegExp('for '+(field.includes('_min_')?'Thursday Night 31st':'Thu 31st')+' \\(00–00 UTC\\).*Thu 31 Dec 2026 00:00 to Fri 1 Jan 2027 00:00 UTC'));
  }
 });
 
