@@ -938,7 +938,7 @@ try{
    await page.locator('#briefing-enlarged-image').evaluate(image=>image.decode());
    const decodedBox=await page.locator('#briefing-enlarged-image').boundingBox();
    assert.ok(Math.abs(decodedBox.width-decodedBox.height)<1,'Enlarged UK chart stays square after decoding');
-   await page.locator('#briefing-enlarged-close').click();
+   await page.locator('#briefing-enlarged-image').click();
    assert.equal(await page.locator('#briefing-contours').isChecked(),false);
    assert.equal(await page.locator('#briefing-grid-values').isChecked(),false);
    const plainImage=await page.locator('#briefing-grid img').first().getAttribute('src');
@@ -967,7 +967,7 @@ try{
    assert.ok(await page.evaluate(()=>window.fixtureRequests.some(r=>r.type==='arrayBuffer'&&decodeURIComponent(r.url).includes('variable=precipitation'))),'Composite contours use precipitation in every view');
    await page.locator('.briefing-chart').first().click();
    assert.equal(await page.locator('#briefing-enlarged-image').getAttribute('src'),await page.locator('#briefing-grid img').first().getAttribute('src'),'Enlargement retains both overlays');
-   await page.locator('#briefing-enlarged-close').click();
+   await page.locator('#briefing-enlarged-image').click();
    await page.locator('#briefing-contours').uncheck();
    await page.locator('#briefing-grid-values').uncheck();
    await page.waitForFunction(()=>document.querySelectorAll('#briefing-grid [data-ready="true"]').length===6);
@@ -991,7 +991,7 @@ try{
    await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
    await page.locator('.briefing-chart').first().click();
    assert.match(await page.locator('#briefing-enlarged-note').textContent(),/not theta-w/,'The airmass chart retains its not-theta-w explanation');
-   await page.locator('#briefing-enlarged-close').click();
+   await page.locator('#briefing-enlarged-image').click();
    for(const [preset,variable] of [['theta-w','wet_bulb_potential_temperature_850hPa'],['vorticity-300','relative_vorticity_300hPa'],['vorticity-400','relative_vorticity_400hPa']]){
     await page.locator('#briefing-preset').selectOption(preset);
     await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length===6,{},{timeout:60000});
@@ -1107,7 +1107,7 @@ try{
     await page.waitForFunction(()=>document.querySelectorAll('.briefing-card[data-ready="true"]').length>=6,{},{timeout:60000});
     await page.locator('.briefing-chart').first().click();
     assert.match(await page.locator('#briefing-enlarged-note').textContent(),/not a daily extreme/,'Native-period extrema explanation appears in the enlarged chart');
-    await page.locator('#briefing-enlarged-close').click();
+    await page.locator('#briefing-enlarged-image').click();
     assert.match(await page.locator('.briefing-card p').first().textContent(),/duration unspecified/);
    }
    assert.equal(await page.locator('#briefing-model option:checked').textContent(),await page.locator('#map-model option:checked').textContent());

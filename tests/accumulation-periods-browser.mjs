@@ -85,7 +85,7 @@ try{
    // The compact briefing layout moved explanatory text into the enlarged chart.
    assert.match(await page.locator('#briefing-enlarged-note').textContent(),/do not overlap/);
    await page.screenshot({path:`review-output/nw-europe-enlarged-${viewport.width}.png`,fullPage:true});
-   await page.locator('#briefing-enlarged-close').click();
+   await page.locator('#briefing-enlarged-image').click();
    await page.screenshot({path:`review-output/fixed-24h-${viewport.width}.png`,fullPage:true});
    await page.locator('#briefing-area').selectOption('atlantic');await readySequence();
    const checkAtlantic=async()=>{const b=await page.evaluate(()=>window.fixtureBounds);assert.ok(b[0]>-71&&b[2]<41&&b[1]>30&&b[3]<76,JSON.stringify(b));return b;};
@@ -124,7 +124,7 @@ try{
    assert.deepEqual(await page.locator('#previous-grid .briefing-card:not([hidden]) h3').allTextContents(),Array(3).fill('UKV · '+expectedPeriod));
    await page.locator('#previous-grid img').first().click();
    assert.equal(await page.locator('#previous-enlarged-title').textContent(),historyExport.title);
-   await page.locator('#previous-enlarged-close').click();
+   await page.locator('#previous-enlarged-image').click();
    await page.screenshot({path:`review-output/nw-europe-history-${viewport.width}.png`,fullPage:true});
    assert.equal(await page.locator('#previous-preset').inputValue(),key(24));
    assert.equal(await page.locator('#previous-run-view #previous-valid-time').inputValue(),'2026-10-12T12:00:00.000Z');

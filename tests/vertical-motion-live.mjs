@@ -55,7 +55,7 @@ try{
  await page.locator('.briefing-chart').first().click();await page.locator('#briefing-enlarged-image').evaluate(image=>image.decode());
  assert.match(await page.locator('#briefing-enlarged-note').textContent(),/barbs in knots/);
  await page.locator('#briefing-enlarged-image').screenshot({path:resolve(outputs,'700hpa-briefing.png')});
- await page.locator('#briefing-enlarged-close').click();report.briefing=true;
+ await page.locator('#briefing-enlarged-image').click();report.briefing=true;
  if(process.env.SNOWLINE_TEST_HISTORY==='1'){
   await page.locator('#briefing-history-mode').click();
   for(const model of ['gem_global','icon_eu']){

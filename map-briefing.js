@@ -4,7 +4,7 @@ import {appearanceKey} from './map-appearance.js?v=20261023-revised-1c';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261023-period-labels';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261023-revised-1c';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261023-click-dismiss';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261022-ireland-ecmwf-range';
 import {BriefingRenderer} from './map-briefing-renderer.js?v=20261023-revised-1c';
@@ -35,7 +35,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
  <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html?v=20261020-run-selector">Data and map credits</a>.</p>
- <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong><button id="briefing-enlarged-close" class="secondary">Close chart</button></div><img id="briefing-enlarged-image" alt=""><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html?v=20261020-run-selector">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
+ <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong></div><img id="briefing-enlarged-image" alt="" role="button" tabindex="0" aria-label="Minimise chart" title="Click to minimise chart" style="cursor:zoom-out"><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html?v=20261020-run-selector">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
  const $=id=>host.querySelector('#briefing-'+id);
  const choices=models;
  for(const [label,items] of [['Short-term models',choices.filter(model=>model.regional&&!model.ensemble)],['Medium-term models',choices.filter(model=>!model.regional&&!model.ensemble)],['Ensemble models',choices.filter(model=>model.ensemble)]] ){
@@ -137,7 +137,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   $('enlarged-note').textContent=briefingCaption(meta,preset,time)+'. '+(accumulationHours(preset.field)?fixedPeriodNote(accumulationHours(preset.field)):preset.note);
   $('enlarged').classList.toggle('briefing-square',chartSize()[0]===chartSize()[1]);
   imageMenu?.registerImage($('enlarged-image'),exportInfo);
-  $('enlarged').showModal();$('enlarged-close').focus();
+  $('enlarged').showModal();$('enlarged-image').focus();
  }
  function renderPage(){
   if(!active||!meta||!preset)return;cancel();
@@ -249,7 +249,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  $('previous').addEventListener('click',()=>{start=Math.max(0,start-count());rememberTime();renderPage();});
  $('next').addEventListener('click',()=>{start=Math.min(times.length-1,start+count());rememberTime();renderPage();});
  $('retry').addEventListener('click',()=>{cancel();renderer?.destroy();renderer=null;meta?renderPage():configure();});
- $('enlarged-close').addEventListener('click',()=>$('enlarged').close());
+ $('enlarged-image').addEventListener('click',()=>$('enlarged').close());
+ $('enlarged-image').addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();$('enlarged').close();}});
  $('enlarged').addEventListener('click',event=>{if(event.target===$('enlarged'))$('enlarged').close();});
  let history;
  function close(){

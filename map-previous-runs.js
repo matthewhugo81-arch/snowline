@@ -32,7 +32,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
  <div class="briefing-navigation"><button type="button" class="secondary" id="previous-back">Earlier valid time</button><p id="previous-progress" role="status"></p><button type="button" class="secondary" id="previous-retry" hidden>Retry charts</button><button type="button" class="secondary" id="previous-forward">Later valid time</button></div>
  <div id="previous-grid" class="previous-grid"></div>
  <p class="small-note">Recent run availability depends on the provider archive. No model cycles or missing hours are substituted. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth.</p>
- <dialog id="previous-enlarged"><div class="briefing-heading"><strong id="previous-enlarged-title"></strong><button type="button" class="secondary" id="previous-enlarged-close">Close chart</button></div><img id="previous-enlarged-image" alt=""><p id="previous-enlarged-note" class="small-note"></p><p class="small-note">Snowline · Weather: Open-Meteo / model providers · OpenFreeMap / OpenStreetMap · Natural Earth</p></dialog>`;
+ <dialog id="previous-enlarged"><div class="briefing-heading"><strong id="previous-enlarged-title"></strong></div><img id="previous-enlarged-image" alt="" role="button" tabindex="0" aria-label="Minimise chart" title="Click to minimise chart" style="cursor:zoom-out"><p id="previous-enlarged-note" class="small-note"></p><p class="small-note">Snowline · Weather: Open-Meteo / model providers · OpenFreeMap / OpenStreetMap · Natural Earth</p></dialog>`;
  const $=name=>host.querySelector('#previous-'+name),choices=models.filter(m=>m.id!==UKV_PREVIOUS).map(m=>m.id===UKV?{...m,name:'UKV'}:m);
  for(const [label,items]of [['Short-term models',choices.filter(m=>m.regional&&!m.ensemble)],['Medium-term models',choices.filter(m=>!m.regional&&!m.ensemble)],['Ensemble models',choices.filter(m=>m.ensemble)]]){const group=document.createElement('optgroup');group.label=label;for(const m of items)group.append(option(m.id,m.name));$('model').append(group);}
  for(const area of BRIEFING_AREAS)$('area').append(option(area.id,area.name));$('area').append(option('current','Current map area'));
@@ -116,7 +116,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    const description=model.name+' · Run '+runLabel(meta)+' · '+forecastChartTitle(p.field,p.name,time,meta),subtitle=briefingCaption(meta,p,time);
    const info={title:description,subtitle,scales:chartScales(fields.find(f=>f.key===p.field),subtitle,p.id==='weather')};
    const img=document.createElement('img');img.src=src;img.alt=description;img.decoding='async';c.button.replaceChildren(img);c.button.disabled=false;c.card.dataset.ready='true';imageMenu?.registerImage(img,info);
-   c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();};loaded++;
+   c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();$('enlarged-image').focus();};loaded++;
   };
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;delete c.card.dataset.unavailable;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;c.button.onclick=null;
@@ -191,7 +191,8 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   $('toggle-controls').textContent=hidden?'Show controls':'Hide controls';
   $('toggle-controls').setAttribute('aria-expanded',String(!hidden));
  });
- $('close').addEventListener('click',onClose);$('enlarged-close').addEventListener('click',()=>$('enlarged').close());
+ $('close').addEventListener('click',onClose);$('enlarged-image').addEventListener('click',()=>$('enlarged').close());
+ $('enlarged-image').addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();$('enlarged').close();}});
  let ukvRefreshing=false;
  const available=async event=>{
   if(!active||event.detail?.model!==model?.id)return;
