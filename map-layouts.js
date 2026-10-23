@@ -64,7 +64,11 @@ export function initialLayout(storage,{url,tabId,navigation}){
  const working=id=>{const entry=recent.find(item=>item.id===id);return entry?{...entry,favouriteId:entry.favouriteId??(favourites.some(item=>item.id===id)?id:null)}:null;};
  // Explicit links (including expired ones) must never be replaced by a default.
  if(url.searchParams.has('favourite'))return favourite(url.searchParams.get('favourite'));
- if(url.searchParams.has('layout'))return working(url.searchParams.get('layout'));
+ if(url.searchParams.has('layout')){
+  const id=url.searchParams.get('layout');
+  // Old named bookmarks keep working after their recent-tab slot is evicted.
+  return working(id)??favourite(id);
+ }
  if(['reload','back_forward'].includes(navigation)){
   const entry=working(tabId);if(entry)return entry;
  }

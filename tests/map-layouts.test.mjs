@@ -56,6 +56,8 @@ test('Existing named recent layouts migrate once, retain old URLs and never over
  const saved=favouriteEntries(s)[0];writeFavourite(s,{...saved,name:'Renamed',layout:{...layout,interval:'12'}});migrateNamedLayouts(s);
  assert.equal(favouriteEntries(s)[0].name,'Renamed');assert.equal(favouriteEntries(s)[0].layout.interval,'12');
  assert.equal(initialLayout(s,{url:new URL('https://example.org/maps.html?layout=named')}).layout.interval,'6');
+ for(let i=0;i<5;i++)writeLayout(s,{id:'new'+i,updated:20+i,layout});
+ assert.equal(initialLayout(s,{url:new URL('https://example.org/maps.html?layout=named')}).layout.interval,'12','An old named bookmark falls back to its permanent migrated favourite after recent eviction');
  removeFavourite(s,'named');migrateNamedLayouts(s);assert.equal(favouriteEntries(s).length,0);
 });
 test('Favourite storage failures preserve saved templates, and interrupted migration is retryable',()=>{
