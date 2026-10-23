@@ -158,7 +158,7 @@ try{
    assert.equal(await page.locator('#briefing-preset').inputValue(),'temperature','The selected comparison chart carries back into sequence');
    await page.locator('#briefing-model').selectOption(UKV);await readySequence();
    await page.locator('#briefing-preset').selectOption('weather');await readySequence();
-   assert.equal(await page.locator('#briefing-time-heading').textContent(),'Forecast time / period · UTC');
+   assert.equal(await page.locator('#briefing-time-heading').textContent(),'Valid time · UTC');
    assert.equal(await page.locator('#briefing-interval').inputValue(),'native');
    await page.locator('#briefing-model').selectOption('gfs_global');await readySequence();
    await page.locator('#briefing-interval').selectOption('6');await readySequence();
