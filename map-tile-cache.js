@@ -48,8 +48,8 @@ export class ForecastTileCache{
   this.contexts=new Map();this.contextSequence=0;this.retentionRevision=0;
   this.context=null;this.generation=0;this.memory=new Map();this.bytes=0;this.pending=new Map();this.writes=new Map();this.limited=false;
   // Run/field/style URLs and complete tile coordinates isolate pixels. A revision
-  // invalidates releases; a rolling per-entry lifetime bounds source corrections
-  // without throwing away a freshly prepared tile at the next clock hour.
+  // invalidates releases. Callers may disable the default per-entry lifetime
+  // when they validate source files and rotate cacheVersion on corrections.
   this.session=persistent&&!this.isolated?'persistent-'+encodeURIComponent(cacheVersion):Date.now()+'-'+Math.random().toString(36).slice(2);
   this.cleanup=()=>{
    const shared=this.contexts.get(this.context)?.shared;
@@ -178,7 +178,7 @@ export class ForecastTileCache{
   // prepared pixels for the run-retention window, avoiding another native
   // download/decode on next-day comparisons. Mutable feeds keep the short TTL.
   const immutable=/^om:\/\/https:\/\/raw\.githubusercontent\.com\/matthewhugo81-arch\/snowline\/[a-f0-9]{40}\/ensemble-data\/snowline_(?:ecmwf|gefs)_ensemble\//.test(url);
-  return Number.isFinite(created)&&created>0&&Date.now()>=created&&Date.now()-created<(immutable?48*3600000:this.maxAge);
+  return Number.isFinite(created)&&created>0&&Date.now()>=created&&Date.now()-created<(immutable?Math.max(48*3600000,this.maxAge):this.maxAge);
  }
  remember(key,result,durable,persisting=false,created=Date.now()){
   const bytes=result.data instanceof ArrayBuffer?result.data.byteLength:new TextEncoder().encode(JSON.stringify(result.data)).length;

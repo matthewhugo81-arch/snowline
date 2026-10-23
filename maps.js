@@ -24,7 +24,8 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
 import {ForecastFrames,frameWindow,arrowFrameWindow,fullSequence} from './map-frames.js?v=20261022-arrow-priority';
-import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261022-arrow-priority';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261023-source-retention';
+import {ForecastRetention} from './map-retention.js?v=20261023-source-retention';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
@@ -92,11 +93,17 @@ installVerticalMotion(OM,settings);
 installPrecipitationType(OM,settings);
 installPrecipitationRates(OM,settings);
 const accumulationReader=installAccumulations(OM,settings);
+const retention=new ForecastRetention({onStatus:message=>{
+ const element=$('source-check-status');if(element)element.textContent=message;
+}});
+await retention.initialize();
+const validatesSources=retention.install(OM.getProtocolInstance(settings).omFileReader.backendPool);
 const renderMapTile=(params,controller)=>isSymbolURL(params.url)?precipitationSymbolProtocol(params,controller,OM,settings):OM.omProtocol(params,controller,isCompositeURL(params.url)?compositeSettings(settings):settings);
 const readMapValue=createValueReader({...OM,omProtocol:renderMapTile},settings);
 OM.updateCurrentBounds(UK);
 let failedSelection=null;
 const imageryCache=new ForecastTileCache(async(params,controller)=>{
+ if($('animation-status').textContent.startsWith('Displaying saved imagery')&&imageryCache.isForeground(params.url))$('animation-status').textContent='Preparing missing imagery for '+timelineLabel(state.times[state.index])+' UTC…';
  const result=await renderMapTile(params,controller);
  if(params.type==='json'&&params.url.includes('/ensemble-data/')){
   const source=params.url.includes('/snowline_gefs_ensemble/')?'NOAA GEFS':'ECMWF ENS (CC BY 4.0)';
@@ -106,7 +113,7 @@ const imageryCache=new ForecastTileCache(async(params,controller)=>{
   result.data.attribution='Weather: <a href="map-credits.html#mogreps">Met Office MOGREPS · © Crown copyright · CC BY-SA 4.0</a> | <a href="https://open-meteo.com/">Open-Meteo</a>';
  }
  return result;
-},{persistent:true,coordinate:true,adaptive:true,cacheVersion:'render-20261022-shared',diskEntries:65536,...forecastRenderBudget({hardwareConcurrency:navigator.hardwareConcurrency,deviceMemory:navigator.deviceMemory,mobile:matchMedia('(max-width: 650px), (pointer: coarse)').matches}),onLimit:()=>updatePreloadStatus()});
+},{persistent:retention.persistent,coordinate:true,adaptive:true,maxAge:validatesSources?Infinity:3600000,cacheVersion:'render-20261023-retention-'+retention.revision,diskEntries:65536,...forecastRenderBudget({hardwareConcurrency:navigator.hardwareConcurrency,deviceMemory:navigator.deviceMemory,mobile:matchMedia('(max-width: 650px), (pointer: coarse)').matches}),onLimit:()=>updatePreloadStatus()});
 imageryCache.setContext('complete-geographic-tiles');
 maplibregl.addProtocol('om',(params,controller)=>imageryCache.protocol(params,controller));
 window.addEventListener('pagehide',()=>imageryCache.release());
@@ -371,7 +378,7 @@ function updatePreloadStatus(){
  let message='Checking imagery…';
  if(total)message='Loading imagery · '+loaded+'/'+total+' frames'+(failed?' · '+failed+' unavailable':'');
  if(cached>loaded)message=cached+'/'+total+' frames cached · '+loaded+'/'+total+' ready for this view'+(failed?' · '+failed+' unavailable':'');
- if(complete)message='All '+total+' frames loaded';
+ if(complete)message='All '+total+' frames saved for this view';
  if(choices.some(({field})=>accumulationHours(field)))message='Accumulations · selected period first; nearby totals cached'+(failed?' · '+failed+' unavailable':'');
  const storage=imageryCache.storageStatus(),limitedText=storage.reason==='budget'?'Chart cache budget reached':storage.reason==='browser-quota'?'Browser storage allowance reached':storage.reason==='memory'?'Chart memory buffer full':'Browser storage unavailable';
  if(imageryCache.limited)message=limitedText+' · nearby frames buffered';
@@ -381,7 +388,7 @@ function updatePreloadStatus(){
  const outlineFailed=choices.some(({key})=>panels[key]?.coastline.state.status==='error');
  $('retry-preload').hidden=!failedSelection&&!outlineFailed&&(!failed||imageryCache.limited);
  $('retry-preload').textContent=outlineFailed||failedSelection?.outline?'Retry map outline':failedSelection?'Retry selected frame':'Retry background loading';
- if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?limitedText.toLowerCase()+'; nearby frames buffered':complete?'all frames loaded':cached>loaded?cached+'/'+total+' cached · '+loaded+'/'+total+' ready for view':loaded+'/'+total+' frames loaded');
+ if($('animation-status').textContent.startsWith('Ready'))$('animation-status').textContent='Ready · '+(imageryCache.limited?limitedText.toLowerCase()+'; nearby frames buffered':complete?'all frames saved':cached>loaded?cached+'/'+total+' cached · '+loaded+'/'+total+' ready for view':loaded+'/'+total+' frames loaded');
 }
 function orderForecastBasemap(panel){
  if(panel.styleOrdered)return;
@@ -415,6 +422,7 @@ function panelCache(panel,model,field){
  panel.cacheTimes=state.times;panel.cacheMeta=meta;panel.frameDescriptors=descriptors;
  const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.symbolURL?[symbolOverlay(descriptor.symbolURL)]:[]),...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
  panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
+ if(validatesSources)panel.frameCache.viewMaxAge=Infinity;
  panel.frameCache.setView(forecastViewKey(panel.map));panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
@@ -455,6 +463,10 @@ async function prepareSelection(index,valid=()=>true){
  return valid()?prepared:null;
 }
 function setTime(){layoutRestore.changed();arrowNavigation.cancel();outlineWait?.abort();outlineWait=new AbortController();return timePending=loadTime(outlineWait.signal);}
+function selectionStatus(index){
+ const saved=panelSelections(state).every(({key,model,field})=>!hasFieldTime(state.metas[model],field,state.times[index])||panels[key].frameCache?.preloaded.has(panels[key].frameURLs?.[index]));
+ return (saved?'Displaying saved imagery for ':'Loading ')+timelineLabel(state.times[index])+' UTC…';
+}
 function stepTime(direction){
  if(!state.times.length)return;
  const shown=playing?state.times.indexOf(panels.a?.displayedTime):-1;
@@ -466,7 +478,7 @@ function stepTime(direction){
  syncArrowButtons(index);++timeGeneration;outlineWait?.abort();viewportRefresh.cancel();
  failedSelection=null;for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
  const ready=panelSelections(state).every(({key,model,field})=>!hasFieldTime(state.metas[model],field,state.times[index])||panels[key].frameCache?.isReady(panels[key].frameURLs?.[index]));
- $('animation-status').textContent='Loading '+stamp(state.times[index])+' UTC…';
+ $('animation-status').textContent=selectionStatus(index);
  return timePending=arrowNavigation.request({ready});
 }
 async function loadTime(outlineSignal){
@@ -483,7 +495,7 @@ async function loadTime(outlineSignal){
  const valid=()=>generation===timeGeneration&&state.times[index]===time&&state.index===index&&!mapsMoving();
  dismissLocation();requestedTime=Date.parse(time);
  // Advance the shared label only when each panel has its chart or an explicit gap.
- $('animation-status').textContent='Loading '+timelineLabel(time)+' UTC…';
+ $('animation-status').textContent=selectionStatus(index);
  for(const {key}of panelSelections(state))$('map-error-'+key).hidden=true;
  try{
   for(const {key,model,field}of panelSelections(state)){
@@ -1051,6 +1063,19 @@ function captureLayout(){
  }),compare:state.compare,comparisonCount:state.comparisonCount,interval:$('map-forecast-interval').value,time:state.times[state.index],area:$('map-area').value,background,terrain,roads,opacity:state.opacity,speed:playback.interval,sidebarCollapsed:sidebar?.collapsed(),briefing};
 }
 layoutRestore.start(captureLayout,layout=>layout.briefing?'Briefing - '+modelName(layout.briefing.model)+' - '+layout.briefing.count+' panels':layout.panels.slice(0,layout.compare?layout.comparisonCount:1).map(p=>modelName(p.model)+' / '+(fields.find(f=>f.key===p.field)?.name??p.field)).join(' | '));
+retention.onChange=message=>{
+ pauseAnimation();++timeGeneration;outlineWait?.abort();
+ for(const panel of Object.values(panels))panel.frameCache?.stop();
+ layoutRestore.changed();layoutRestore.save();
+ $('animation-status').textContent=message+' Refreshing charts…';
+ // Reset native, derived, and in-flight readers together. Merely deleting PNGs
+ // would allow an old decoded field to recreate stale imagery after correction.
+ location.reload();
+};
+if(retention.changed)retention.onChange('Updated source data found.');
+else retention.start();
+window.addEventListener('pagehide',()=>retention.stop());
+window.addEventListener('pageshow',event=>{if(event.persisted){retention.start();void retention.check();}});
 for(const event of ['change','click','input'])document.querySelector('main').addEventListener(event,()=>layoutRestore.changed());
 let liveRunTimer=setInterval(refreshLiveRuns,60000);
 window.addEventListener('pagehide',()=>clearInterval(liveRunTimer));

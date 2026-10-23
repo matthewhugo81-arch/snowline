@@ -13,6 +13,22 @@ const storage=()=>{
 const read=(cache,url,type)=>cache.protocol(params(url,type),new AbortController());
 const saved=cache=>Promise.all([...cache.writes.values()].map(job=>job.promise));
 
+test('source-validated retention restores disk pixels after two hours; a revision rebuilds corrected pixels',async()=>{
+ const disk=storage(),realNow=Date.now;let now=realNow(),calls=0;
+ Date.now=()=>now;
+ const options={storage:disk,persistent:true,maxAge:Infinity,memoryBytes:0,cacheVersion:'validated-source-1'};
+ let cache;
+ try{
+  cache=new ForecastTileCache(async()=>{calls++;return bytes();},options);cache.setContext('tiles');
+  await read(cache,'model/run/frame');await saved(cache);cache.release();
+  now+=2*3600000;
+  cache=new ForecastTileCache(async()=>{calls++;return bytes();},options);cache.setContext('tiles');
+  await read(cache,'model/run/frame');assert.equal(calls,1);cache.release();
+  cache=new ForecastTileCache(async()=>{calls++;return bytes();},{...options,cacheVersion:'validated-source-2'});cache.setContext('tiles');
+  await read(cache,'model/run/frame');assert.equal(calls,2);await saved(cache);
+ }finally{cache?.release();Date.now=realNow;}
+});
+
 test('faster devices prepare more tiles without taking the selected chart slots',async()=>{
  assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8,mobile:true}),{concurrency:4,backgroundConcurrency:2});
  assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8}),{concurrency:8,backgroundConcurrency:6});
