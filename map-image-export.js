@@ -1,3 +1,4 @@
+import {anomalyLegend} from './map-anomaly-scale.js?v=20261023-revised-1c';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261022-ireland-ecmwf-range';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
@@ -12,6 +13,8 @@ export function chartScales(field,interval='',weather=false){
   {name:'Modelled total cloud cover (not satellite observations)',colors:['#414141','#e6e6e6'],labels:['Clear · 0%','Overcast · 100%'],bands:false},
   {name:'Mean precipitation · mm/h'+(interval?' · '+interval:''),colors:[...PRECIPITATION_SCALE.colors],labels:PRECIPITATION_SCALE.stops.map((v,i)=>i===0?'<0.5':v+(i===PRECIPITATION_SCALE.stops.length-1?'+':'')),bands:true,note:'Below 0.5 mm/h: cloud remains visible; not necessarily dry.'}
  ];
+ const anomaly=anomalyLegend(field);
+ if(anomaly)return [{name:field.name+' · '+displayUnit(field),colors:anomaly.colors,labels:anomaly.ticks.map(v=>(v>0?'+':'')+v),bands:false,discrete:true,endColors:anomaly.endColors,note:[interval,field.legendNote].filter(Boolean).join(' · ')}];
  const offset=field.legendStart??0,stops=displayStops(field).slice(offset),colors=field.colors.slice(offset);
  const labels=field.legendLabels?field.legendLabels.slice(offset):field.categoryLabels?field.categoryLabels.slice(offset):field.bands?stops.map((v,i)=>v+(i===stops.length-1&&!field.categorical?'+':'')):[String(field.temperatureBands?stops[1]:stops[0]),String(stops.at(-1))];
  const notes=interval&&field.legendNote&&interval.startsWith(field.legendNote)?[interval]:[interval,field.legendNote];
@@ -62,6 +65,7 @@ export async function composeChartImage({image,width,title,subtitle='',scales=[]
   const w=width-pad*2,n=scale.colors.length;
   if(scale.bands||scale.discrete){for(let i=0;i<n;i++){ctx.fillStyle=scale.colors[i];ctx.fillRect(pad+w*i/n,y,w/n+.2,12);}}
   else{const gradient=ctx.createLinearGradient(pad,0,pad+w,0);scale.colors.forEach((c,i)=>gradient.addColorStop(scale.positions?.[i]??(n===1?0:i/(n-1)),c));ctx.fillStyle=gradient;ctx.fillRect(pad,y,w,12);}
+  if(scale.endColors){ctx.fillStyle=scale.endColors[0];ctx.fillRect(pad,y,3,12);ctx.fillStyle=scale.endColors[1];ctx.fillRect(pad+w-3,y,3,12);}
   ctx.strokeStyle='#cbd5e1';ctx.lineWidth=.5;ctx.strokeRect(pad,y,w,12);y+=15;ctx.fillStyle='#0e2034';ctx.font=(scale.bands?Math.min(10,w/scale.labels.length/3):10)+'px '+FONT;
   scale.labels.forEach((label,i)=>{ctx.textAlign=scale.bands?'center':i===0?'left':i===scale.labels.length-1?'right':'center';const x=scale.bands?pad+w*(i+.5)/scale.labels.length:pad+w*i/Math.max(1,scale.labels.length-1);ctx.fillText(label,x,y);});
   ctx.textAlign='left';y+=17;ctx.fillStyle='#43546a';ctx.font='10px '+FONT;for(const line of scale.notes){ctx.fillText(line,pad,y);y+=13;}y+=4;

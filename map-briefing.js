@@ -1,17 +1,18 @@
-import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
-import {appearanceKey} from './map-appearance.js?v=20261019-coastline3';
+import {anomalyLegend} from './map-anomaly-scale.js?v=20261023-revised-1c';
+import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261023-revised-1c';
+import {appearanceKey} from './map-appearance.js?v=20261023-revised-1c';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261022-ireland-ecmwf-range';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261022-retention-recovery';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261023-revised-1c';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261022-ireland-ecmwf-range';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261022-retention-recovery';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261023-revised-1c';
 import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261022-ireland-ecmwf-range';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {chartScales} from './map-image-export.js?v=20261020-ifs-coverage';
+import {chartScales} from './map-image-export.js?v=20261023-revised-1c';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {mapRunCatalogue,sourceModel,selectedRunKey,selectedReference,renderRunSelector} from './map-run-selection.js?v=20261022-retention-recovery';
@@ -82,6 +83,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   if(isTypeField(field.key)){for(const scale of chartScales(field)){const item=document.createElement('div'),heading=document.createElement('strong'),gradient=document.createElement('div'),labels=document.createElement('div');item.className='briefing-scale';heading.textContent=scale.name;gradient.className='briefing-gradient';gradient.style.background='linear-gradient(to right,'+scale.colors.flatMap((c,i)=>[c+' '+i*25+'%',c+' '+(i+1)*25+'%']).join(',')+')';labels.className='briefing-scale-labels briefing-band-labels';for(const text of scale.labels){const span=document.createElement('span');span.textContent=text;labels.append(span);}item.append(heading,gradient,labels);$('legend').append(item);}return;}
   const item=document.createElement('div'),title=document.createElement('strong'),gradient=document.createElement('div'),labels=document.createElement('div');
   item.className='briefing-scale';item.setAttribute('role','group');item.setAttribute('aria-label',field.name+' colour scale');gradient.className='briefing-gradient';labels.className='briefing-scale-labels';
+  const anomaly=anomalyLegend(field);
+  if(anomaly){title.textContent='°C · 1°C bands';gradient.style.background=anomaly.gradient;gradient.style.borderLeft='3px solid '+anomaly.endColors[0];gradient.style.borderRight='3px solid '+anomaly.endColors[1];gradient.title=field.legendNote;for(const v of anomaly.ticks){const label=document.createElement('span');label.textContent=(v>0?'+':'')+v+'°';labels.append(label);}item.append(title,gradient,labels);$('legend').append(item);return;}
   if(preset.id==='weather'){
    title.textContent='Cloud cover';gradient.style.background='linear-gradient(to right,#414141,#e6e6e6)';labels.innerHTML='<span>Clear · 0%</span><span>Overcast · 100%</span>';
   }else{

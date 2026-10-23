@@ -66,7 +66,7 @@ test('UK and Ireland references load without changing palette, periods or older 
  m.anomaly_reference.period='1981-2010';assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),false);
  m.anomaly_reference={dataset:'unknown',period:'1991-2020'};assert.equal(verifyProduct(m,'snowline_ecmwf_ensemble'),false);
  for(const f of PRODUCT_FIELDS.filter(f=>f.group==='Temperature anomalies')){
-  assert.deepEqual(f.stops,[-10,-8,-6,-4,-2,0,2,4,6,8,10]);assert.equal(f.periodHours,24);
+  assert.equal(f.stops[1],-10);assert.equal(f.stops.at(-1),10);assert.equal(f.anomalyBands,1);assert.equal(f.periodHours,24);
   assert.match(f.note,/Met Éireann/);assert.match(f.note,/border discontinuity/);
  }
 });

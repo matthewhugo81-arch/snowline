@@ -6,7 +6,7 @@ export {coastlineController};
 // Interactive maps, briefing PNGs and their exports share these drawing rules.
 export const mapAppearance=({opacity=.8,terrain=true,roads=false}={})=>({opacity,terrain,roads});
 export const appearanceKey=appearance=>JSON.stringify(mapAppearance(appearance));
-export const rasterResampling=field=>field?.bands?'nearest':'linear';
+export const rasterResampling=field=>field?.bands||field?.anomalyBands?'nearest':'linear';
 export function applyRoads(map,roads=false){for(const layer of map.getStyle().layers)if(['transportation','transportation_name'].includes(layer['source-layer']))map.setLayoutProperty(layer.id,'visibility',roads?'visible':'none');}
 export function applyMapAppearance(map,appearance={}){
  const {roads,terrain}=mapAppearance(appearance);

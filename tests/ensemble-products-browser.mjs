@@ -128,6 +128,11 @@ try{
   // Anomalies must work as the first optional layer, without a probability detour.
   for(const anomaly of anomalies){
    await page.locator('#map-variable').selectOption(anomaly);await ready();
+   assert.equal(await page.locator('#legend-title-a').textContent(),'°C · 1°C bands');
+   assert.equal(await page.locator('#legend-ticks-a span').count(),11);
+   const anomalyURL=new URL((await page.evaluate(()=>window.productPanels.a.url)).replace(/^om:\/\//,''));
+   assert.equal(anomalyURL.searchParams.get('color_blend'),'false');
+   assert.equal(anomalyURL.searchParams.get('anomaly_style'),'20261023-revised-1c');
    assert.equal(await page.locator('#map-variable').inputValue(),anomaly);
    assert.equal(await page.locator('#map-run option').count(),1,'Only the published product run is offered');
    assert.match(await page.locator('#map-run option').textContent(),/06Z · ensemble products$/);
@@ -192,6 +197,11 @@ try{
   for(const k of cold)assert.equal(await page.locator(`#map-variable option[value="${k}"]`).count(),0);
   for(const anomaly of anomalies){
    await page.locator('#map-variable').selectOption(anomaly);await ready();
+   assert.equal(await page.locator('#legend-title-a').textContent(),'°C · 1°C bands');
+   assert.equal(await page.locator('#legend-ticks-a span').count(),11);
+   const anomalyURL=new URL((await page.evaluate(()=>window.productPanels.a.url)).replace(/^om:\/\//,''));
+   assert.equal(anomalyURL.searchParams.get('color_blend'),'false');
+   assert.equal(anomalyURL.searchParams.get('anomaly_style'),'20261023-revised-1c');
    assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('snowline_ecmwf_products/'));
    await page.locator('#map-start-time').selectOption(anomalyTime);await ready();
    assert.equal(await page.locator('#map-time-label').textContent(),'Fri 23 Oct 0900');
