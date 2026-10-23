@@ -44,7 +44,7 @@ test('dynamic and convective components survive together without double-counting
 });
 test('legend and prepared-tile URL use the new presentation version',()=>{
  assert.ok(symbolURL('om://source?variable=precipitation',{domain:'none',variables:['precipitation']}).includes('symbols_style='+SYMBOL_STYLE));
- assert.match(thetaSymbolsField().legendNote,/Continuous size scale/);
+ assert.equal(thetaSymbolsField().legendNote,'');
  assert.match(thetaSymbolsField().note,/Symbol density is not a measure of intensity/);
 });
 test('actual tile protocol reads native fields and generates finite glyph geometry',async()=>{

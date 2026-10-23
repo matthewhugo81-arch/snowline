@@ -6,19 +6,19 @@ import {installAccumulations} from './map-accumulation-reader.js?v=20261014-inte
 import {ForecastFrames} from './map-frames.js?v=20261019-mogreps-uk';
 import {ForecastTileCache} from './map-tile-cache.js?v=20261022-retention-recovery';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261023-theta-phase';
+import {hasFieldTime,fieldDataURL} from './map-sources.js?v=20261023-phase-mechanism';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
 import {installPrecipitationType} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-gefs-archive';
 import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
-import {briefingValueLabels} from './map-briefing-values.js?v=20261023-theta-phase';
+import {briefingValueLabels} from './map-briefing-values.js?v=20261023-phase-mechanism';
 
 import {compositeSettings as briefingSettings,compositeUnderlay,WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261023-theta-phase';
-import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261023-theta-phase';
-import {fieldSource} from './map-sources.js?v=20261023-theta-phase';
-import {sourceVariable} from './map-catalogue.js?v=20261023-theta-phase';
+import {THETA_SYMBOLS} from './map-winter.js?v=20261023-phase-mechanism';
+import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261023-phase-mechanism';
+import {fieldSource} from './map-sources.js?v=20261023-phase-mechanism';
+import {sourceVariable} from './map-catalogue.js?v=20261023-phase-mechanism';
 import {forecastInputWork} from './map-work-queue.js';
 import {installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261020-native-levels';
 export {briefingSettings};

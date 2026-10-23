@@ -14,7 +14,7 @@ test('theta fallback boundaries, missing data and native phase precedence',()=>{
  const parts=precipitationSymbols({precipitation:3,showers:1,theta_w:-2},1,'partitioned');
  assert.deepEqual(parts.map(g=>g.kind),['snow','snow']);assert.equal(parts.reduce((n,g)=>n+g.amount,0),3);
  let arcs=0,lines=0;const ctx={setLineDash(){},beginPath(){},arc(){arcs++;},moveTo(){},lineTo(){lines++;},stroke(){}};
- drawPrecipitationSymbols(ctx,parts,20,20);assert.equal(arcs,0);assert.equal(lines,6);
+ drawPrecipitationSymbols(ctx,parts,20,20);assert.equal(arcs,0);assert.equal(lines,8);
 });
 test('fallback samples separate GFS upper-air grid and rejects mismatched valid time',async()=>{
  const old=globalThis.OffscreenCanvas,reads=[];let lines=0;

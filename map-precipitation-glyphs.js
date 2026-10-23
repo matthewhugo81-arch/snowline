@@ -1,5 +1,5 @@
 // Presentation only: rates and precipitation mechanisms are supplied by the model reader.
-export const SYMBOL_STYLE='20261023-theta-phase';
+export const SYMBOL_STYLE='20261023-phase-mechanism';
 export const SYMBOL_SPACING=16;
 export const SYMBOL_HALO=96;
 export const MAX_CLUSTER_EXTENT=24;
@@ -91,14 +91,13 @@ function glyphPath(ctx,g,x,y){
  const r=g.radius;
  ctx.beginPath();
  if(g.kind==='snow'||g.mechanism==='snow'){
-  for(let i=0;i<3;i++){const a=i*Math.PI/3,dx=Math.cos(a)*r,dy=Math.sin(a)*r;ctx.moveTo(x-dx,y-dy);ctx.lineTo(x+dx,y+dy);}
+  // Fit both marks inside the collision radius: snowflake above shower V.
+  const shower=g.mechanism==='convective',sr=shower?r*.55:r,sy=shower?y-r*.4:y;
+  for(let i=0;i<3;i++){const a=i*Math.PI/3,dx=Math.cos(a)*sr,dy=Math.sin(a)*sr;ctx.moveTo(x-dx,sy-dy);ctx.lineTo(x+dx,sy+dy);}
+  if(shower){ctx.moveTo(x-r*.65,y+r*.25);ctx.lineTo(x,y+r);ctx.lineTo(x+r*.65,y+r*.25);}
  }else if(g.mechanism==='convective'){
-  // Equilateral downward triangle, contained within the radius used for spacing.
-  // Light convection retains the reference chart's open V.
   ctx.moveTo(x-Math.sqrt(3)/2*r,y-r/2);ctx.lineTo(x,y+r);ctx.lineTo(x+Math.sqrt(3)/2*r,y-r/2);
   if(g.rate>=.5)ctx.closePath();
- }else if(g.mechanism==='snow'){
-  for(let i=0;i<3;i++){const a=i*Math.PI/3,dx=Math.cos(a)*r,dy=Math.sin(a)*r;ctx.moveTo(x-dx,y-dy);ctx.lineTo(x+dx,y+dy);}
  }else ctx.arc(x,y,r,0,Math.PI*2);
 }
 

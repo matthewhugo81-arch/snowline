@@ -1,14 +1,14 @@
 import {appearanceKey} from './map-appearance.js?v=20261023-revised-1c';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261023-theta-phase';
+import {forecastValidity,forecastChartTitle,forecastTimeLabel} from './map-validity.js?v=20261023-phase-mechanism';
 import {UKV_PREVIOUS,isUKVChoice} from './map-ukv-runs.js?v=20261020-run-selector';
 import {UKV} from './ukv-run-selection.js?v=20261011-live-runs';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasChart,previousRunPeriodNote,newerRunAvailable,refreshPinnedRun} from './map-previous-run-data.js?v=20261023-theta-phase';
-import {BRIEFING_AREAS,briefingTimes,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261023-theta-phase';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261023-theta-phase';
+import {discoverPreviousRuns,previousRunPresets,previousRunTimes,previousRunHasChart,previousRunPeriodNote,newerRunAvailable,refreshPinnedRun} from './map-previous-run-data.js?v=20261023-phase-mechanism';
+import {BRIEFING_AREAS,briefingTimes,briefingOptions,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261023-phase-mechanism';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261023-phase-mechanism';
 import {runLabel,runAvailability} from './map-runs.js?v=20261020-run-selector';
-import {chartScales} from './map-image-export.js?v=20261023-theta-phase';
+import {chartScales} from './map-image-export.js?v=20261023-phase-mechanism';
 import {accumulationHours,accumulationPeriod} from './map-accumulation.js?v=20261014-interaction-audit';
 const stamp=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const utc=time=>stamp.format(new Date(time))+' UTC';
@@ -109,6 +109,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
   requestedTime=Date.parse(time);if(accumulationHours(p.field))requestedStart=periodStart(time,accumulationHours(p.field));navigation();
   const opts={model:model.id,preset:p,bounds:[...bounds()],size:[...size()],background:$('background').value,appearance:getAppearance(),overlays:{contours:$('contours').checked,grid:$('grid-values').checked}};
   const hours=accumulationHours(p.field);
+  $('note').hidden=p.field==='theta_w_precipitation_symbols';
   $('note').textContent=[hours?fixedPeriodNote(hours)+' Each displayed chart covers the identical start/end period.':p.note,'The full available range is shown; panels without data are marked individually.',previousRunPeriodNote(chosen,p,time)].filter(Boolean).join(' ');
   let loaded=0,failed=0,unavailable=0;const started=performance.now();
   const progress=()=>{if(token===generation)$('progress').textContent=loaded+'/'+(runCount()-unavailable)+' available charts ready'+(unavailable?' · '+unavailable+' run'+(unavailable===1?'':'s')+' without data at this time':'')+(failed?' · '+failed+' failed to load':loaded+unavailable===runCount()?' · '+((performance.now()-started)/1000).toFixed(1)+' s':'')+(hours?' · Shared period: '+accumulationPeriod(p.field,time):' · Valid time / periods: '+selected().map(m=>forecastTimeLabel(p.field,time,m)).filter((v,i,a)=>a.indexOf(v)===i).join(' / '));};
@@ -116,7 +117,7 @@ export function createPreviousRunAnalysis({host,models,fields,loadModel,loadRun,
    const description=model.name+' · Run '+runLabel(meta)+' · '+forecastChartTitle(p.field,p.name,time,meta),subtitle=briefingCaption(meta,p,time);
    const info={title:description,subtitle,scales:chartScales(fields.find(f=>f.key===p.field),subtitle,p.id==='weather')};
    const img=document.createElement('img');img.src=src;img.alt=description;img.decoding='async';c.button.replaceChildren(img);c.button.disabled=false;c.card.dataset.ready='true';imageMenu?.registerImage(img,info);
-   c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();$('enlarged-image').focus();};loaded++;
+   c.button.onclick=()=>{$('enlarged-title').textContent=description;$('enlarged-note').hidden=p.field==='theta_w_precipitation_symbols';$('enlarged-note').textContent=subtitle;$('enlarged-image').src=src;$('enlarged-image').alt=description;imageMenu?.registerImage($('enlarged-image'),info);$('enlarged').showModal();$('enlarged-image').focus();};loaded++;
   };
   const tasks=chosen.map((meta,i)=>{
    const c=cards[i];delete c.card.dataset.ready;delete c.card.dataset.failed;delete c.card.dataset.unavailable;c.card.dataset.run=meta.reference_time;c.card.dataset.time=time;c.button.onclick=null;
