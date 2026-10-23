@@ -42,8 +42,8 @@ test('sizes distinguish intensity and keep heavy convection smaller than dynamic
   const sizes=rates.map(r=>symbolRadius(r,convective));
   assert.ok(sizes.every((r,i)=>!i||r>sizes[i-1]));assert.equal(symbolRadius(.09,convective),0);
  }
- // The continuous display scale spans 3 to 15 px diameter, capped at 8 mm/h.
- assert.equal(symbolRadius(8),symbolRadius(.1)*5);
+ // The continuous display scale spans 5 to 15 px diameter, capped at 8 mm/h.
+ assert.equal(symbolRadius(8),symbolRadius(.1)*3);
  assert.equal(symbolRadius(100),symbolRadius(8));
  for(const r of [2,5])assert.ok(symbolRadius(r,true)<symbolRadius(r));
  const render=(values,recipe='partitioned')=>{

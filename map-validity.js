@@ -1,10 +1,10 @@
 import {productField} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
-import {fieldIntervalHours} from './map-sources.js?v=20261020-run-selector';
+import {fieldIntervalHours} from './map-sources.js?v=20261023-theta-phase';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261014-interaction-audit';
+import {THETA_SYMBOLS} from './map-winter.js?v=20261023-theta-phase';
 
 const instant=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const temperatureAnomaly=field=>/^ens_temperature_(min|max)_anomaly$/.test(field);

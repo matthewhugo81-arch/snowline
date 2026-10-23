@@ -1,15 +1,15 @@
 // Presentation only: rates and precipitation mechanisms are supplied by the model reader.
-export const SYMBOL_STYLE='20261014-vw-refinement1';
+export const SYMBOL_STYLE='20261023-theta-phase';
 export const SYMBOL_SPACING=16;
 export const SYMBOL_HALO=96;
 export const MAX_CLUSTER_EXTENT=24;
 export const SYMBOL_RATE_POINTS=Object.freeze([.1,.5,1,2,4,8]);
-export const SYMBOL_DIAMETERS=Object.freeze([3,5,7,9,12,15]);
+export const SYMBOL_DIAMETERS=Object.freeze([5,7,9,11,13,15]);
 export const SYMBOL_SIZE_NOTE='Continuous size scale, anchored at 0.1 / 0.5 / 1 / 2 / 4 / 8 mm/h water equivalent; below 0.1 is unplotted and size is capped at 8 mm/h.';
 export const SYMBOL_COLORS={rain:'#1535d8',precipitation:'#1535d8',showers:'#1535d8',mixed:'#11833b',snow:'#db2387',freezing:'#8c34b8',ice:'#b77505',other:'#586575'};
 const PADDING=1.6;
-const STROKE=1.1;
-const HALO_STROKE=2.2;
+const STROKE=1.7;
+const HALO_STROKE=3.1;
 // Spatial rather than rainfall priority avoids deleting an entire monotonic
 // rainband in favour of its local maxima. Equal ranks are 64 px apart.
 const PRIORITY=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
@@ -90,7 +90,9 @@ export function thinSymbolSamples(samples){
 function glyphPath(ctx,g,x,y){
  const r=g.radius;
  ctx.beginPath();
- if(g.mechanism==='convective'){
+ if(g.kind==='snow'||g.mechanism==='snow'){
+  for(let i=0;i<3;i++){const a=i*Math.PI/3,dx=Math.cos(a)*r,dy=Math.sin(a)*r;ctx.moveTo(x-dx,y-dy);ctx.lineTo(x+dx,y+dy);}
+ }else if(g.mechanism==='convective'){
   // Equilateral downward triangle, contained within the radius used for spacing.
   // Light convection retains the reference chart's open V.
   ctx.moveTo(x-Math.sqrt(3)/2*r,y-r/2);ctx.lineTo(x,y+r);ctx.lineTo(x+Math.sqrt(3)/2*r,y-r/2);
@@ -104,9 +106,9 @@ export function drawPlacedPrecipitationSymbols(ctx,glyphs,x,y){
  ctx.setLineDash([]);ctx.lineCap='round';ctx.lineJoin='round';
  for(const g of glyphs){
   glyphPath(ctx,g,x+g.dx,y+g.dy);
-  // Narrow translucent halo improves contrast without filling the symbol or
+  // Strong white halo improves contrast without filling the symbol or
   // masking the theta-w field. Phase colours retain their existing meaning.
-  ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=HALO_STROKE;ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.95)';ctx.lineWidth=HALO_STROKE;ctx.stroke();
   ctx.strokeStyle=SYMBOL_COLORS[g.kind]??SYMBOL_COLORS.other;ctx.lineWidth=STROKE;ctx.stroke();
  }
 }

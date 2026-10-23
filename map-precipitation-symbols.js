@@ -1,14 +1,17 @@
 import {nativeCategory,estimatedCategory,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {symbolRecipe} from './map-winter.js?v=20261014-interaction-audit';
-import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261014-vw-refinement1';
-export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261014-vw-refinement1';
+import {symbolRecipe} from './map-winter.js?v=20261023-theta-phase';
+import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-theta-phase';
+export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-theta-phase';
 export const isSymbolURL=url=>/[?&]precip_symbols=/.test(url);
-export const symbolURL=(url,source)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style='+SYMBOL_STYLE;
+export const symbolURL=(url,source,thetaURL)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style='+SYMBOL_STYLE+(thetaURL?'&theta_source='+encodeURIComponent(thetaURL):'');
 export function symbolOverlay(url){return {id:'precip-symbols',source:{type:'raster',url,tileSize:512,maxzoom:10},layers:[{id:'precip-symbols-image',type:'raster',paint:{'raster-opacity':1,'raster-fade-duration':0,'raster-resampling':'linear'}}]};}
 const categoryKind={1:'rain',2:'mixed',3:'snow',4:'other',5:'freezing',6:'ice'};
 export function symbolInputs(recipe){return recipe==='icon'?['rain','showers','snowfall_water_equivalent']:recipe==='partitioned'?['precipitation','showers']:recipe==='native'?['precipitation','precipitation_type']:recipe==='estimated'?['precipitation','snowfall_water_equivalent']:['precipitation'];}
+export function thetaPhase(value){return Number.isFinite(value)?value<=0?'snow':value<2?'mixed':'rain':'other';}
 export function precipitationSymbols(values,hours,recipe){
- const glyph=(kind,amount,mechanism='unseparated')=>({kind,mechanism,amount,rate:amount/hours,radius:symbolRadius(amount/hours,mechanism==='convective')});
+ const fallback=thetaPhase(values.theta_w);
+ const resolve=kind=>recipe!=='icon'&&['other','precipitation','showers'].includes(kind)&&fallback!=='other'?fallback:kind;
+ const glyph=(kind,amount,mechanism='unseparated')=>({kind:resolve(kind),mechanism,amount,rate:amount/hours,radius:symbolRadius(amount/hours,mechanism==='convective')});
  const wet=g=>Number.isFinite(g.rate)&&g.rate>=.1;
  if(!Number.isFinite(hours)||!(hours>0))return [];
  if(recipe==='icon')return [glyph('rain',values.rain,'dynamic'),glyph('showers',values.showers,'convective'),glyph('snow',values.snowfall_water_equivalent,'snow')].filter(wet);
@@ -23,7 +26,7 @@ export function precipitationSymbols(values,hours,recipe){
   return [glyph('precipitation',amount-convective,'dynamic'),glyph('showers',convective,'convective')].filter(wet);
  }
  const category=recipe==='native'?nativeCategory(values.precipitation_type):recipe==='estimated'?estimatedCategory(amount,values.snowfall_water_equivalent):4;
- return Number.isFinite(category)?[glyph(categoryKind[category]??'other',amount)]:[];
+ return [glyph(categoryKind[category]??'other',amount)];
 }
 const latAt=(pixel,world)=>Math.atan(Math.sinh(Math.PI*(1-2*pixel/world)))*180/Math.PI;
 // Keep the original global 16 px lattice and nearest-native-cell sampling.
@@ -45,6 +48,18 @@ export async function precipitationSymbolProtocol(params,controller,OM,settings)
  if(clip[0]<clip[2]&&clip[1]<clip[3]){
   const ranges=OM.getRanges(config,clip),grid=OM.GridFactory.create(config,ranges),reader=OM.getProtocolInstance(settings).omFileReader,arrays={};
   for(const key of symbolInputs(recipe)){controller.signal.throwIfAborted();arrays[key]=(await reader.readVariable(file,key,ranges,controller.signal)).values;}
+  let thetaGrid,thetaValues;
+  const thetaURL=query.get('theta_source');
+  if(thetaURL){
+   const thetaPlain=thetaURL.replace(/^(?:om|briefing):\/\//,''),thetaFile=thetaPlain.split('?')[0],thetaQuery=new URLSearchParams(thetaPlain.split('?')[1]);
+   const surfaceInfo=precipitationFileInfo(file),upperDomain=new URL(thetaFile).pathname.match(/\/(?:data_spatial|ensemble-data)\/([^/]+)\//)?.[1],upperInfo=precipitationFileInfo(thetaFile.replace('/'+upperDomain+'/', '/'+surfaceInfo.domain+'/'));
+   if(surfaceInfo.reference!==upperInfo.reference||surfaceInfo.time!==upperInfo.time)throw Error('Theta-w must match precipitation run and valid time.');
+   const thetaConfig=settings.domainOptions.find(d=>d.value===upperDomain)?.grid;
+   if(!thetaConfig)throw Error('Unknown theta-w grid.');
+   const thetaRanges=OM.getRanges(thetaConfig,clip);
+   thetaGrid=OM.GridFactory.create(thetaConfig,thetaRanges);
+   thetaValues=(await reader.readVariable(thetaFile,thetaQuery.get('variable'),thetaRanges,controller.signal)).values;
+  }
   const keys=Object.keys(arrays),samples=[];
   for(let row=Math.floor((top-halo)/SYMBOL_SPACING);row<Math.ceil((top+512+halo)/SYMBOL_SPACING);row++){
    controller.signal.throwIfAborted();
@@ -52,6 +67,7 @@ export async function precipitationSymbolProtocol(params,controller,OM,settings)
     const x=(column+.5)*SYMBOL_SPACING,y=(row+.5)*SYMBOL_SPACING,lon=x/world*360-180,lat=latAt(y,world);
     if(lon<clip[0]||lon>clip[2]||lat<clip[1]||lat>clip[3])continue;
     const values=Object.fromEntries(keys.map(key=>[key,grid.getInterpolatedValue(arrays[key],lat,lon,'nearest')]));
+    if(thetaGrid)values.theta_w=thetaGrid.getInterpolatedValue(thetaValues,lat,lon,'nearest');
     const glyphs=precipitationSymbols(values,hours,recipe);
     if(glyphs.length)samples.push(makeSymbolSample(column,row,glyphs));
    }

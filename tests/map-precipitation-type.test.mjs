@@ -72,7 +72,7 @@ test('symbols retain independent native ICON rain, convection and snow amounts; 
  assert.equal(symbolRecipe(meta('dwd_icon',0,[...vars,'rain','showers'])),'icon');
  const gs=precipitationSymbols({rain:1,showers:4,snowfall_water_equivalent:2},1,'icon');assert.deepEqual(gs.map(g=>[g.kind,g.rate]),[['rain',1],['showers',4],['snow',2]]);
  assert.deepEqual(precipitationSymbols({precipitation:3,precipitation_type:3},3,'native').map(g=>[g.kind,g.rate]),[['freezing',1]]);
- assert.equal(precipitationSymbols({precipitation:1,snowfall_water_equivalent:NaN},1,'estimated').length,0);
+ assert.equal(precipitationSymbols({precipitation:1,snowfall_water_equivalent:NaN},1,'estimated')[0].kind,'other');
  assert.equal(precipitationSymbols({precipitation:1},1,'unresolved')[0].kind,'other');
  assert.ok(symbolRadius(5)>symbolRadius(.1));assert.equal(symbolRadius(.09),0);
  assert.ok(isSymbolURL(symbolURL('om://file?variable=precipitation',meta())));
