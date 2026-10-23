@@ -14,7 +14,15 @@
 .layout-name-row{display:flex;gap:6px}
 .layout-name-row input{min-width:0;flex:1;background:#fff;color:#142c40;padding:7px;border:1px solid #607d91;border-radius:5px}
 .layout-name-row button{white-space:nowrap;padding:6px 9px;background:#294b63;color:#fff;border:1px solid #607d91;border-radius:5px}
-@media(max-width:650px){.layout-restore{position:static;font-size:12px}.layout-menu{position:fixed;top:112px;right:12px;max-height:calc(100dvh - 130px)}.layout-restore>summary{padding:6px}.map-page .page-nav{gap:3px}.map-page .page-nav a{font-size:12px}.layout-name-row input{font-size:16px}}
+.layout-menu section{margin-top:18px;padding-top:14px;border-top:1px solid #607d91}
+.layout-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px}
+.layout-actions button{font:inherit;font-size:12px;padding:7px 9px;background:#294b63;color:#fff;border:1px solid #607d91;border-radius:5px;cursor:pointer}
+.layout-menu select{width:100%;max-width:100%;font-size:13px;padding:8px;background:#fff;color:#142c40;border:1px solid #607d91;border-radius:5px}
+.layout-menu button:focus-visible,.layout-menu input:focus-visible,.layout-menu select:focus-visible,.layout-menu a:focus-visible{outline:2px solid #6ce1d6;outline-offset:2px}
+.layout-menu button[hidden]{display:none}
+.layout-menu .layout-error{color:#ffb7ae}
+.layout-menu #layout-action-status:empty{display:none}
+@media(max-width:650px){.layout-restore{position:static;font-size:12px}.layout-menu{position:fixed;top:112px;right:12px;max-height:calc(100dvh - 130px)}.layout-restore>summary{padding:6px}.map-page .page-nav{gap:3px}.map-page .page-nav a{font-size:12px}.layout-name-row input,.layout-menu select{font-size:16px}}
 .page-nav a{color:#ccdae7;text-decoration:none;font-size:14px;padding:8px 12px;border-radius:6px}
 .page-nav a[aria-current=page],.page-nav a:hover{background:#294155;color:white}
 .map-page header{padding:10px 12px;gap:24px}
