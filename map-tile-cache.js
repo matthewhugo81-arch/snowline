@@ -2,10 +2,12 @@
 // can then recreate a distant frame without downloading/decoding the model again.
 import {cacheDiskBudget,SharedForecastStorage,cleanupObsoleteCaches} from './map-cache-storage.js?v=20261022-cache-cleanup';
 const PREFIX='snowline-forecast-tiles-v1-';
-// Faster machines can prepare six tiles concurrently while two slots remain
-// available for the selected chart. Keep the existing budget on smaller devices.
+// A preparation slot includes network waits, not just worker CPU time. Allow
+// capable desktops to overlap more reads while reserving four foreground slots.
+// Keep the existing budgets on mobile and lower-memory devices.
 export function forecastRenderBudget({hardwareConcurrency=4,deviceMemory=4,mobile=false}={}){
  if(mobile)return {concurrency:4,backgroundConcurrency:2};
+ if(hardwareConcurrency>=8&&deviceMemory>=8)return {concurrency:16,backgroundConcurrency:12};
  return {concurrency:8,backgroundConcurrency:hardwareConcurrency>=8&&deviceMemory>=4?6:4};
 }
 const abort=()=>new DOMException('Aborted','AbortError');

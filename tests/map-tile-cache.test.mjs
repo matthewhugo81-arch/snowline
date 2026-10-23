@@ -31,14 +31,15 @@ test('source-validated retention restores disk pixels after two hours; a revisio
 
 test('faster devices prepare more tiles without taking the selected chart slots',async()=>{
  assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8,mobile:true}),{concurrency:4,backgroundConcurrency:2});
- assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8}),{concurrency:8,backgroundConcurrency:6});
+ assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8}),{concurrency:16,backgroundConcurrency:12});
+ assert.deepEqual(forecastRenderBudget({hardwareConcurrency:8,deviceMemory:4}),{concurrency:8,backgroundConcurrency:6});
  for(const device of [{},{hardwareConcurrency:4,deviceMemory:8},{hardwareConcurrency:16,deviceMemory:2}])assert.equal(forecastRenderBudget(device).backgroundConcurrency,4);
  const started=[],jobs=new Map();
- const cache=new ForecastTileCache(p=>new Promise(resolve=>{started.push(p.url);jobs.set(p.url,resolve);}),{storage:null,...forecastRenderBudget({hardwareConcurrency:8})});cache.setContext('tiles');
- const work=Array.from({length:8},(_,i)=>cache.prefetch(params('background-'+i),new AbortController()));
- await new Promise(resolve=>setImmediate(resolve));assert.equal(started.length,6);
- const selected=[read(cache,'selected-rain'),read(cache,'selected-pressure')];
- await new Promise(resolve=>setImmediate(resolve));assert.equal(started.length,8);assert.ok(started.includes('om://selected-pressure'));
+ const cache=new ForecastTileCache(p=>new Promise(resolve=>{started.push(p.url);jobs.set(p.url,resolve);}),{storage:null,...forecastRenderBudget({hardwareConcurrency:8,deviceMemory:8})});cache.setContext('tiles');
+ const work=Array.from({length:16},(_,i)=>cache.prefetch(params('background-'+i),new AbortController()));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(started.length,12);
+ const selected=['rain','pressure','wind','cloud'].map(field=>read(cache,'selected-'+field));
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(started.length,16);assert.ok(started.includes('om://selected-cloud'));
  for(const resolve of jobs.values())resolve(bytes());await new Promise(resolve=>setImmediate(resolve));
  for(const resolve of jobs.values())resolve(bytes());await Promise.all([...work,...selected]);cache.release();
 });

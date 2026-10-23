@@ -5,7 +5,7 @@ import {installPrecipitationRates,precipitationRateVariable,isPrecipitationRate}
 import {DIRECT_VERTICAL_DOMAINS,directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
 import {UKMO_EARLY_DOMAINS} from './map-ukmo-early.js?v=20261021-early';
 import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from './map-vertical-motion.js?v=20261020-native-levels';
-import {installRangeReads} from './map-range-reads.js?v=20261015-range-reads';
+import {installRangeReads} from './map-range-reads.js?v=20261023-frame-throughput';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261023-revised-1c';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastPointChartTitle as forecastChartTitle,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261023-period-labels';
@@ -24,7 +24,7 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {setupMobileMap} from './map-mobile.js?v=20261009-controls-fix';
 import {setupMapSidebar} from './map-sidebar.js?v=20261022-restore-layouts';
 import {ForecastFrames,frameWindow,arrowFrameWindow,fullSequence} from './map-frames.js?v=20261022-arrow-priority';
-import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261023-save-backpressure';
+import {ForecastTileCache,forecastRenderBudget} from './map-tile-cache.js?v=20261023-frame-throughput';
 import {ForecastRetention} from './map-retention.js?v=20261023-no-auto-refresh';
 import {createFramePrefetch} from './map-prefetch.js?v=20261020-selection-priority';
 import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance';

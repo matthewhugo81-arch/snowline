@@ -46,9 +46,10 @@ export function installRangeReads(OM,settings){
  const reader=OM.getProtocolInstance(settings).omFileReader,pool=reader.backendPool;
  if(!pool||installed.has(pool))return;
  installed.add(pool);
- // Set before the first read. Larger blocks reduce per-request overhead on
- // the spatial arrays; the LRU remains capped at 32 MiB, across every panel.
- if(OM.LruBlockCache)reader.cache=new OM.LruBlockCache(256*1024,128);
+ // Set before the first read. Smaller blocks reduce unused spatial payload;
+ // adjacent blocks still coalesce and the shared LRU remains capped at 32 MiB.
+ // Ensemble transport installs its own existing 64 KiB cache separately.
+ if(OM.LruBlockCache)reader.cache=new OM.LruBlockCache(128*1024,256);
  const original=pool.backend.bind(pool),wrapped=new WeakSet();
  pool.backend=url=>{
   const backend=original(url);
