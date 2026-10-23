@@ -57,10 +57,16 @@ export function forecastChartTitle(field,name,time,meta){
  return temperatureAnomaly(field)?validity:name+' · '+validity;
 }
 
-// Compact map labels identify the frame by its valid (period-end) time.
+// Explicit period products retain their bounds; ordinary frames keep one time.
+// Never infer a display period from the selected playback/output cadence.
 export function forecastPointTimeLabel(field,time,meta){
  if(!Number.isFinite(Date.parse(time)))return '';
- return periodStamp(new Date(time),false).replace(/(\d{2}):(\d{2})$/, '$1$2');
+ const bounds=(productField(field)?.periodHours||accumulationHours(field)||ensemblePeriod(meta,field,time))?forecastPeriod(field,time,meta):null;
+ const compact=(value,year=false)=>periodStamp(new Date(value),year).replace(/(\d{2}):(\d{2})$/, '$1$2');
+ if(!bounds)return compact(time);
+ const start=new Date(bounds.start),end=new Date(bounds.end),year=start.getUTCFullYear()!==end.getUTCFullYear();
+ const sameDay=start.toISOString().slice(0,10)===end.toISOString().slice(0,10);
+ return compact(start,year)+'-'+(sameDay?compact(end).slice(-4):compact(end,year));
 }
 export function forecastPointChartTitle(field,name,time,meta){
  const stamp=forecastPointTimeLabel(field,time,meta);

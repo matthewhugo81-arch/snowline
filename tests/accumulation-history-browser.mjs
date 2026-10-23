@@ -56,7 +56,7 @@ try{
    metrics.push({viewport:viewport.width,syntheticFirstMapMs:Math.round(firstMs),syntheticSelected24hMs:Math.round(performance.now()-accumStart)});
    if(viewport.width<650)await page.locator('#mobile-map-settings').click();await page.locator('#compare-maps').check();if(viewport.width<650)await page.locator('#mobile-return-map').click();
    await page.locator('#map-variable-b').selectOption('temperature_2m');await page.waitForFunction(()=>document.querySelector('#panel-label-b').textContent.toLowerCase().includes('valid'));
-   assert.match(await page.locator('#panel-label-a').textContent(),/VALID Tue 13 Oct 1200 UTC$/);assert.match(await page.locator('#panel-label-b').textContent(),/VALID Tue 13 Oct 1200 UTC$/);
+   assert.match(await page.locator('#panel-label-a').textContent(),/VALID Mon 12 Oct 1200-Tue 13 Oct 1200 UTC$/);assert.match(await page.locator('#panel-label-b').textContent(),/VALID Tue 13 Oct 1200 UTC$/);
    await page.locator(viewport.width<650?'#mobile-briefing':'#open-briefing').click();
    await page.waitForFunction(()=>document.querySelector('#briefing-preset')&&!document.querySelector('#briefing-preset').disabled);
    assert.equal(await page.locator('#briefing-preset').inputValue(),key(24),'Main map rainfall total carries into briefing');
@@ -179,7 +179,7 @@ try{
    assert.match(await page.locator('#map-error-a').textContent(),/No forecast for this layer at the selected time.*First available:.*13 Oct.*15:00/);
    assert.equal(await page.locator('#map-error-b').isVisible(),false,'The temperature panel still has a valid forecast');
    await page.locator('#map-start-time').selectOption('2026-10-13T15:00:00.000Z');
-   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready')&&['a','b'].every(key=>/VALID Tue 13 Oct 1500 UTC$/.test(document.querySelector('#panel-label-'+key).textContent)),{},{timeout:90000});
+   await page.waitForFunction(()=>document.querySelector('#animation-status').textContent.startsWith('Ready')&&/VALID Mon 12 Oct 1500-Tue 13 Oct 1500 UTC$/.test(document.querySelector('#panel-label-a').textContent)&&/VALID Tue 13 Oct 1500 UTC$/.test(document.querySelector('#panel-label-b').textContent),{},{timeout:90000});
    assert.equal(await page.locator('#map-error-a').isVisible(),false,'The first complete 24-hour window restores the accumulation chart');
    assert.equal(await page.locator('#map-error-b').isVisible(),false,'Both panels restore without forecast-frame errors');
    assert.match(await page.locator('#legend-interval-a').textContent(),/12 Oct.*15:00.*13 Oct.*15:00.*UTC/);

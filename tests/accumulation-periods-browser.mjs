@@ -53,7 +53,7 @@ try{
    await page.locator('#compare-maps').uncheck();
    if(viewport.width<650)await page.locator('#mobile-return-map').click();
    await page.locator('#map-variable').selectOption(key(24));
-   await page.waitForFunction(()=>{const title=document.querySelector('#panel-label-a').textContent;return title.includes('24 h')&&title.endsWith('VALID Tue 13 Oct 1200 UTC')&&document.querySelector('#animation-status').textContent.startsWith('Ready');});
+   await page.waitForFunction(()=>{const title=document.querySelector('#panel-label-a').textContent;return title.includes('24 h')&&title.endsWith('VALID Mon 12 Oct 1200-Tue 13 Oct 1200 UTC')&&document.querySelector('#animation-status').textContent.startsWith('Ready');});
    const normalTitle=await page.locator('#panel-label-a').textContent();
    assert.equal((normalTitle.match(/VALID/g)||[]).length,1);assert.equal((normalTitle.match(/24 h/g)||[]).length,1);assert.ok(!normalTitle.includes('Valid Tue'));
    assert.equal(await page.evaluate(()=>window.fixtureMapInfo['map-a']().title),normalTitle,'Saved normal chart uses the same period');
@@ -70,10 +70,10 @@ try{
    assert.equal(await page.locator('#briefing-interval').isDisabled(),true);
    assert.deepEqual(await page.locator('#briefing-interval option').allTextContents(),['24-hour periods']);
    assert.deepEqual(await ends(),['2026-10-13T12:00:00.000Z','2026-10-14T12:00:00.000Z']);
-   assert.match(await page.locator('#briefing-grid h3').first().textContent(),/VALID Tue 13 Oct 1200 UTC$/);
+   assert.match(await page.locator('#briefing-grid h3').first().textContent(),/VALID Mon 12 Oct 1200-Tue 13 Oct 1200 UTC$/);
    assert.equal(await page.locator('#briefing-next').isDisabled(),true);
    const expectedPeriod='VALID Mon 12 Oct 12:00 to Tue 13 Oct 12:00 UTC';
-   const expectedStamp='VALID Tue 13 Oct 1200 UTC';
+   const expectedStamp='VALID Mon 12 Oct 1200-Tue 13 Oct 1200 UTC';
    assert.equal(await page.locator('#briefing-grid h3').first().textContent(),'UKV · '+expectedStamp);
    assert.equal(await page.locator('#briefing-grid .briefing-card>p').first().textContent(),'T+024');
    const exported=JSON.parse(await page.locator('#briefing-grid img').first().getAttribute('data-fixture-export'));

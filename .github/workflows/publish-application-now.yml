@@ -31,7 +31,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: github-pages
-          run-id: 39902836333
+          run-id: 39912250935
           github-token: ${{ github.token }}
           path: retained-publication
       - name: Apply application changes to last complete publication
@@ -39,13 +39,13 @@ jobs:
         run: |
           mkdir _site
           tar -xf retained-publication/artifact.tar -C _site
-          test "$(cat _site/site-revision.txt)" = '9a117653a860fd10e6b8464614af1e1597f5f056'
-          git fetch --depth=1 origin 9a117653a860fd10e6b8464614af1e1597f5f056
+          test "$(cat _site/site-revision.txt)" = 'dcad3bd16618bfab3ffb85ea5adaf1ae19d4aa3d'
+          git fetch --depth=1 origin dcad3bd16618bfab3ffb85ea5adaf1ae19d4aa3d
           python - <<'PY'
           import pathlib, subprocess, shutil
-          base='9a117653a860fd10e6b8464614af1e1597f5f056'
+          base='dcad3bd16618bfab3ffb85ea5adaf1ae19d4aa3d'
           paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD','--','.',':(exclude).github/**',':(exclude)scripts/**',':(exclude)tests/**',':(exclude)review/**']).decode().splitlines()
-          allowed={'map-startup.js','maps.html','maps.js','map-briefing.js'}
+          allowed={'README.md','map-anomaly-scale.js','map-appearance.js','map-briefing-renderer.js','map-briefing.js','map-ensemble-products.js','map-image-export.js','map-layouts.js','map-previous-runs.js','map-startup.js','map-validity.js','maps.css','maps.html','maps.js'}
           if not set(paths)<=allowed: raise SystemExit('Unexpected changes: '+str(paths))
           for name in paths: shutil.copy2(name,pathlib.Path('_site')/name)
           PY

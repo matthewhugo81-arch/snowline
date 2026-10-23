@@ -2,7 +2,7 @@ import {anomalyLegend} from './map-anomaly-scale.js?v=20261023-revised-1c';
 import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261023-revised-1c';
 import {appearanceKey} from './map-appearance.js?v=20261023-revised-1c';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261022-ireland-ecmwf-range';
+import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261023-period-labels';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
 import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261023-revised-1c';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -127,7 +127,7 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   }
   $('time').disabled=!times.length;legend();navigation();configureOverlays();
  }
- function periodTitle(time){const parts=date.formatToParts(new Date(time));const part=type=>parts.find(p=>p.type===type).value;const stamp='VALID '+part('weekday')+' '+part('day')+' '+part('month')+' '+part('hour')+part('minute')+' UTC';const validity=forecastValidity(preset.field,time,meta);return validity.startsWith('24 hr ')?validity.replace(/VALID .*/,stamp):stamp;}
+ function periodTitle(time){const stamp='VALID '+forecastTimeLabel(preset.field,time,meta)+' UTC';const validity=forecastValidity(preset.field,time,meta);return validity.startsWith('24 hr ')?validity.replace(/VALID .*/,stamp):stamp;}
  function chartTitle(time){const title=periodTitle(time);return title.startsWith('24 hr ')?title:preset.name+' · '+title;}
  function rememberTime(){if(times[start]){requestedTime=Date.parse(times[start]);const hours=accumulationHours(preset?.field);if(hours)requestedStart=periodStart(times[start],hours);}}
  function enlarge(src,time,exportInfo){
