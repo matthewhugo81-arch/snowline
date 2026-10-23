@@ -3,7 +3,7 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_REQUIRED_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261021-harmonie-pressure';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261023-phase-mechanism';
+import {sourceVariable} from './map-catalogue.js?v=20261023-phase-mechanism2';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
@@ -11,7 +11,7 @@ import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-c
 import {MOGREPS_UK,mogrepsUKCycle,selectMogrepsUKRun} from './mogreps-run-selection.js?v=20261022-three-hour-runs';
 import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mogreps-global.js?v=20261020-native-levels';
 
-import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261023-phase-mechanism';
+import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261023-phase-mechanism2';
 import {precipitationStepHours,precipitationExistsAt} from './map-accumulation.js?v=20261014-interaction-audit';
 import {DIRECT_VERTICAL_MODELS,verifiedDirectVertical} from './map-direct-vertical.js?v=20261020-native-levels';
 import {UKMO_NATIVE,UKMO_EARLY,verifiedUKMOEarly,completedSources,UKMO_EARLY_NOTE} from './map-ukmo-early.js?v=20261021-early';

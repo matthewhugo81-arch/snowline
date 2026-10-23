@@ -9,7 +9,7 @@ import {SURFACE_DERIVED_KEYS,surfaceDerivedVariable} from './map-surface-derived
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261022-theta-label';
 import {isJetWind,JET_WIND_SCALE,is850Temperature,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261023-phase-mechanism';
+import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261023-phase-mechanism2';
 import {VERTICAL_MOTION,pressureMotionVariable,pressureMotionField} from './map-vertical-motion.js?v=20261020-native-levels';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.

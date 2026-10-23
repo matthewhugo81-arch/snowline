@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261023-phase-mechanism';
+import {hasFieldTime} from './map-sources.js?v=20261023-phase-mechanism2';
 import {intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 
 export function createPanelOverlays(){

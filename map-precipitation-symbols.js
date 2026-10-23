@@ -1,7 +1,7 @@
 import {nativeCategory,estimatedCategory,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {symbolRecipe} from './map-winter.js?v=20261023-phase-mechanism';
-import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism';
-export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism';
+import {symbolRecipe} from './map-winter.js?v=20261023-phase-mechanism2';
+import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism2';
+export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism2';
 export const isSymbolURL=url=>/[?&]precip_symbols=/.test(url);
 export const symbolURL=(url,source,thetaURL)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style='+SYMBOL_STYLE+(thetaURL?'&theta_source='+encodeURIComponent(thetaURL):'');
 export function symbolOverlay(url){return {id:'precip-symbols',source:{type:'raster',url,tileSize:512,maxzoom:10},layers:[{id:'precip-symbols-image',type:'raster',paint:{'raster-opacity':1,'raster-fade-duration':0,'raster-resampling':'linear'}}]};}
