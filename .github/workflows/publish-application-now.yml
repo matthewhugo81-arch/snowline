@@ -23,10 +23,15 @@ jobs:
           node-version: '22'
       - name: Verify application tests
         run: node --test tests/*.test.mjs
+      - name: Verify ensemble menus on desktop and mobile
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+          node tests/ensemble-products-browser.mjs
       - uses: actions/download-artifact@v4
         with:
           name: github-pages
-          run-id: 39773012949
+          run-id: 39902836333
           github-token: ${{ github.token }}
           path: retained-publication
       - name: Apply application changes to last complete publication
@@ -34,13 +39,13 @@ jobs:
         run: |
           mkdir _site
           tar -xf retained-publication/artifact.tar -C _site
-          test "$(cat _site/site-revision.txt)" = '203fb77a33b1f63d80f2cd018260fb6c11792c12'
-          git fetch --depth=1 origin 203fb77a33b1f63d80f2cd018260fb6c11792c12
+          test "$(cat _site/site-revision.txt)" = '9a117653a860fd10e6b8464614af1e1597f5f056'
+          git fetch --depth=1 origin 9a117653a860fd10e6b8464614af1e1597f5f056
           python - <<'PY'
           import pathlib, subprocess, shutil
-          base='203fb77a33b1f63d80f2cd018260fb6c11792c12'
+          base='9a117653a860fd10e6b8464614af1e1597f5f056'
           paths=subprocess.check_output(['git','diff','--name-only',base,'HEAD','--','.',':(exclude).github/**',':(exclude)scripts/**',':(exclude)tests/**',':(exclude)review/**']).decode().splitlines()
-          allowed={'map-briefing.js','map-validity.js','maps.css','maps.html','maps.js'}
+          allowed={'map-startup.js','maps.html','maps.js'}
           if not set(paths)<=allowed: raise SystemExit('Unexpected changes: '+str(paths))
           for name in paths: shutil.copy2(name,pathlib.Path('_site')/name)
           PY
