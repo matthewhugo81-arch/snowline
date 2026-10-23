@@ -53,7 +53,6 @@ export function migrateNamedLayouts(storage){
   if(!entry.name.trim())continue;
   // Separate namespaces let the old tab ID be a stable, retry-safe migration ID.
   if(!storage.getItem(FAVOURITE_PREFIX+entry.id))writeFavourite(storage,entry);
-  storage.setItem(LAYOUT_PREFIX+entry.id,JSON.stringify({...entry,favouriteId:entry.id}));
  }
  storage.setItem(MIGRATION_KEY,'1');
 }
@@ -61,11 +60,13 @@ export function initialLayout(storage,{url,tabId,navigation}){
  if(['model','time','lat','lon'].some(key=>url.searchParams.has(key)))return null;
  const favourites=favouriteEntries(storage),recent=layoutEntries(storage);
  const favourite=id=>{const entry=favourites.find(item=>item.id===id);return entry?{...entry,favouriteId:entry.id,fromFavourite:true}:null;};
+ // Link migrated copies on read; never rewrite another active tab during upgrade.
+ const working=id=>{const entry=recent.find(item=>item.id===id);return entry?{...entry,favouriteId:entry.favouriteId??(favourites.some(item=>item.id===id)?id:null)}:null;};
  // Explicit links (including expired ones) must never be replaced by a default.
  if(url.searchParams.has('favourite'))return favourite(url.searchParams.get('favourite'));
- if(url.searchParams.has('layout'))return recent.find(entry=>entry.id===url.searchParams.get('layout'))??null;
+ if(url.searchParams.has('layout'))return working(url.searchParams.get('layout'));
  if(['reload','back_forward'].includes(navigation)){
-  const entry=recent.find(item=>item.id===tabId);if(entry)return entry;
+  const entry=working(tabId);if(entry)return entry;
  }
  return favourite(storage.getItem(STARTUP_KEY));
 }

@@ -50,7 +50,9 @@ test('Removing the startup favourite clears the default without changing recent 
 });
 test('Existing named recent layouts migrate once, retain old URLs and never overwrite favourites',()=>{
  const s=storage();writeLayout(s,{id:'named',name:'Monitor 2 and 3',updated:1,layout});writeLayout(s,{id:'plain',updated:2,layout});
- migrateNamedLayouts(s);assert.deepEqual(favouriteEntries(s).map(e=>e.id),['named']);assert.equal(layoutEntries(s).find(e=>e.id==='named').favouriteId,'named');
+ const original=s.getItem(LAYOUT_PREFIX+'named');
+ migrateNamedLayouts(s);assert.deepEqual(favouriteEntries(s).map(e=>e.id),['named']);assert.equal(s.getItem(LAYOUT_PREFIX+'named'),original,'Migration must not write to an open tab’s recent record');
+ assert.equal(initialLayout(s,{url:new URL('https://example.org/maps.html?layout=named')}).favouriteId,'named');
  const saved=favouriteEntries(s)[0];writeFavourite(s,{...saved,name:'Renamed',layout:{...layout,interval:'12'}});migrateNamedLayouts(s);
  assert.equal(favouriteEntries(s)[0].name,'Renamed');assert.equal(favouriteEntries(s)[0].layout.interval,'12');
  assert.equal(initialLayout(s,{url:new URL('https://example.org/maps.html?layout=named')}).layout.interval,'6');
@@ -59,7 +61,7 @@ test('Existing named recent layouts migrate once, retain old URLs and never over
 test('Favourite storage failures preserve saved templates, and interrupted migration is retryable',()=>{
  const s=storage();writeLayout(s,{id:'old',name:'Existing',updated:1,layout});const put=s.setItem;let writes=0;
  s.setItem=(...args)=>{if(++writes===2)throw Error('Quota');put(...args);};assert.throws(()=>migrateNamedLayouts(s));
- s.setItem=put;migrateNamedLayouts(s);assert.equal(favouriteEntries(s).length,1);assert.equal(layoutEntries(s)[0].favouriteId,'old');
+ s.setItem=put;migrateNamedLayouts(s);assert.equal(favouriteEntries(s).length,1);assert.equal(initialLayout(s,{url:new URL('https://example.org/maps.html?layout=old')}).favouriteId,'old');
  const before=s.getItem(FAVOURITE_PREFIX+'old');s.setItem=()=>{throw Error('Quota');};
  assert.throws(()=>writeFavourite(s,{id:'old',name:'Changed',updated:9,layout}));assert.equal(s.getItem(FAVOURITE_PREFIX+'old'),before);
 });
