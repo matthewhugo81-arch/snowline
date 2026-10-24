@@ -1,4 +1,4 @@
-import {finite,valueAt} from './data.js';
+import {finite,valueAt} from './data.js?v=20261024-loading-verified1';
 export function snowCategory(mm){if(!finite(mm)||mm<0)return null;mm=Math.round(mm*1e6)/1e6;if(mm===0)return 'No snow';if(mm<2)return 'D1';if(mm<=20)return 'D2';if(mm<=50)return 'D3';return 'E';}
 export function eventHours(start,end){const a=Date.parse(start),b=Date.parse(end);if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a||b-a>168*3600000||a%3600000!==0||b%3600000!==0)throw new Error('Choose whole UTC hours with an end after the start, up to seven days apart.');return Array.from({length:(b-a)/3600000},(_,i)=>new Date(a+(i+1)*3600000).toISOString().replace('.000Z','Z'));}
 export function analyseEvent(model,start,end){

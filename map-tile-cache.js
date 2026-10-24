@@ -1,6 +1,6 @@
 // Keep prepared PNG/vector tiles on disk, with a small hot memory cache. MapLibre
 // can then recreate a distant frame without downloading/decoding the model again.
-import {cacheDiskBudget,SharedForecastStorage,cleanupObsoleteCaches} from './map-cache-storage.js?v=20261022-cache-cleanup';
+import {cacheDiskBudget,SharedForecastStorage,cleanupObsoleteCaches} from './map-cache-storage.js?v=20261024-loading-verified1';
 const PREFIX='snowline-forecast-tiles-v1-';
 // A preparation slot includes network waits, not just worker CPU time. Allow
 // capable desktops to overlap more reads while reserving four foreground slots.

@@ -1,4 +1,4 @@
-import {VARIABLES} from './data.js?v=20261019-mogreps-uk';
+import {VARIABLES} from './data.js?v=20261024-loading-verified1';
 import {fetchMogreps, MOGREPS_VARIABLES} from './mogreps-client.js?v=20261021-reliable-pressure';
 
 export const MOGREPS_POINT='mogreps_global_ensemble_mean';

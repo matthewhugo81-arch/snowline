@@ -1,14 +1,14 @@
-import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261019-mogreps-uk';
-import {loadPointForecasts} from './point-forecasts.js?v=20261019-mogreps-uk';
+import {MODELS,VARIABLES,finite,parseCoordinates,valueAt,agreement,fetchJSON} from './data.js?v=20261024-loading-verified1';
+import {loadPointForecasts} from './point-forecasts.js?v=20261024-loading-verified1';
 import {averageSeries,cumulativePrecipitation,circularAverageSeries,directionLabel} from './average.js?v=20261019-cumulative-precipitation';
 import {chartWindow} from './chart-window.js?v=20261015-touch-zoom';
 import {createChartZoom} from './chart-zoom.js?v=20261018-context-menu-fix';
 import {createChartImageMenu} from './chart-image-export.js?v=20261019-mogreps-uk';
 import {setupChartPanels} from './chart-panels.js?v=20261018-panel-width';
-import {createDatasetDialog} from './dataset-dialog.js?v=20261019-mogreps-uk';
-import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261019-mogreps-uk';
+import {createDatasetDialog} from './dataset-dialog.js?v=20261024-loading-verified1';
+import {valueAttributes, variableLegend, formatValue} from './export.js?v=20261024-loading-verified1';
 
-import {nativeSeriesPath,mogrepsLabel} from './mogreps-point.js?v=20261019-mogreps-uk';
+import {nativeSeriesPath,mogrepsLabel} from './mogreps-point.js?v=20261024-loading-verified1';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});

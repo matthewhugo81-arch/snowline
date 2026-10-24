@@ -1,6 +1,6 @@
-import {MODELS} from './data.js?v=20261019-mogreps-uk';
-import {loadPointForecasts} from './point-forecasts.js?v=20261019-mogreps-uk';
-import {analyseEvent,eventHours} from './hazards.js';
+import {MODELS} from './data.js?v=20261024-loading-verified1';
+import {loadPointForecasts} from './point-forecasts.js?v=20261024-loading-verified1';
+import {analyseEvent,eventHours} from './hazards.js?v=20261024-loading-verified1';
 const $=id=>document.getElementById(id);let point=null,controller=null,revision=0;const results=new Map();
 const stamp=new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 function busy(active){for(const id of ['calculate-event','event-start','event-end'])$(id).disabled=active;}

@@ -1,7 +1,7 @@
-import {MODELS,normalise,fetchJSON,forecastURL} from './data.js?v=20261019-mogreps-uk';
+import {MODELS,normalise,fetchJSON,forecastURL} from './data.js?v=20261024-loading-verified1';
 import {FORECAST_SERVICE_URL,pointForecastURL} from './forecast-service.js?v=20261015-shared-cache-live';
 import {POINT_LOCATIONS,POINT_TTL,POINT_MAX_AGE,pointKey,usableForecast,snapshotFor} from './point-snapshots.js';
-import {fetchMogrepsPoint} from './mogreps-point.js?v=20261019-mogreps-uk';
+import {fetchMogrepsPoint} from './mogreps-point.js?v=20261024-loading-verified1';
 
 function mergeHourlyFields(json,extra,keys){
  const indices=new Map((extra.hourly?.time??[]).map((t,i)=>[Date.parse(/Z$/.test(t)?t:t+'Z'),i]));

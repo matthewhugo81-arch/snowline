@@ -1,13 +1,13 @@
 import {anomalyLegend} from './map-anomaly-scale.js?v=20261023-revised-1c';
 import {productField,productChoices,loadProducts} from './map-ensemble-products.js?v=20261023-revised-1c';
-import {appearanceKey} from './map-appearance.js?v=20261023-revised-1c';
+import {appearanceKey} from './map-appearance.js?v=20261024-loading-verified1';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261024-ifs-gem-showers1';
+import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261024-loading-verified1';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261024-ifs-gem-showers1';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261024-loading-verified1';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
-import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261024-ifs-gem-showers1';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261024-ifs-gem-showers1';
+import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261024-loading-verified1';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261024-loading-verified1';
 import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261024-live-products';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261024-ifs-gem-showers1';
@@ -15,7 +15,7 @@ import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-
 import {chartScales} from './map-image-export.js?v=20261024-ifs-gem-showers1';
 
 import {isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {mapRunCatalogue,sourceModel,selectedRunKey,selectedReference,renderRunSelector} from './map-run-selection.js?v=20261024-live-products';
+import {mapRunCatalogue,sourceModel,selectedRunKey,selectedReference,renderRunSelector} from './map-run-selection.js?v=20261024-loading-verified1';
 const date=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const stamp=time=>date.format(new Date(time))+' UTC';
 const option=(value,label)=>{const el=document.createElement('option');el.value=value;el.textContent=label;return el;};
