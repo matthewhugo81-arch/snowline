@@ -36,6 +36,8 @@ jobs:
         run: node tests/map-startup-browser.mjs
       - name: Check shared chart storage across four windows and mobile limits
         run: node tests/shared-cache-browser.mjs
+      - name: Verify active-window loading allocation
+        run: node tests/cache-activity-browser.mjs
       - name: Check complete frame retention under slow browser storage
         run: node tests/cache-save-pressure-browser.mjs
       - name: Check saved layouts across four tabs, refresh, restart and mobile

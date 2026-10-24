@@ -93,7 +93,8 @@ export class ForecastTileCache{
   }
   if(this.coordinated&&!entry.shared){
    entry.shared=new SharedForecastStorage({name:entry.name,store:entry.disk,budget:this.diskBytes,entries:this.diskEntries,onChange:()=>{
-    this.backgroundConcurrency=Math.max(1,Math.floor(this.backgroundBudget/Math.max(1,entry.shared.stats?.windows??1)));
+    this.backgroundConcurrency=Math.max(1,Math.floor(this.backgroundBudget/Math.max(1,entry.shared.activeWindows??entry.shared.stats?.windows??1)));
+    this.drain();
     clearTimeout(this.statsTimer);this.statsTimer=setTimeout(()=>this.onLimit(),150);
    },onEvict:keys=>{
     for(const key of keys){
@@ -127,7 +128,7 @@ export class ForecastTileCache{
   this.disk=null;this.name=null;
  }
  limit(reason='storage-unavailable'){this.retentionRevision++;if(!this.limited||this.limitReason!==reason){this.limited=true;this.limitReason=reason;this.onLimit();}}
- storageStatus(){return {...this.contexts.get(this.context)?.shared?.stats,budget:this.contexts.get(this.context)?.shared?.stats?.budget??this.diskBytes,reason:this.limitReason,coordinated:this.coordinated};}
+ storageStatus(){const shared=this.contexts.get(this.context)?.shared;return {...shared?.stats,activeWindows:shared?.activeWindows,budget:shared?.stats?.budget??this.diskBytes,reason:this.limitReason,coordinated:this.coordinated};}
  setProtected(urls){this.protectedURLs=[...new Set(urls)];this.contexts.get(this.context)?.shared?.update({protected:this.protectedURLs});}
  setSequence(urls){
   const next=[...new Set(urls)].sort();

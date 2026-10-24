@@ -1,0 +1,19 @@
+import {createServer} from 'node:http';import {readFile} from 'node:fs/promises';import {resolve,extname} from 'node:path';import assert from 'node:assert/strict';import {chromium} from 'playwright';
+const server=createServer(async(req,res)=>{try{const path=resolve('.'+new URL(req.url,'http://local').pathname);res.writeHead(200,{'Content-Type':extname(path)==='.js'?'text/javascript':'text/html'});res.end(await readFile(path));}catch{res.writeHead(404);res.end();}});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port,browser=await chromium.launch({headless:true});
+try{const context=await browser.newContext(),pages=[];
+for(let i=0;i<3;i++){const page=await context.newPage();pages.push(page);await page.goto(origin+'/map-credits.html');await page.evaluate(async i=>{window.hiddenForTest=false;Object.defineProperty(document,'hidden',{get:()=>hiddenForTest});const {ForecastTileCache}=await import('./map-tile-cache.js');window.c=new ForecastTileCache(async()=>({data:new Uint8Array(4).buffer}),{persistent:true,coordinate:true,concurrency:16,backgroundConcurrency:12,cacheVersion:'activity-test',diskBytes:32});c.setContext('tiles');c.setProtected(['om://selected-'+i]);await c.protocol({url:'om://selected-'+i,type:'image'},new AbortController());await Promise.all([...c.writes.values()].map(w=>w.promise));},i);}
+const main=pages[2],wait=budget=>main.waitForFunction(b=>c.backgroundConcurrency===b,budget,{timeout:5000});await wait(4);
+for(const page of pages.slice(0,2))await page.evaluate(()=>{hiddenForTest=true;document.dispatchEvent(new Event('visibilitychange'));});await wait(12);
+assert.equal(await main.evaluate(()=>c.storageStatus().windows),3,'Hidden storage leases stay alive');
+// Visibility updates must wake an existing queue, without another tile write.
+await main.evaluate(()=>{window.started=0;c.load=async()=>{started++;return {data:new Uint8Array(4).buffer};};});
+await pages[0].evaluate(()=>{hiddenForTest=false;document.dispatchEvent(new Event('visibilitychange'));});await wait(6);
+await pages[0].evaluate(()=>{hiddenForTest=true;document.dispatchEvent(new Event('visibilitychange'));});await wait(12);
+await main.evaluate(async()=>{for(let i=0;i<10;i++){await c.protocol({url:'om://distant-'+i,type:'image'},new AbortController());await Promise.all([...c.writes.values()].map(w=>w.promise));}});
+const keys=await main.evaluate(async()=>[...await(await c.disk).keys()].map(k=>JSON.parse(new URL(k.url).searchParams.get('key'))[1]));for(let i=0;i<3;i++)assert.ok(keys.includes('om://selected-'+i),'Hidden selected charts remain protected');
+await pages[0].evaluate(()=>c.release());await main.waitForFunction(()=>c.storageStatus().windows===2);assert.equal(await main.evaluate(()=>c.backgroundConcurrency),12);
+const stats=await main.evaluate(async()=>{const shared=c.contexts.get(c.context).shared,db=await shared.db;await new Promise(r=>{const tx=db.transaction('clients','readwrite');tx.objectStore('clients').put({id:'legacy',cache:shared.name,expires:Date.now()+120000,budget:32,sequence:[],protected:[]});tx.oncomplete=r;});await shared.refreshActivity();return c.storageStatus();});assert.equal(stats.activeWindows,2,'Older clients without activity flags count conservatively');await wait(6);
+await main.evaluate(async()=>{const shared=c.contexts.get(c.context).shared,db=await shared.db;await new Promise(r=>{const tx=db.transaction('clients','readwrite');tx.objectStore('clients').delete('legacy');tx.oncomplete=r;});await shared.refreshActivity();});await wait(12);
+for(const page of pages)await page.evaluate(()=>c.release());await context.close();console.log('PASS active windows, hidden leases/protection, visibility recovery, immediate close, legacy clients');
+}finally{await browser.close();server.close();}
+

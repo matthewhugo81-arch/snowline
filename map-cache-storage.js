@@ -51,6 +51,7 @@ export class SharedForecastStorage{
  constructor({name,store,budget,entries=65536,onChange=()=>{},onEvict=()=>{},locks=navigator.locks,indexedDB=globalThis.indexedDB,channel=globalThis.BroadcastChannel}={}){
   Object.assign(this,{name,store,budget,entries,onChange,onEvict,locks});
   this.id=crypto.randomUUID();this.sequence=[];this.protected=[];this.closed=false;
+  this.active=!globalThis.document?.hidden;
   this.db=new Promise((resolve,reject)=>{
    const r=indexedDB.open('snowline-chart-cache-index-v1',1);
    r.onupgradeneeded=()=>{
@@ -66,8 +67,22 @@ export class SharedForecastStorage{
    if(data?.cache!==this.name)return;
    if(data.type==='evict')this.onEvict(data.keys);
    if(data.type==='usage'){this.stats=data.stats;this.onChange();}
+   if(data.type==='clients')void this.refreshActivity().catch(()=>{});
   };
+  this.onVisibility=()=>this.update({active:!globalThis.document?.hidden});
+  globalThis.document?.addEventListener('visibilitychange',this.onVisibility);
   this.timer=setInterval(()=>this.lease().catch(()=>{}),30000);
+ }
+ async refreshActivity(){
+  const db=await this.db;if(this.closed)return;
+  const tx=db.transaction(['clients','totals'],'readonly'),done=complete(tx);
+  const [all,total]=await Promise.all([request(tx.objectStore('clients').getAll()),request(tx.objectStore('totals').get(this.name))]);await done;
+  if(this.closed)return;
+  const clients=all.filter(c=>c.cache===this.name&&c.expires>Date.now());
+  // Older clients lack the activity flag; count them conservatively as active.
+  this.activeWindows=clients.filter(c=>c.active!==false).length;
+  this.stats={...this.stats,bytes:total?.bytes??0,entries:total?.count??0,budget:Math.min(this.budget,...clients.map(c=>c.budget)),windows:clients.length,activeWindows:this.activeWindows};
+  this.onChange();
  }
  async lease(){
   if(this.closed)return;
@@ -76,20 +91,26 @@ export class SharedForecastStorage{
   this.leasePending=(async()=>{
    const db=await this.db;if(this.closed)return;
    const revision=this.leaseRevision??0,now=Date.now(),tx=db.transaction('clients','readwrite'),done=complete(tx);
-   tx.objectStore('clients').put({id:this.id,cache:this.name,expires:now+120000,sequence:this.sequence,protected:this.protected,budget:this.budget});
+   tx.objectStore('clients').put({id:this.id,cache:this.name,expires:now+120000,sequence:this.sequence,protected:this.protected,budget:this.budget,active:this.active});
    await done;this.lastLeaseRevision=revision;this.lastLease=now;
+   await this.refreshActivity();this.channel?.postMessage({cache:this.name,type:'clients'});
   })();
   try{await this.leasePending;}finally{this.leasePending=null;}
  }
- update({sequence=this.sequence,protected:protectedURLs=this.protected,budget=this.budget}={}){
-  Object.assign(this,{sequence,protected:protectedURLs,budget});
+ update({sequence=this.sequence,protected:protectedURLs=this.protected,budget=this.budget,active=this.active}={}){
+  Object.assign(this,{sequence,protected:protectedURLs,budget,active});
   this.leaseRevision=(this.leaseRevision??0)+1;
   // Selection changes coalesce; never write the whole sequence per tile.
   clearTimeout(this.leaseTimer);this.leaseTimer=setTimeout(()=>this.lease().catch(()=>{}),0);
  }
  async close(){
-  this.closed=true;clearInterval(this.timer);clearTimeout(this.leaseTimer);this.channel?.close();
-  try{const db=await this.db,tx=db.transaction('clients','readwrite'),done=complete(tx);tx.objectStore('clients').delete(this.id);await done;db.close();}catch{}
+  this.closed=true;clearInterval(this.timer);clearTimeout(this.leaseTimer);
+  globalThis.document?.removeEventListener('visibilitychange',this.onVisibility);
+  try{
+   await this.leasePending;
+   const db=await this.db,tx=db.transaction('clients','readwrite'),done=complete(tx);tx.objectStore('clients').delete(this.id);await done;
+   this.channel?.postMessage({cache:this.name,type:'clients'});db.close();
+  }catch{}finally{this.channel?.close();}
  }
  notify(keys,stats){
   if(keys.length){this.onEvict(keys);this.channel?.postMessage({cache:this.name,type:'evict',keys});}
