@@ -290,9 +290,9 @@ async function drawGridValues(panel){
   const grid=OM.GridFactory.create(domain.grid),canvas=map.getCanvas(),f=fields.find(item=>item.key===field);
   const points=visibleGridPoints(grid,canvas.clientWidth,canvas.clientHeight,p=>map.unproject(p),p=>map.project(p));
   const valueURL=panel.url.replace(/interpolation=[^&]+/,'interpolation=nearest');
-  if(points.length)await readMapValue(points[0].lat,points[0].lon,valueURL,map.getZoom());
   const features=(await Promise.all(points.map(async point=>{
-   const result=await OM.getValueFromLatLong(point.lat,point.lon,valueURL,map.getZoom());
+   // Zoomed views span multiple decoded tiles; restore each point's tile on demand.
+   const result=await readMapValue(point.lat,point.lon,valueURL,map.getZoom());
    const label=gridValueLabel(result?.value,f);if(label===null)return null;
    return {type:'Feature',id:point.id,properties:{label,value:result.value},geometry:{type:'Point',coordinates:[point.lon,point.lat]}};
   }))).filter(Boolean);
