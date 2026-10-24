@@ -1,5 +1,5 @@
 import {UKV,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
-import {loadSpatialModel,loadSpatialRun} from './map-sources.js?v=20261024-loading-verified1';
+import {loadSpatialModel,loadSpatialRun} from './map-sources.js?v=20261024-rain-colours1';
 import {publishedRun,retainRunProgress} from './map-runs.js?v=20261020-run-selector';
 
 // A map-only run choice, not another operational model or point-forecast ID.

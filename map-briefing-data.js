@@ -4,9 +4,9 @@ import {ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-lev
 import {appearanceKey} from './map-appearance.js?v=20261024-loading-verified1';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField} from './map-accumulation.js?v=20261014-interaction-audit';
 import {directVerticalNote} from './map-direct-vertical.js?v=20261020-native-levels';
-import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261024-loading-verified1';
+import {hasFieldTime,fieldIntervalHours,fieldSource} from './map-sources.js?v=20261024-rain-colours1';
 import {forecastInterval,intervalForecastTimes} from './map-interval.js?v=20261019-12-hour';
-import {sourceVariable,availableFields,compareFields,variableGroup} from './map-catalogue.js?v=20261024-ifs-gem-showers1';
+import {sourceVariable,availableFields,compareFields,variableGroup} from './map-catalogue.js?v=20261024-rain-colours1';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 

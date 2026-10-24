@@ -3,6 +3,26 @@ import assert from 'node:assert/strict';
 import * as OM from '../vendor/index.mjs';
 import {sourceVariable,canonicalVariable,describeVariable,extendCatalogue,availableFields,PRECIPITATION_SCALE} from '../map-catalogue.js';
 import {displayStops,MPH_PER_MS} from '../map-wind-units.js';
+import {compositeSettings} from '../map-weather-composite.js';
+
+test('IFS and GEM symbols never overwrite ordinary or composite precipitation colours',()=>{
+ for(const domain of ['ecmwf_ifs','ecmwf_ifs025','cmc_gem_gdps_15km']){
+  const fields=[{key:'precipitation',name:'Precipitation',unit:'mm/h',...PRECIPITATION_SCALE},{key:'cloud_cover',name:'Cloud',unit:'%',stops:[0,100],colors:['#000000','#ffffff']}],settings={colorScales:{}};
+  const meta={domain,reference_time:'2026-10-24T12:00:00Z',variables:['precipitation','showers','snowfall_water_equivalent','cloud_cover']};
+  extendCatalogue(fields,[meta],OM,settings);
+  const rain=fields[0];
+  assert.deepEqual(settings.colorScales.precipitation.breakpoints,rain.stops);
+  const expected=rain.colors.map(c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16),1]);
+  assert.deepEqual(settings.colorScales.precipitation.colors,expected);
+  assert.deepEqual(settings.colorScales.precipitation_hourly_rate.colors,expected);
+  assert.ok(fields.some(f=>f.key==='precipitation_symbols'));
+  const composite=compositeSettings(settings);
+  assert.equal(composite.colorScales.precipitation_hourly_rate.colors[0][3],0);
+  assert.deepEqual(composite.colorScales.precipitation_hourly_rate.colors.slice(1),expected.slice(1));
+  extendCatalogue(fields,[meta],OM,settings);
+  assert.deepEqual(settings.colorScales.precipitation.colors,expected);
+ }
+});
 
 test('300 hPa jet bands and contour thresholds agree in mph for both wind representations',()=>{
  const fields=[],settings={colorScales:{}};

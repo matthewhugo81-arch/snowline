@@ -251,6 +251,8 @@ export function extendCatalogue(fields,metas,OM,settings){
    if(base){for(const property of ['unit','stops','colors','temperatureBands','bands'])if(property in base)field[property]=base[property];}
   }
   if(key==='wind_speed_10m'){field.name='10 m wind speed & direction';field.note='Shading, legend and readouts display mph; underlying spatial data remains in m/s. Arrows show flow direction.';}
+  // Symbols read native precipitation but do not own its shared raster scale.
+  if(key===PRECIP_SYMBOLS)continue;
   for(const meta of metas){const source=sourceVariable(meta,key);if(!source)continue;
    settings.colorScales[precipitationRateVariable(source)]=settings.colorScales[source]={type:'breakpoint',unit:field.unit,breakpoints:field.stops,colors:field.colors.map(c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16),c.length===9?parseInt(c.slice(7,9),16)/255:1])};
   }

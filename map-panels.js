@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261024-loading-verified1';
+import {hasFieldTime} from './map-sources.js?v=20261024-rain-colours1';
 import {intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 
 export function createPanelOverlays(){
