@@ -38,6 +38,10 @@ jobs:
         run: node tests/shared-cache-browser.mjs
       - name: Verify active-window loading allocation
         run: node tests/cache-activity-browser.mjs
+      - name: Verify reload leases and cached geography
+        run: |
+          node tests/cache-reload-browser.mjs
+          node tests/coastline-reload-browser.mjs
       - name: Check complete frame retention under slow browser storage
         run: node tests/cache-save-pressure-browser.mjs
       - name: Check saved layouts across four tabs, refresh, restart and mobile
