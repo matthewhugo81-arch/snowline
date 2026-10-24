@@ -2,10 +2,10 @@ import {winterHours} from './map-winter-registry.js?v=20261024-winter-panel-cont
 import {productField} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
-import {fieldIntervalHours} from './map-sources.js?v=20261024-winter-panel-controls';
+import {fieldIntervalHours} from './map-sources.js?v=20261024-ifs-gem-showers1';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261024-uk-showers1';
+import {THETA_SYMBOLS,PRECIP_SYMBOLS} from './map-winter.js?v=20261024-ifs-gem-showers1';
 
 const instant=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const temperatureAnomaly=field=>/^ens_temperature_(min|max)_anomaly$/.test(field);
@@ -16,7 +16,7 @@ const periodStamp=(date,year)=>{
  return part('weekday')+' '+part('day')+' '+part('month')+(year?' '+part('year'):'')+' '+part('hour')+':'+part('minute');
 };
 
-const nativePeriods=new Set(['precipitation','rain','showers','hail','snowfall_water_equivalent','precipitation_probability','snowfall_probability',WEATHER_COMPOSITE,PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS]);
+const nativePeriods=new Set(['precipitation','rain','showers','hail','snowfall_water_equivalent','precipitation_probability','snowfall_probability',WEATHER_COMPOSITE,PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE,THETA_SYMBOLS,PRECIP_SYMBOLS]);
 const unknownPeriods=new Set(['categorical_freezing_rain','temperature_2m_min','temperature_2m_max','wind_gusts_10m','shortwave_radiation','direct_radiation','diffuse_radiation']);
 export function forecastPeriod(field,time,meta){
  const known=ensemblePeriod(meta,field,time);

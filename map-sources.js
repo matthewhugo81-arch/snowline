@@ -4,7 +4,7 @@ import {accumulationHours,accumulationSource} from './map-accumulation.js?v=2026
 import {WEATHER_COMPOSITE,COMPOSITE_REQUIRED_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261021-harmonie-pressure';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261024-winter-panel-controls';
+import {sourceVariable} from './map-catalogue.js?v=20261024-ifs-gem-showers1';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
@@ -12,7 +12,7 @@ import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-c
 import {MOGREPS_UK,mogrepsUKCycle,selectMogrepsUKRun} from './mogreps-run-selection.js?v=20261022-three-hour-runs';
 import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mogreps-global.js?v=20261020-native-levels';
 
-import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261024-uk-showers1';
+import {THETA_SYMBOLS,PRECIP_SYMBOLS,canPrecipSymbols,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261024-ifs-gem-showers1';
 import {precipitationStepHours,precipitationExistsAt} from './map-accumulation.js?v=20261014-interaction-audit';
 import {DIRECT_VERTICAL_MODELS,verifiedDirectVertical} from './map-direct-vertical.js?v=20261020-native-levels';
 import {UKMO_NATIVE,UKMO_EARLY,verifiedUKMOEarly,completedSources,UKMO_EARLY_NOTE} from './map-ukmo-early.js?v=20261021-early';
@@ -62,7 +62,7 @@ export function fieldIntervalHours(meta,key,time){
  if(key==='hail')return 1;
  const period=ensemblePeriod(meta,key,time);if(period)return period.hours;
  if(accumulationHours(key))return accumulationHours(key);
- if(key===THETA_SYMBOLS){const s=fieldSource(compositeMeta(meta),'precipitation',time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
+ if(key===THETA_SYMBOLS||key===PRECIP_SYMBOLS){const s=fieldSource(compositeMeta(meta),'precipitation',time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
  if(isTypeField(key)){const s=fieldSource(meta,key,time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
  if(key===WEATHER_COMPOSITE)return fieldIntervalHours(compositeMeta(meta),'precipitation',time);
  if(isPrecipitationRate(key)){const s=fieldSource(meta,key,time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
@@ -89,6 +89,7 @@ export function fieldSource(meta,key,time){
  if(winterHours(key))return winterPeriodSource(meta,key,time);
  if(key===WET_BULB)return (meta?.sources??(meta?[meta]:[])).find(source=>wetBulbInputs(source)&&(!time||(hasTime(source,time)&&wetBulbInputs(source).every(input=>fieldPublishedAt(source,input,time)))))??null;
  if(accumulationHours(key))return accumulationSource(meta,key,time);
+ if(key===PRECIP_SYMBOLS)return (meta?.sources??(meta?[meta]:[])).find(s=>canPrecipSymbols(s)&&(!time||(hasTime(s,time)&&fieldPublishedAt(s,'precipitation',time))))??null;
  if(key===THETA_SYMBOLS){const selected=compositeMeta(meta);return THETA_SYMBOL_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'wet_bulb_potential_temperature_850hPa',time):null;}
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_REQUIRED_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'precipitation',time):null;}
  return (meta?.sources??(meta?[meta]:[])).find(source=>sourceVariable(source,key)&&(!time||(hasTime(source,time)&&fieldPublishedAt(source,key,time))))??null;

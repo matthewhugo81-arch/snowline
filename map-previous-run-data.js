@@ -1,11 +1,11 @@
-import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261024-winter-panel-controls';
-import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261024-winter-panel-controls';
+import {previousCompletedUKV,completedUKV} from './map-ukv-runs.js?v=20261024-ifs-gem-showers1';
+import {briefingTimes,briefingPresets} from './map-briefing-data.js?v=20261024-ifs-gem-showers1';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
-import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261024-winter-panel-controls';
+import {hasFieldTime,fieldIntervalHours,loadSpatialRun,ensembleHistoryURL,COMPANION_BASE} from './map-sources.js?v=20261024-ifs-gem-showers1';
 import {UKV,UKV_NOWCAST,cycleFamily} from './ukv-run-selection.js?v=20261011-live-runs';
 import {MOGREPS_UK,mogrepsUKCycle} from './mogreps-run-selection.js?v=20261022-three-hour-runs';
 import {PRECIPITATION_TYPE,TYPE_KEYS} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261024-uk-showers1';
+import {THETA_SYMBOLS,PRECIP_SYMBOLS} from './map-winter.js?v=20261024-ifs-gem-showers1';
 import {retainRunProgress,runSignature} from './map-runs.js?v=20261020-run-selector';
 const HOUR=3600000;
 export function runCandidates(model,reference,lookbackHours=48){
@@ -85,7 +85,7 @@ export function previousRunTimes(runs,preset,model,interval='3'){
 export function previousRunPeriodNote(runs,preset,time){
  if(!preset||!time)return '';
  const amount=preset.id==='weather'?'precipitation':preset.field;
- const intervalAmount=[...TYPE_KEYS,THETA_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)||runs.some(meta=>meta.sources?.some(source=>source.variable_intervals?.[amount]));
+ const intervalAmount=[...TYPE_KEYS,THETA_SYMBOLS,PRECIP_SYMBOLS,'precipitation','rain','showers','snowfall_water_equivalent','precipitation_probability','snowfall_probability'].includes(amount)||runs.some(meta=>meta.sources?.some(source=>source.variable_intervals?.[amount]));
  if(!intervalAmount)return '';
  const periods=[...new Set(runs.filter(meta=>previousRunHasChart(meta,preset,time)).map(meta=>fieldIntervalHours(meta,amount,time)).filter(Number.isFinite))].sort((a,b)=>a-b);
  return periods.length>1?'Reporting periods differ between runs ('+periods.map(h=>h+' h').join(' / ')+'). Each chart states its own period.':'';

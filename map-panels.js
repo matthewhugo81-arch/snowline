@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261024-winter-panel-controls';
+import {hasFieldTime} from './map-sources.js?v=20261024-ifs-gem-showers1';
 import {intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 
 export function createPanelOverlays(){

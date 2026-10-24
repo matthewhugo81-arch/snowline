@@ -1,6 +1,6 @@
 import {anomalyLegend} from './map-anomaly-scale.js?v=20261023-revised-1c';
 import {displayStops,displayUnit} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261024-winter-panel-controls';
+import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261024-ifs-gem-showers1';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {isTypeField,NATIVE_PRECIPITATION_TYPE,precipitationTypeScales} from './map-precipitation-type.js?v=20261014-interaction-audit';
 const CREDITS='Snowline · Weather: Open-Meteo / model providers · Map: OpenFreeMap / OpenMapTiles / OpenStreetMap · Coastline: Natural Earth';
@@ -8,6 +8,7 @@ const FONT='Arial, sans-serif';
 // Detached descriptors prevent later model/run changes relabelling a saved image.
 export function chartScales(field,interval='',weather=false){
  if(!field)return [];
+ if(field.key==='precipitation_symbols')return [{name:field.name,colors:[],labels:[],bands:true,note:[field.legendNote,interval].filter(Boolean).join(' · ')}];
  if(isTypeField(field.key))return precipitationTypeScales(field.key===NATIVE_PRECIPITATION_TYPE);
  if(weather||field.key===WEATHER_COMPOSITE)return [
   {name:'Modelled total cloud cover (not satellite observations)',colors:['#414141','#e6e6e6'],labels:['Clear · 0%','Overcast · 100%'],bands:false},

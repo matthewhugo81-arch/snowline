@@ -3,6 +3,26 @@ import assert from 'node:assert/strict';
 import {precipitationSymbols,symbolInputs,symbolRadius,drawPrecipitationSymbols,precipitationSymbolProtocol} from '../map-precipitation-symbols.js';
 import {symbolRecipe,winterNote,THETA_SYMBOLS} from '../map-winter.js';
 
+test('IFS and GEM use native convection with their existing phase guidance',()=>{
+ for(const domain of ['ecmwf_ifs','cmc_gem_gdps_15km']){
+  const source={domain,variables:['precipitation','showers','snowfall_water_equivalent']};
+  assert.equal(symbolRecipe(source),'partitioned_estimated');
+  assert.equal(symbolRecipe({...source,variables:['precipitation','snowfall_water_equivalent']}),'estimated');
+ }
+ assert.equal(symbolRecipe({domain:'ecmwf_ifs025',variables:['precipitation','showers','precipitation_type']}),'partitioned_native');
+ assert.deepEqual(symbolInputs('partitioned_native'),['precipitation','showers','precipitation_type']);
+ assert.deepEqual(symbolInputs('partitioned_estimated'),['precipitation','showers','snowfall_water_equivalent']);
+ for(const [recipe,phase,kind] of [['partitioned_estimated',{snowfall_water_equivalent:6},'snow'],['partitioned_estimated',{snowfall_water_equivalent:3},'mixed'],['partitioned_estimated',{snowfall_water_equivalent:0},'rain'],['partitioned_native',{precipitation_type:3},'freezing'],['partitioned_native',{precipitation_type:5},'snow']]){
+  const values={precipitation:6,showers:2,theta_w:4,...phase};
+  const glyphs=precipitationSymbols(values,2,recipe);
+  assert.deepEqual(glyphs.map(g=>[g.kind,g.mechanism,g.amount,g.rate]),[[kind,'dynamic',4,2],[kind,'convective',2,1]]);
+  for(const showers of [NaN,-1,9]){
+   const fallback=precipitationSymbols({...values,showers},2,recipe);
+   assert.deepEqual(fallback.map(g=>[g.kind,g.mechanism,g.amount]),[[kind,'unseparated',6]]);
+  }
+ }
+});
+
 test('only verified native feeds supply a dynamic / convective partition',()=>{
  for(const domain of ['ncep_gfs013','ecmwf_aifs025_single']){
   assert.equal(symbolRecipe({domain,variables:['precipitation','showers']}),'partitioned');

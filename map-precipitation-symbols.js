@@ -1,27 +1,28 @@
 import {nativeCategory,estimatedCategory,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {symbolRecipe} from './map-winter.js?v=20261024-uk-showers1';
+import {symbolRecipe} from './map-winter.js?v=20261024-ifs-gem-showers1';
 import {loadShowerDiagnostic,showerAt} from './map-shower-diagnostics.js';
-import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261024-uk-showers1';
-export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261024-uk-showers1';
+import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261024-ifs-gem-showers1';
+export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261024-ifs-gem-showers1';
 export const isSymbolURL=url=>/[?&]precip_symbols=/.test(url);
 const showerSession=Date.now();
 export const symbolURL=(url,source,thetaURL)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style='+SYMBOL_STYLE+(['ukmo_global_deterministic_10km','ukmo_uk_deterministic_2km'].includes(source?.domain)?'&shower_session='+showerSession:'')+(thetaURL?'&theta_source='+encodeURIComponent(thetaURL):'');
 export function symbolOverlay(url){return {id:'precip-symbols',source:{type:'raster',url,tileSize:512,maxzoom:10},layers:[{id:'precip-symbols-image',type:'raster',paint:{'raster-opacity':1,'raster-fade-duration':0,'raster-resampling':'linear'}}]};}
 const categoryKind={1:'rain',2:'mixed',3:'snow',4:'other',5:'freezing',6:'ice'};
-export function symbolInputs(recipe){return recipe==='icon'?['rain','showers','snowfall_water_equivalent']:recipe==='partitioned'?['precipitation','showers']:recipe==='native'?['precipitation','precipitation_type']:recipe==='estimated'?['precipitation','snowfall_water_equivalent']:['precipitation'];}
+export function symbolInputs(recipe){return recipe==='partitioned_native'?['precipitation','showers','precipitation_type']:recipe==='partitioned_estimated'?['precipitation','showers','snowfall_water_equivalent']:recipe==='icon'?['rain','showers','snowfall_water_equivalent']:recipe==='partitioned'?['precipitation','showers']:recipe==='native'?['precipitation','precipitation_type']:recipe==='estimated'?['precipitation','snowfall_water_equivalent']:['precipitation'];}
 export function thetaPhase(value){return Number.isFinite(value)?value<=0?'snow':value<2?'mixed':'rain':'other';}
 export function precipitationSymbols(values,hours,recipe){
- const fallback=thetaPhase(values.theta_w);
+ const phase=recipe==='partitioned_native'?nativeCategory(values.precipitation_type):recipe==='partitioned_estimated'?estimatedCategory(values.precipitation,values.snowfall_water_equivalent):4;
+ const fallback=phase!==4&&categoryKind[phase]?categoryKind[phase]:thetaPhase(values.theta_w);
  const resolve=kind=>recipe!=='icon'&&['other','precipitation','showers'].includes(kind)&&fallback!=='other'?fallback:kind;
  const glyph=(kind,amount,mechanism='unseparated')=>({kind:resolve(kind),mechanism,amount,rate:amount/hours,radius:resolve(kind)==='snow'&&mechanism==='convective'?2.25+symbolRadius(amount/hours,true)*(5.25/6.45):symbolRadius(amount/hours,mechanism==='convective')});
  const wet=g=>Number.isFinite(g.rate)&&g.rate>=.1;
  if(!Number.isFinite(hours)||!(hours>0))return [];
  if(recipe==='icon')return [glyph('rain',values.rain,'dynamic'),glyph('showers',values.showers,'convective'),glyph('snow',values.snowfall_water_equivalent,'snow')].filter(wet);
  const amount=values.precipitation;if(!Number.isFinite(amount)||amount/hours<.1)return [];
- if(recipe==='partitioned'){
-  // ECMWF cp and GFS CPRAT include both rain and snow. Subtract once from
-  // total precipitation; never subtract total snowfall again or assign its
-  // phase to each mechanism. Invalid partitions fall back to unsplit total.
+ if(recipe.startsWith('partitioned')){
+  // Native convection includes rain and snow. Subtract once from total;
+  // whole-cell phase guides symbols, without allocating snowfall separately
+  // to each mechanism. Invalid partitions fall back to unsplit total.
   const convection=values.showers;
   if(!Number.isFinite(convection)||convection<0||convection>amount+.11)return [glyph('precipitation',amount)];
   const convective=Math.min(amount,convection);
@@ -39,7 +40,7 @@ export async function precipitationSymbolProtocol(params,controller,OM,settings)
  const match=params.url.match(/^(.*)\/(\d+)\/(\d+)\/(\d+)$/);if(!match)throw Error('Missing symbol tile coordinates.');
  const [,base,zs,xs,ys]=match,z=Number(zs),tx=Number(xs),ty=Number(ys),world=512*2**z;
  const plain=base.replace(/^(?:om|briefing):\/\//,''),file=plain.split('?')[0],query=new URLSearchParams(plain.split('?')[1]);
- const recipe=query.get('precip_symbols');if(!['native','estimated','icon','partitioned','unresolved'].includes(recipe))throw Error('Unsupported precipitation symbol recipe.');
+ const recipe=query.get('precip_symbols');if(!['native','estimated','icon','partitioned','partitioned_native','partitioned_estimated','unresolved'].includes(recipe))throw Error('Unsupported precipitation symbol recipe.');
  const {domain,hours}=precipitationFileInfo(file),config=settings.domainOptions.find(d=>d.value===domain)?.grid;if(!config)throw Error('Unknown symbol grid.');
  const left=tx*512,top=ty*512,halo=SYMBOL_HALO;
  const bounds=[(left-halo)/world*360-180,latAt(top+512+halo,world),(left+512+halo)/world*360-180,latAt(top-halo,world)];

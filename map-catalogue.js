@@ -10,7 +10,7 @@ import {SURFACE_DERIVED_KEYS,surfaceDerivedVariable} from './map-surface-derived
 import {DIAGNOSTIC_KEYS,diagnosticVariable,diagnosticField} from './map-diagnostics.js?v=20261022-theta-label';
 import {isJetWind,JET_WIND_SCALE,is850Temperature,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
 import {PRECIPITATION_TYPE,PRECIPITATION_TYPE_SOURCE,NATIVE_PRECIPITATION_TYPE,NATIVE_TYPE_SOURCE,TYPE_KEYS,isTypeField,typeMethod,canDerivePrecipitationType,precipitationTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {THETA_SYMBOLS,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261024-uk-showers1';
+import {THETA_SYMBOLS,PRECIP_SYMBOLS,canPrecipSymbols,precipitationSymbolsField,canThetaSymbols,thetaSymbolsField} from './map-winter.js?v=20261024-ifs-gem-showers1';
 import {VERTICAL_MOTION,pressureMotionVariable,pressureMotionField} from './map-vertical-motion.js?v=20261020-native-levels';
 export {JET_WIND_SCALE};
 // Expose useful fields only when the selected spatial run actually supplies them.
@@ -54,6 +54,7 @@ export const PRECIPITATION_PROBABILITY_SCALE = {
 export function sourceVariable(meta,key){
  if(winterHours(key))return winterPeriodSource(meta,key)?key:null;
  if(accumulationHours(key))return accumulationSource(meta,key)?key:null;
+ if(key===PRECIP_SYMBOLS)return canPrecipSymbols(meta)?'precipitation':null;
  if(key===THETA_SYMBOLS)return canThetaSymbols(meta)?'wet_bulb_potential_temperature_850hPa_derived':null;
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_REQUIRED_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
@@ -90,7 +91,7 @@ export function variableGroup(key){
  if(productField(key))return productField(key).group;
  if(/^ocean_|^sea_(ice|level|water)_/.test(key))return 'Marine';
  if(/^vertical_motion_\d+hPa$/.test(key))return 'Derived diagnostics';
- if(isTypeField(key)||key===THETA_SYMBOLS)return 'Winter Analysis';
+ if(isTypeField(key)||key===THETA_SYMBOLS||key===PRECIP_SYMBOLS)return 'Winter Analysis';
  if(accumulationHours(key))return 'Accumulated precipitation';
  if(key===WEATHER_COMPOSITE)return 'Combined weather';
  if(DIAGNOSTIC_KEYS.includes(key))return 'Derived diagnostics';
@@ -159,6 +160,7 @@ export function describeVariable(key,OM){
   note:'Percentage of MOGREPS members forecasting falling snow at an average rate of at least 0.1 mm/hour liquid-water equivalent over the stated period. This is a raw member fraction, not a calibrated probability, settling-snow risk or snow depth. Missing members leave a gap; they are never counted as dry.'
  };
  if(isTypeField(key))return precipitationTypeField(key);
+ if(key===PRECIP_SYMBOLS)return precipitationSymbolsField();
  if(key===THETA_SYMBOLS)return thetaSymbolsField();
  const accumulation=accumulationField(key);if(accumulation)return accumulation;
  const diagnostic=diagnosticField(key);if(diagnostic)return diagnostic;
@@ -229,7 +231,7 @@ export function extendCatalogue(fields,metas,OM,settings){
  for(const key of ACCUMULATION_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of DIAGNOSTIC_KEYS)if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of SURFACE_DERIVED_KEYS)if(!keys.includes(key)&&metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
- for(const key of [...TYPE_KEYS,THETA_SYMBOLS])if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
+ for(const key of [...TYPE_KEYS,THETA_SYMBOLS,PRECIP_SYMBOLS])if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  if(metas.some(meta=>sourceVariable(meta,'dew_point_2m'))&&!keys.includes('dew_point_2m'))keys.push('dew_point_2m');
  for(const key of WINTER_ADDITION_KEYS)if(!keys.includes(key)&&metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  const omitted=[];

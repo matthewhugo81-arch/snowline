@@ -1,5 +1,5 @@
 // Presentation only: rates and precipitation mechanisms are supplied by the model reader.
-export const SYMBOL_STYLE='20261024-uk-showers1';
+export const SYMBOL_STYLE='20261024-ifs-gem-showers1';
 export const SYMBOL_SPACING=16;
 export const SYMBOL_HALO=96;
 export const MAX_CLUSTER_EXTENT=24;
