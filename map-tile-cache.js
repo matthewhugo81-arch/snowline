@@ -79,7 +79,7 @@ export class ForecastTileCache{
  }
  setContext(context){
   if(context===this.context)return false;
-  this.contexts.get(this.context)?.shared?.update({sequence:[],protected:[]});
+  this.contexts.get(this.context)?.shared?.update({sequence:[],protected:[],participating:false});
   this.resetPending();this.context=context;this.limited=false;this.limitReason=null;
   let entry=this.contexts.get(context);
   if(!entry){const name=PREFIX+this.session+'-'+(this.persistent?encodeURIComponent(context):++this.contextSequence);entry={name,disk:this.storage?.open(name).catch(()=>null)??Promise.resolve(null)};}
@@ -93,6 +93,7 @@ export class ForecastTileCache{
   }
   if(this.coordinated&&!entry.shared){
    entry.shared=new SharedForecastStorage({name:entry.name,store:entry.disk,budget:this.diskBytes,entries:this.diskEntries,onChange:()=>{
+    if(this.contexts.get(this.context)?.shared!==entry.shared)return;
     this.backgroundConcurrency=Math.max(1,Math.floor(this.backgroundBudget/Math.max(1,entry.shared.activeWindows??entry.shared.stats?.windows??1)));
     this.drain();
     clearTimeout(this.statsTimer);this.statsTimer=setTimeout(()=>this.onLimit(),150);
@@ -106,6 +107,7 @@ export class ForecastTileCache{
   }
   while(this.contexts.size>this.maxContexts){const [key,old]=this.contexts.entries().next().value;this.contexts.delete(key);old.shared?.close();old.lease?.close();if(!this.coordinated)old.disk.then(()=>this.storage?.delete(old.name)).catch(()=>{});}
   if(this.coordinated&&!this.cleanupTimer)this.cleanupTimer=setInterval(()=>this.cleanup(),60000);
+  entry.shared?.update({participating:true,active:!globalThis.document?.hidden});
   this.cleanup();
   if(this.persistent&&!this.coordinated)entry.disk.then(async()=>{
    const active=new Set([...this.contexts.values()].map(item=>item.name));

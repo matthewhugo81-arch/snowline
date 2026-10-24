@@ -8,6 +8,16 @@ export function cacheDiskBudget({mobile=false,deviceMemory,quota,usage=0}={}){
 }
 const request=r=>new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
 const complete=tx=>new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error??Error('Cache index unavailable'));});
+async function liveClients(clients,locks,now=Date.now()){
+ const unexpired=clients.filter(c=>c.expires>now);
+ if(!locks?.query)return unexpired;
+ try{
+  const held=new Set((await locks.query()).held.map(lock=>lock.name));
+  // Lifetime locks disappear automatically on document destruction, even when
+  // asynchronous pagehide cleanup cannot commit. Legacy leases retain their TTL.
+  return clients.filter(c=>c.lifetimeLock?held.has(c.lifetimeLock):c.expires>now);
+ }catch{return unexpired;}
+}
 const matches=(url,sources)=>{
  // Tile URLs append /z/x/y to a source. Set membership avoids comparing every
  // tile against every frame in four long forecast sequences during eviction.
@@ -27,7 +37,7 @@ export async function cleanupObsoleteCaches({storage,db,locks,prefix,currentPref
    await locks.request('snowline-disk:'+name,async()=>{
     const tx=database.transaction(['clients','totals'],'readonly'),done=complete(tx);
     const [clients,marker]=await Promise.all([request(tx.objectStore('clients').getAll()),request(tx.objectStore('totals').get('cleanup:'+name))]);await done;
-    const active=clients.some(c=>c.cache===name&&c.expires>now);
+    const active=(await liveClients(clients,locks,now)).some(c=>c.cache===name);
     if(active||!marker||now-marker.seen<grace){
      if(active||!marker){const mark=database.transaction('totals','readwrite'),marked=complete(mark);mark.objectStore('totals').put({id:'cleanup:'+name,seen:now});await marked;}
      return;
@@ -51,7 +61,14 @@ export class SharedForecastStorage{
  constructor({name,store,budget,entries=65536,onChange=()=>{},onEvict=()=>{},locks=navigator.locks,indexedDB=globalThis.indexedDB,channel=globalThis.BroadcastChannel}={}){
   Object.assign(this,{name,store,budget,entries,onChange,onEvict,locks});
   this.id=crypto.randomUUID();this.sequence=[];this.protected=[];this.closed=false;
-  this.active=!globalThis.document?.hidden;
+  this.lifetimeReady=Promise.resolve();
+  if(locks?.query){
+   this.lifetimeLock='snowline-client:'+this.id;
+   let ready;this.lifetimeReady=new Promise(resolve=>{ready=resolve;});
+   const lifetime=new Promise(resolve=>{this.releaseLifetime=resolve;});
+   void locks.request(this.lifetimeLock,()=>{ready();return lifetime;}).catch(()=>{this.lifetimeLock=null;ready();});
+  }
+  this.participating=true;this.active=!globalThis.document?.hidden;
   this.db=new Promise((resolve,reject)=>{
    const r=indexedDB.open('snowline-chart-cache-index-v1',1);
    r.onupgradeneeded=()=>{
@@ -78,7 +95,8 @@ export class SharedForecastStorage{
   const tx=db.transaction(['clients','totals'],'readonly'),done=complete(tx);
   const [all,total]=await Promise.all([request(tx.objectStore('clients').getAll()),request(tx.objectStore('totals').get(this.name))]);await done;
   if(this.closed)return;
-  const clients=all.filter(c=>c.cache===this.name&&c.expires>Date.now());
+  const clients=await liveClients(all.filter(c=>c.cache===this.name),this.locks);
+  if(this.closed)return;
   // Older clients lack the activity flag; count them conservatively as active.
   this.activeWindows=clients.filter(c=>c.active!==false).length;
   this.stats={...this.stats,bytes:total?.bytes??0,entries:total?.count??0,budget:Math.min(this.budget,...clients.map(c=>c.budget)),windows:clients.length,activeWindows:this.activeWindows};
@@ -89,22 +107,26 @@ export class SharedForecastStorage{
   if(this.leasePending){await this.leasePending;return this.lease();}
   if(this.lastLeaseRevision===(this.leaseRevision??0)&&Date.now()-this.lastLease<30000)return;
   this.leasePending=(async()=>{
+   await this.lifetimeReady;
    const db=await this.db;if(this.closed)return;
    const revision=this.leaseRevision??0,now=Date.now(),tx=db.transaction('clients','readwrite'),done=complete(tx);
-   tx.objectStore('clients').put({id:this.id,cache:this.name,expires:now+120000,sequence:this.sequence,protected:this.protected,budget:this.budget,active:this.active});
+   tx.objectStore('clients').put({id:this.id,cache:this.name,expires:now+120000,sequence:this.sequence,protected:this.protected,budget:this.budget,active:this.active,lifetimeLock:this.lifetimeLock});
    await done;this.lastLeaseRevision=revision;this.lastLease=now;
    await this.refreshActivity();this.channel?.postMessage({cache:this.name,type:'clients'});
   })();
   try{await this.leasePending;}finally{this.leasePending=null;}
  }
- update({sequence=this.sequence,protected:protectedURLs=this.protected,budget=this.budget,active=this.active}={}){
-  Object.assign(this,{sequence,protected:protectedURLs,budget,active});
+ update({sequence=this.sequence,protected:protectedURLs=this.protected,budget=this.budget,active=this.active,participating=this.participating}={}){
+  Object.assign(this,{sequence,protected:protectedURLs,budget,participating,active:active&&participating});
   this.leaseRevision=(this.leaseRevision??0)+1;
   // Selection changes coalesce; never write the whole sequence per tile.
   clearTimeout(this.leaseTimer);this.leaseTimer=setTimeout(()=>this.lease().catch(()=>{}),0);
  }
  async close(){
+  if(this.closed)return;
   this.closed=true;clearInterval(this.timer);clearTimeout(this.leaseTimer);
+  this.releaseLifetime?.();
+  this.channel?.postMessage({cache:this.name,type:'clients'});
   globalThis.document?.removeEventListener('visibilitychange',this.onVisibility);
   try{
    await this.leasePending;
@@ -125,11 +147,11 @@ export class SharedForecastStorage{
    const tx=db.transaction(['tiles','totals','clients'],'readonly'),done=complete(tx);
    const tiles=tx.objectStore('tiles'),id=this.name+'|'+key;
    const [saved,old,allClients]=await Promise.all([request(tx.objectStore('totals').get(this.name)),request(tiles.get(id)),request(tx.objectStore('clients').getAll())]);await done;
-   const clients=allClients.filter(c=>c.cache===this.name&&c.expires>Date.now());
+   const living=await liveClients(allClients,this.locks),clients=living.filter(c=>c.cache===this.name);
    const budget=Math.min(this.budget,...clients.map(c=>c.budget)),total=saved??{id:this.name,bytes:0,count:0};
    const stats=()=>({bytes:total.bytes,budget,entries:total.count,windows:clients.length});
    if(bytes>budget){this.notify([],stats());throw cacheLimitError('budget');}
-   const expired=allClients.filter(c=>c.expires<=Date.now());
+   const liveIDs=new Set(living.map(c=>c.id)),expired=allClients.filter(c=>!liveIDs.has(c.id));
    if(expired.length){const clean=db.transaction('clients','readwrite'),finished=complete(clean);for(const c of expired)clean.objectStore('clients').delete(c.id);await finished;}
    const evicted=[];
    if(total.bytes-(old?.bytes??0)+bytes>budget||total.count-(old?1:0)>=this.entries){

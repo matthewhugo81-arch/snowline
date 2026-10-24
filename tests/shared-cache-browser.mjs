@@ -43,7 +43,8 @@ try{
  await pages[0].evaluate(async()=>{cache.setProtected(['om://new-active','om://near-0','om://next']);await read('om://next');});
  assert.equal(await pages[1].evaluate(async()=>{cache.setProtected(['om://active-1','om://extra']);return read('om://extra');}),4);
  assert.equal(await pages[1].evaluate(()=>cache.limitReason),'budget');
- // Closing a window releases its protection immediately; crashes have expiring leases.
+ // Closing a window releases protection. A document that is still alive keeps
+ // its selected frames even if timer throttling lets its disk heartbeat expire.
  await pages[2].evaluate(()=>cache.release());
  await pages[1].evaluate(()=>read('om://extra'));
  const abandoned=await pages[3].evaluate(()=>cache.contexts.get('tiles').shared.id);
@@ -52,6 +53,9 @@ try{
   await new Promise((resolve,reject)=>{const tx=db.transaction('clients','readwrite'),s=tx.objectStore('clients'),r=s.get(id);r.onsuccess=()=>s.put({...r.result,expires:0});tx.oncomplete=resolve;tx.onerror=reject;});
   await read('om://extra-after-expiry');
  },abandoned);
+ assert.equal(await pages[1].evaluate(()=>cache.storageStatus().windows),3);
+ await pages[3].close();
+ await pages[1].evaluate(()=>read('om://extra-after-document-close'));
  assert.equal(await pages[1].evaluate(()=>cache.storageStatus().windows),2);
  // Slow shared disk operations cannot delay the foreground renderer's result.
  const fast=await pages[0].evaluate(async()=>{
@@ -96,7 +100,7 @@ try{
   const result=await c.protocol({type:'image',url:'om://selected'},new AbortController());await Promise.all([...c.writes.values()].map(w=>w.promise));
   const state={bytes:result.data.byteLength,reason:c.limitReason,stored:c.storageStatus().bytes};c.release();return state;
  });assert.deepEqual(denied,{bytes:4,reason:'browser-quota',stored:0});
- for(const page of pages)await page.evaluate(()=>cache.release());
+ for(const page of pages)if(!page.isClosed())await page.evaluate(()=>cache.release());
  await context.close();assert.deepEqual(errors,[]);
  const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),phone=await mobile.newPage();await phone.goto(origin+'/map-credits.html');
  const budget=await phone.evaluate(async()=>{
