@@ -10,7 +10,7 @@ import {sourceVariable,availableFields,compareFields,variableGroup} from './map-
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,isTypeField,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
 
-import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261023-phase-mechanism2';
+import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261024-uk-showers1';
 import {VERTICAL_MOTION,verticalMotionField} from './map-vertical-motion.js?v=20261020-native-levels';
 export const BRIEFING_PRESETS=[
  {id:'weather',name:'Cloud, precipitation & MSLP',field:WEATHER_COMPOSITE,required:[WEATHER_COMPOSITE],note:'White = overcast; dark = clear. Coloured rain overlays cloud. Black isobars every 4 hPa. Rain periods are stated on each chart.'},

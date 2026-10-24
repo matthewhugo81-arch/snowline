@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import urllib.request
+from itertools import groupby
 import numpy as np
 from netCDF4 import Dataset
 from pyproj import CRS, Transformer
@@ -95,7 +96,7 @@ def build(model,run,hour,cache,output):
  flags=np.nan_to_num(sample(fields[0],flag)).astype('u1')
  valid=run+timedelta(hours=hour)
  doc=dict(version=1,domain=DOMAINS[model],reference_time=iso(run),valid_time=iso(valid),method=method,grid=GRID,
-  flags=''.join(flags.astype(str).ravel()),source=BASE+MODELS[model],attribution='British Crown copyright, Met Office, CC BY-SA 4.0')
+  flags_rle=[[int(value),sum(1 for _ in items)] for value,items in groupby(flags.ravel())],source=BASE+MODELS[model],attribution='British Crown copyright, Met Office, CC BY-SA 4.0')
  path=Path(output)/DOMAINS[model]/run.strftime('%Y/%m/%d/%H%MZ')/(valid.strftime('%Y-%m-%dT%H%M')+'.json')
  path.parent.mkdir(parents=True,exist_ok=True);tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(doc,separators=(',',':')));tmp.replace(path)
  print(model,iso(run),iso(valid),'shower cells',int((flags==2).sum()))

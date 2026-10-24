@@ -5,7 +5,7 @@ import {ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
 import {fieldIntervalHours} from './map-sources.js?v=20261024-winter-panel-controls';
 import {WEATHER_COMPOSITE} from './map-weather-composite.js?v=20261018-rates';
 import {PRECIPITATION_TYPE,NATIVE_PRECIPITATION_TYPE} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261023-phase-mechanism2';
+import {THETA_SYMBOLS} from './map-winter.js?v=20261024-uk-showers1';
 
 const instant=new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'UTC'});
 const temperatureAnomaly=field=>/^ens_temperature_(min|max)_anomaly$/.test(field);

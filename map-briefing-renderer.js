@@ -15,8 +15,8 @@ import {installDiagnostics} from './map-diagnostics.js?v=20261022-theta-label';
 import {briefingValueLabels} from './map-briefing-values.js?v=20261024-winter-panel-controls';
 
 import {compositeSettings as briefingSettings,compositeUnderlay,WEATHER_COMPOSITE,COMPOSITE_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
-import {THETA_SYMBOLS} from './map-winter.js?v=20261023-phase-mechanism2';
-import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261023-phase-mechanism2';
+import {THETA_SYMBOLS} from './map-winter.js?v=20261024-uk-showers1';
+import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261024-uk-showers1';
 import {fieldSource} from './map-sources.js?v=20261024-winter-panel-controls';
 import {sourceVariable} from './map-catalogue.js?v=20261024-winter-panel-controls';
 import {forecastInputWork} from './map-work-queue.js';

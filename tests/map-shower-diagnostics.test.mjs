@@ -13,6 +13,11 @@ test('categorical nearest-cell sampling does not extend beyond coverage',()=>{
  assert.equal(showerAt(doc,51,0),true);assert.equal(showerAt(doc,50,1),false);
  assert.equal(showerAt(doc,55,0),false);assert.equal(showerAt(null,51,0),false);
 });
+test('compact products decode exactly and malformed runs fail closed',()=>{
+ const packed={...doc,flags:undefined,flags_rle:[[0,1],[1,1],[2,1],[1,1]]};
+ assert.equal(validateShowerDiagnostic(packed,file).flags,doc.flags);
+ for(const flags_rle of [[[2,1000001]],[[3,4]],[[2,-1]],[[2,3]],[[2,1.5]]])assert.equal(validateShowerDiagnostic({...packed,flags_rle},file),null);
+});
 test('shower guidance preserves total water, interval rate and native phase',()=>{
  const v={precipitation:6,snowfall_water_equivalent:6,theta_w:4};
  const before=precipitationSymbols(v,3,'estimated')[0];

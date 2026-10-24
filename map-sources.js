@@ -12,7 +12,7 @@ import {MOGREPS_MODELS,verifiedSnowMetadata} from './map-mogreps.js?v=20261014-c
 import {MOGREPS_UK,mogrepsUKCycle,selectMogrepsUKRun} from './mogreps-run-selection.js?v=20261022-three-hour-runs';
 import {MOGREPS_GLOBAL,verifiedMogrepsGlobal,MOGREPS_GLOBAL_NOTE} from './map-mogreps-global.js?v=20261020-native-levels';
 
-import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261023-phase-mechanism2';
+import {THETA_SYMBOLS,THETA_SYMBOL_FIELDS} from './map-winter.js?v=20261024-uk-showers1';
 import {precipitationStepHours,precipitationExistsAt} from './map-accumulation.js?v=20261014-interaction-audit';
 import {DIRECT_VERTICAL_MODELS,verifiedDirectVertical} from './map-direct-vertical.js?v=20261020-native-levels';
 import {UKMO_NATIVE,UKMO_EARLY,verifiedUKMOEarly,completedSources,UKMO_EARLY_NOTE} from './map-ukmo-early.js?v=20261021-early';

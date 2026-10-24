@@ -7,3 +7,4 @@ pyproj==3.8.0
 
 fsspec[http]==2026.9.0
 h5py==3.16.0
+scipy>=1.15,<2

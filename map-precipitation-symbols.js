@@ -1,8 +1,8 @@
 import {nativeCategory,estimatedCategory,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-interaction-audit';
-import {symbolRecipe} from './map-winter.js?v=20261023-phase-mechanism2';
+import {symbolRecipe} from './map-winter.js?v=20261024-uk-showers1';
 import {loadShowerDiagnostic,showerAt} from './map-shower-diagnostics.js';
-import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism2';
-export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism2';
+import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261024-uk-showers1';
+export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261024-uk-showers1';
 export const isSymbolURL=url=>/[?&]precip_symbols=/.test(url);
 const showerSession=Date.now();
 export const symbolURL=(url,source,thetaURL)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style='+SYMBOL_STYLE+(['ukmo_global_deterministic_10km','ukmo_uk_deterministic_2km'].includes(source?.domain)?'&shower_session='+showerSession:'')+(thetaURL?'&theta_source='+encodeURIComponent(thetaURL):'');

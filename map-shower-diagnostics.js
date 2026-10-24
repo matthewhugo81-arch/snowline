@@ -11,6 +11,14 @@ export function validateShowerDiagnostic(data,file){
  if(!match)return null;
  const [,domain,y,m,d,h,min,t,tm]=match;
  const grid=data?.grid;
+ if(grid&&Array.isArray(data.flags_rle)&&data.flags_rle.length<=1000000){
+  let length=0;const parts=[];
+  for(const row of data.flags_rle){
+   if(!Array.isArray(row)||row.length!==2||![0,1,2].includes(row[0])||!Number.isInteger(row[1])||row[1]<1||(length+=row[1])>1000000)return null;
+   parts.push(String(row[0]).repeat(row[1]));
+  }
+  data={...data,flags:parts.join('')};delete data.flags_rle;
+ }
  if(data?.version!==SHOWER_VERSION||data.domain!==domain||Date.parse(data.reference_time)!==Date.parse(`${y}-${m}-${d}T${h}:${min}:00Z`)||Date.parse(data.valid_time)!==Date.parse(t+':'+tm+':00Z')||
  !['native-rate','estimated-texture'].includes(data.method)||data.method!==(domain==='ukmo_global_deterministic_10km'?'native-rate':'estimated-texture')||
  !grid||![grid.lonMin,grid.latMin,grid.dx,grid.dy].every(Number.isFinite)||grid.dx<=0||grid.dy<=0||!Number.isInteger(grid.nx)||!Number.isInteger(grid.ny)||grid.nx<1||grid.ny<1||grid.nx*grid.ny>1000000||typeof data.flags!=='string'||data.flags.length!==grid.nx*grid.ny||/[^012]/.test(data.flags))return null;
