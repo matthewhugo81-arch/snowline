@@ -55,6 +55,12 @@ try{
  },abandoned);
  assert.equal(await pages[1].evaluate(()=>cache.storageStatus().windows),3);
  await pages[3].close();
+ // Closing the tab and releasing its browser-owned lifetime lock are separate
+ // events. Wait for the real shared-client state, rather than a fixed delay.
+ await pages[1].waitForFunction(async()=>{
+  await cache.contexts.get('tiles').shared.refreshActivity();
+  return cache.storageStatus().windows===2;
+ },null,{timeout:10000});
  await pages[1].evaluate(()=>read('om://extra-after-document-close'));
  assert.equal(await pages[1].evaluate(()=>cache.storageStatus().windows),2);
  // Slow shared disk operations cannot delay the foreground renderer's result.
