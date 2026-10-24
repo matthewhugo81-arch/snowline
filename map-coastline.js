@@ -18,8 +18,22 @@ function validateData(data){
 
 // A failed request is never retained. Each caller can retry after an outage;
 // concurrent maps share the same bounded request and the original full geometry.
-export function createCoastlineDataLoader({fetcher=(...args)=>fetch(...args),url='coastline.geojson',timeout=8000,attempts=3,retryDelay=400}={}){
+export function createCoastlineDataLoader({fetcher=(...args)=>fetch(...args),url='coastline.geojson',timeout=8000,attempts=3,retryDelay=400,storage=globalThis.caches,storageTimeout=200,revision='full-lines-20261024'}={}){
  let data,pending;
+ // Static full-resolution geography has its own version, independent of the
+ // forecast cache. Bump revision when coastline.geojson changes.
+ const cacheKey=new URL(url,import.meta.url);cacheKey.searchParams.set('geography',revision);
+ const store=storage?Promise.resolve().then(()=>storage.open('snowline-map-geography-v1')).catch(()=>null):Promise.resolve(null);
+ async function stored(){
+  let timer;
+  try{return await Promise.race([new Promise(resolve=>{timer=setTimeout(()=>resolve(null),storageTimeout);}),store.then(async cache=>{
+   const response=await cache?.match(cacheKey.href);if(!response)return null;
+   try{return validateData(await response.json());}catch{void cache.delete(cacheKey.href).catch(()=>{});return null;}
+  }).catch(()=>null)]);}finally{clearTimeout(timer);}
+ }
+ function remember(value){
+  void store.then(cache=>cache?.put(cacheKey.href,new Response(JSON.stringify(value),{headers:{'Content-Type':'application/geo+json'}}))).catch(()=>{});
+ }
  async function request(){
   const controller=new AbortController();let timer;
   const expired=new Promise((_,reject)=>{timer=setTimeout(()=>{
@@ -42,8 +56,9 @@ export function createCoastlineDataLoader({fetcher=(...args)=>fetch(...args),url
   if(pending)return pending;
   pending=(async()=>{
    try{
+    if(storage){const cached=await stored();if(cached)return data=cached;}
     for(let attempt=0;;attempt++){
-     try{return data=await request();}
+     try{data=await request();remember(data);return data;}
      catch(error){
       const transient=error.retryable===true||error instanceof TypeError||error.name==='AbortError';
       if(!transient||attempt+1>=Math.max(1,attempts))throw error;

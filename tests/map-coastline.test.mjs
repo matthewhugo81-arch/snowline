@@ -6,6 +6,25 @@ const coastline={type:'FeatureCollection',features:[{type:'Feature',properties:{
 const response=(data=coastline)=>({ok:true,status:200,json:async()=>data});
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};};
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
+function storedGeography(){
+ const entries=new Map();
+ return {entries,open:async()=>({match:async key=>entries.get(key)?.clone(),put:async(key,value)=>{entries.set(key,value.clone());},delete:async key=>entries.delete(key)})};
+}
+test('validated full coastline survives a loader restart without network; revision changes invalidate it',async()=>{
+ const storage=storedGeography();let calls=0;
+ const fetcher=async()=>{calls++;return response();};
+ assert.deepEqual(await createCoastlineDataLoader({storage,fetcher})(),coastline);await flush();
+ assert.deepEqual(await createCoastlineDataLoader({storage,fetcher:()=>{throw Error('Offline');}})(),coastline);assert.equal(calls,1);
+ await createCoastlineDataLoader({storage,fetcher,revision:'next'})();assert.equal(calls,2);
+});
+test('corrupt geography is replaced and unavailable or stalled disk cannot block a network load',async()=>{
+ const storage=storedGeography();await createCoastlineDataLoader({storage,fetcher:async()=>response()})();await flush();
+ for(const key of storage.entries.keys())storage.entries.set(key,Response.json({invalid:true}));
+ let calls=0;assert.deepEqual(await createCoastlineDataLoader({storage,fetcher:async()=>{calls++;return response();}})(),coastline);assert.equal(calls,1);
+ for(const storage of [{open:async()=>{throw Error('Denied');}},{open:()=>new Promise(()=>{})}]){
+  const start=performance.now();assert.deepEqual(await createCoastlineDataLoader({storage,storageTimeout:20,fetcher:async()=>response()})(),coastline);assert.ok(performance.now()-start<500);
+ }
+});
 
 class Events{
  constructor(){this.events=new Map();}
