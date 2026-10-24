@@ -15,7 +15,7 @@ import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompos
 import {MOGREPS_SNOW_DOMAINS} from './map-mogreps.js?v=20261022-attribution';
 import {ENSEMBLE_DOMAINS} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRA_DOMAINS,ensemblePeriodLabel} from './map-ensemble-extra.js?v=20261020-native-levels';
-import {createValueReader} from './map-values.js?v=20261011-ensemble-statistics';
+import {createValueReader} from './map-values.js?v=20261024-point-sampler';
 import {installEnsembleTransport} from './map-ensemble-transport.js?v=20261022-gefs-archive';
 import {installDewPoint} from './map-dew-point.js';
 import {installSurfaceDerived} from './map-surface-derived.js?v=20261020-ifs-coverage';
@@ -40,7 +40,7 @@ import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-run
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
 import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261023-phase-mechanism2';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
-import * as OM from './vendor/index.mjs?v=20261021-stable-tiles';
+import * as OM from './vendor/index.mjs?v=20261024-point-sampler';
 import {finite} from './data.js?v=20261019-mogreps-uk';
 import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-concise-names';
 import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-retention-recovery';
