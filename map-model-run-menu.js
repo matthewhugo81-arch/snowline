@@ -1,4 +1,4 @@
-import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261024-winter-hazards';
+import {UKV_PREVIOUS} from './map-ukv-runs.js?v=20261024-winter-panel-controls';
 // Decorate native model options only: model IDs and selections stay unchanged.
 const runDate = new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short', timeZone: 'UTC'});
 

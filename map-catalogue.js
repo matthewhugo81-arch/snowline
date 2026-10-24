@@ -1,4 +1,4 @@
-import {WINTER_ADDITION_KEYS,WET_BULB,winterHours,winterPeriodSource,winterVariable,winterAdditionField} from './map-winter-registry.js';
+import {WINTER_ADDITION_KEYS,WET_BULB,winterHours,winterPeriodSource,winterVariable,winterAdditionField} from './map-winter-registry.js?v=20261024-winter-panel-controls';
 import {productField} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';

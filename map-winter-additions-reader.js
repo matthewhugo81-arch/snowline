@@ -1,5 +1,5 @@
 import {RollingAccumulations,SharedGridReads} from './map-accumulation-reader.js?v=20261014-interaction-audit';
-import {winterHours,winterSlots,reduceSkin,wetBulbValues} from './map-winter-additions.js';
+import {winterHours,winterSlots,reduceSkin,wetBulbValues} from './map-winter-additions.js?v=20261024-winter-panel-controls';
 const installed=new WeakSet();
 export function installWinterAdditions(OM,settings){
  const reader=OM.getProtocolInstance(settings).omFileReader;if(installed.has(reader))return;installed.add(reader);

@@ -27,3 +27,10 @@ test('third-panel overlay preferences are independent',()=>{
  const overlays=createPanelOverlays();overlays.c.grid=true;overlays.c.isobars=false;
  assert.equal(overlays.a.grid,false);assert.equal(overlays.b.isobars,true);
 });
+
+test('closing any winter panel excludes its forecast times and keeps remaining selections',()=>{
+ const s=state();s.visiblePanelKeys=['b','c'];assert.deepEqual(panelSelections(s).map(p=>p.key),['b','c']);
+ s.visiblePanelKeys=['c'];s.compare=false;assert.deepEqual(panelForecastTimes(s),[0,6,12].map(t));
+ assert.equal(panelSelection(s,'a').model,'gfs');
+ s.visiblePanelKeys=['a','b','c'];assert.deepEqual(panelForecastTimes(s),[0,6,12,18,24].map(t));
+});

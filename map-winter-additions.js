@@ -1,6 +1,6 @@
 import {accumulationSlots} from './map-accumulation.js?v=20261014-interaction-audit';
 import {humidityFromDewPoint} from './map-surface-derived.js?v=20261020-ifs-coverage';
-import {registerWinterAdditions} from './map-winter-registry.js';
+import {registerWinterAdditions} from './map-winter-registry.js?v=20261024-winter-panel-controls';
 export const WET_BULB='wet_bulb_temperature_2m';
 export const WINTER_PERIOD_KEYS=['snowfall_total_6h','snowfall_total_12h','snowfall_total_24h','surface_temperature_min_24h','surface_freezing_hours_24h'];
 export const WINTER_ADDITION_KEYS=[WET_BULB,'categorical_freezing_rain','hail',...WINTER_PERIOD_KEYS];

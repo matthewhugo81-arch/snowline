@@ -373,3 +373,8 @@
  .winter-hazards .map-panel-label{font-size:10px;left:4px;padding:4px}
  .winter-hazards .panel-overlays{gap:5px;flex-wrap:wrap}
 }
+
+.winter-hazards .panel-close{margin-left:auto;margin-right:6px;font-size:17px;line-height:1}
+.winter-hazards .panel-heading{min-height:24px;margin-bottom:5px}
+.winter-hazards .panel-number{display:block!important;margin-bottom:0}
+@media(min-width:800px){.winter-hazards .map-canvases{flex-direction:row!important}.winter-hazards .panel-selectors{grid-template-columns:1fr!important}.winter-hazards .map-view{height:420px!important}}

@@ -1,4 +1,4 @@
-import {hasFieldTime} from './map-sources.js?v=20261024-winter-hazards';
+import {hasFieldTime} from './map-sources.js?v=20261024-winter-panel-controls';
 import {intervalForecastTimes} from './map-interval.js?v=20261019-panel-interval';
 
 export function createPanelOverlays(){
@@ -10,7 +10,7 @@ export function panelSelection(state,key){
  return {key,model:state['model'+suffix],field:state['field'+suffix]};
 }
 export function panelSelections(state){
- return (state.compare?(state.comparisonCount===3?['a','b','c']:['a','b']):['a']).map(key=>panelSelection(state,key));
+ return (state.visiblePanelKeys??(state.compare?(state.comparisonCount===3?['a','b','c']:['a','b']):['a'])).map(key=>panelSelection(state,key));
 }
 export function panelModelIds(state){
  return [...new Set(panelSelections(state).map(({model})=>model))];

@@ -1,7 +1,7 @@
-import {winterHours} from './map-winter-registry.js';
-const winterMode=new URLSearchParams(location.search).get('view')==='winter';
+import {winterHours,setWinterAdditionsActive,isWinterAddition} from './map-winter-registry.js?v=20261024-winter-panel-controls';
+let winterMode=new URLSearchParams(location.search).get('view')==='winter';
 let winterOpening= winterMode;
-const {isWinterField,WINTER_DEFAULTS}=winterMode?await import('./map-winter-hazards.js'):{isWinterField:()=>false,WINTER_DEFAULTS:null};
+let {isWinterField,WINTER_DEFAULTS}=winterMode?await import('./map-winter-hazards.js?v=20261024-winter-panel-controls'):{isWinterField:()=>false,WINTER_DEFAULTS:null};
 import {ANOMALY_STYLE,anomalyLegend} from './map-anomaly-scale.js?v=20261023-revised-1c';
 import {createLayoutRestore} from './map-layouts.js?v=20261023-favourites';
 import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js?v=20261023-revised-1c';
@@ -12,7 +12,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261023-frame-throughput';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261023-revised-1c';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastPointChartTitle as forecastChartTitle,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261024-winter-hazards';
+import {forecastPointChartTitle as forecastChartTitle,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261024-winter-panel-controls';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -35,24 +35,24 @@ import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
 import {createViewRefresh,layoutForecastBounds,forecastViewKey} from './map-view-refresh.js?v=20261021-stable-tiles';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261024-winter-hazards';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261024-winter-panel-controls';
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel,gridLabelDensity} from './map-grid.js?v=20261024-native-labels';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261024-winter-hazards';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261024-winter-panel-controls';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261024-winter-hazards';
+import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261024-winter-panel-controls';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261024-point-sampler';
 import {finite} from './data.js?v=20261019-mogreps-uk';
-import {MAP_MODELS as MODELS} from './map-models.js?v=20261024-winter-hazards';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261024-winter-hazards';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261024-winter-hazards';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261024-winter-panel-controls';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261024-winter-panel-controls';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261024-winter-panel-controls';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
 import {isJetWind,is850Temperature,temperatureContourLevels,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261024-winter-hazards';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261024-winter-panel-controls';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261023-phase-mechanism2';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261023-phase-mechanism2';
@@ -60,7 +60,7 @@ const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
 const sidebar=setupMapSidebar({onLayoutChange:resizeMapLayout});
-const layoutRestore=winterMode?{initial:null,changed(){},start(){}}:await createLayoutRestore(),savedLayout=layoutRestore.initial;
+let layoutRestore=winterMode?{initial:null,changed(){},start(){}}:await createLayoutRestore(),savedLayout=layoutRestore.initial;
 const UK=[-11,49,2.7,61.6];
 for(const area of MAP_AREAS){const option=document.createElement('option');option.value=area.id;option.textContent=area.name;$('map-area').append(option);}
 const currentArea=document.createElement('option');currentArea.value='current';currentArea.textContent='Current map area';$('map-area').append(currentArea);
@@ -97,7 +97,7 @@ installVerticalMotion(OM,settings);
 installPrecipitationType(OM,settings);
 installPrecipitationRates(OM,settings);
 const accumulationReader=installAccumulations(OM,settings);
-if(winterMode){const {installWinterAdditions}=await import('./map-winter-additions-reader.js');installWinterAdditions(OM,settings);}
+if(winterMode){const {installWinterAdditions}=await import('./map-winter-additions-reader.js?v=20261024-winter-panel-controls');installWinterAdditions(OM,settings);}
 const retention=new ForecastRetention({deferChanges:true,onStatus:message=>{
  const element=$('source-check-status');if(element)element.textContent=message;
 }});
@@ -193,8 +193,10 @@ if(savedLayout){
  $('map-playback-speed').value=String(savedLayout.speed);
 }
 
+const normalWorkspaceDefaults={...state,overlays:structuredClone(state.overlays)};
 if(winterMode){
  Object.assign(state,WINTER_DEFAULTS);
+ state.visiblePanelKeys=['a','b','c'];
  document.body.classList.add('winter-hazards');
  document.querySelector('.map-heading h1').textContent='Winter Hazard Forecasting';
  document.title='Winter Hazard Forecasting · Snowline';
@@ -238,7 +240,7 @@ function makeMap(key){
  panel.coastline=coastlineController(map,{onState:()=>queueMicrotask(()=>updateOutlineStatus(panel))});
  // One resize owner avoids duplicate movement events invalidating the buffer.
  let pixelRatio=map.getPixelRatio();
- panel.resize=({layoutOnly=false}={})=>{if(briefingActive)return;const container=map.getContainer(),canvas=map.getCanvas(),ratio=map.getPixelRatio();if(container.clientWidth!==canvas.clientWidth||container.clientHeight!==canvas.clientHeight||pixelRatio!==ratio){pixelRatio=ratio;map.resize(layoutOnly?{snowlineLayoutResize:true}:undefined);if(layoutOnly)scheduleGridValues(panel);}};
+ panel.resize=({layoutOnly=false}={})=>{if(briefingActive||!panelVisible(key))return;const container=map.getContainer(),canvas=map.getCanvas(),ratio=map.getPixelRatio();if(container.clientWidth!==canvas.clientWidth||container.clientHeight!==canvas.clientHeight||pixelRatio!==ratio){pixelRatio=ratio;map.resize(layoutOnly?{snowlineLayoutResize:true}:undefined);if(layoutOnly)scheduleGridValues(panel);}};
  new ResizeObserver(panel.resize).observe($('map-'+key));window.addEventListener('resize',panel.resize);
  map.on('style.load',()=>{panel.styleOrdered=false;applyMapAppearance(map,{roads,terrain});if(panel.restyling){panel.restyling=false;panel.sourceId=null;if(panelVisible(key)&&panelSelections(state).every(({key})=>!panels[key]?.restyling))void restoreMapFrame();}});
  map.on('error',event=>{console.warn('Map rendering:',event.error?.message);if(event.sourceId==='mslp-source'){$('mslp-note-'+key).textContent='MSLP overlay could not be loaded. Try another time or model.';return;}if(event.error?.name==='AbortError'||!event.sourceId||event.sourceId!==panel.sourceId)return;const el=$('map-error-'+key);el.textContent='This layer could not be loaded. Try another field or check the latest run.';el.hidden=false;panel.loaded=false;});
@@ -435,13 +437,13 @@ function panelCache(panel,model,field){
  panel.cacheKey=signature;
  panel.cacheTimes=state.times;panel.cacheMeta=meta;panel.frameDescriptors=descriptors;
  const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.symbolURL?[symbolOverlay(descriptor.symbolURL)]:[]),...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:(accumulationHours(field)||winterHours(field))?120000:25000,preloadConcurrency:(accumulationHours(field)||winterHours(field))?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:(accumulationHours(field)||winterHours(field))?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>panelVisible(panel.key)&&!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
  if(validatesSources)panel.frameCache.viewMaxAge=Infinity;
  panel.frameCache.setView(forecastViewKey(panel.map));panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
- if(panel.restyling||!panel.frameCache)return;
- const accumulation=accumulationHours(panelSelection(state,panel.key).field)||winterHours(panelSelection(state,panel.key).field);
+ if(!panelVisible(panel.key)||panel.restyling||!panel.frameCache)return;
+ const accumulation=accumulationHours(panelSelection(state,panel.key).field);
  const window=arrowFrameWindow(panel.frameURLs,state.index,accumulation?{ahead:1,behind:1,loop:false}:frameBudget());
  panel.frameCache.warm({...window,all:accumulation?window.upcoming:fullSequence(panel.frameURLs,state.index),delay:accumulation?250:0});
 }
@@ -685,7 +687,7 @@ function setLegend(){
 }
 function populateVariables(onlyKey){
  for(const {key,model,field} of panelSelections(state).filter(item=>!onlyKey||item.key===onlyKey)){
-  const published=availableFields(fields,[state.metas[model],...(winterMode&&state.metas[model]?.winterProductMenu?[state.metas[model].winterProductMenu]:[]),...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]).filter(f=>!winterMode||isWinterField(f));
+  const published=availableFields(fields,[state.metas[model],...(winterMode&&state.metas[model]?.winterProductMenu?[state.metas[model].winterProductMenu]:[]),...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]).filter(f=>winterMode?isWinterField(f):!isWinterAddition(f.key));
   const available=[...published];for(const f of productChoices(sourceModel(model)).filter(f=>!winterMode))if(!available.some(a=>a.key===f.key))available.push(f);available.sort(compareFields);const select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
   for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
   if(!winterMode&&state.metas[model]?.variables.includes('precipitation')){
@@ -939,6 +941,38 @@ for(const key of ['a','b','c'])$('toggle-panel-menu-'+key).addEventListener('cli
  setPanelMenuExpanded(key,!expanded);
  resizeMapLayout();
 });
+function updateWinterPanelControls(){
+ const keys=state.visiblePanelKeys??['a'];
+ for(const key of ['a','b','c']){
+  $('close-panel-'+key).hidden=!winterMode;
+  $('close-panel-'+key).disabled=keys.length===1;
+ }
+ $('restore-winter-panels').hidden=!winterMode||keys.length===3;
+}
+function setWinterPanels(keys){
+ if(!winterMode||!keys.length||!state.times.length)return;
+ pauseAnimation();++timeGeneration;viewportRefresh.cancel();
+ requestedTime=Date.parse(state.times[state.index])||requestedTime;
+ state.visiblePanelKeys=keys;state.compare=keys.length>1;state.comparisonCount=keys.length;
+ for(const key of ['a','b','c']){
+  const visible=keys.includes(key);
+  $('panel-'+key).hidden=!visible;$('layer-notes-'+key).hidden=!visible;
+  if(!visible){panels[key].frameCache?.stop();clearGridValues(panels[key]);}
+  else panels[key].frameCache?.resume();
+ }
+ updateWinterPanelControls();resizeMapLayout();viewportBounds();
+ if(panelSelections(state).some(({model})=>!state.metas[model])){void configure();return;}
+ populateVariables();refreshTimeline();showRunUpdates();setLegend();setTime();
+}
+{
+ updateWinterPanelControls();
+ for(const key of ['a','b','c'])$('close-panel-'+key).addEventListener('click',()=>{
+  if(!winterMode||state.visiblePanelKeys.length<2)return;
+  setWinterPanels(state.visiblePanelKeys.filter(k=>k!==key));
+  $('toggle-panel-menu-'+state.visiblePanelKeys[0]).focus({preventScroll:true});
+ });
+ $('restore-winter-panels').addEventListener('click',()=>setWinterPanels(['a','b','c']));
+}
 async function changeComparison(){
  pauseAnimation();requestedTime=Date.parse(state.times[state.index])||requestedTime;
  state.compare=$('compare-maps').checked;
@@ -1031,7 +1065,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261024-winter-hazards').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261024-winter-panel-controls').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;
@@ -1082,14 +1116,15 @@ await configure();
 if(savedLayout?.briefing)await openBriefing(savedLayout.briefing);
 function captureLayout(){
  // A pending or failed model switch must never replace a working saved setup.
- if(!state.times.length||$('reload-maps').disabled||Object.values(panels).some(p=>p.configuring))return null;
+ if(winterMode||!state.times.length||$('reload-maps').disabled||Object.values(panels).some(p=>p.configuring))return null;
  const briefing=briefingActive?briefingView?.snapshot():null;if(briefingActive&&!briefing)return null;
  return {version:1,panels:['a','b','c'].map(key=>{
   const {model,field}=panelSelection(state,key),map=panels[key]?.map,center=map?.getCenter();
   return {model:followLatest[key]?sourceModel(model):model,field,followLatest:followLatest[key],...state.overlays[key],expanded:$('toggle-panel-menu-'+key).getAttribute('aria-expanded')!=='false',camera:center?[center.lng,center.lat,map.getZoom()]:null};
  }),compare:state.compare,comparisonCount:state.comparisonCount,interval:$('map-forecast-interval').value,time:state.times[state.index],area:$('map-area').value,background,terrain,roads,opacity:state.opacity,speed:playback.interval,sidebarCollapsed:sidebar?.collapsed(),briefing};
 }
-layoutRestore.start(captureLayout,layout=>layout.briefing?'Briefing - '+modelName(layout.briefing.model)+' - '+layout.briefing.count+' panels':layout.panels.slice(0,layout.compare?layout.comparisonCount:1).map(p=>modelName(p.model)+' / '+(fields.find(f=>f.key===p.field)?.name??p.field)).join(' | '));
+const describeLayout=layout=>layout.briefing?'Briefing - '+modelName(layout.briefing.model)+' - '+layout.briefing.count+' panels':layout.panels.slice(0,layout.compare?layout.comparisonCount:1).map(p=>modelName(p.model)+' / '+(fields.find(f=>f.key===p.field)?.name??p.field)).join(' | ');
+layoutRestore.start(captureLayout,describeLayout);
 retention.onChange=message=>{
  $('source-check-status').textContent=message+' Existing charts are kept for this session.';
 };
@@ -1102,3 +1137,77 @@ let liveRunTimer=setInterval(refreshLiveRuns,60000);
 window.addEventListener('pagehide',()=>clearInterval(liveRunTimer));
 window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(liveRunTimer);liveRunTimer=setInterval(refreshLiveRuns,60000);refreshLiveRuns();}});
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'select_event_location',title:'Prepare an event analysis at a location',description:'Select latitude and longitude for the visible event analysis form. Does not calculate a hazard or fetch point forecasts; use the visible Calculate event action afterwards.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');state.location={latitude:input.latitude,longitude:input.longitude};selectEventPoint(state.location,state.times[state.index]);$('event-analysis').scrollIntoView({block:'start'});return {location:state.location,eventStartUTC:$('event-start').value+'Z',eventEndUTC:$('event-end').value+'Z',calculated:false};}},{signal:lifecycle.signal});}catch(error){console.info('Optional map tool unavailable:',error.message);}}
+
+// Switch workspaces within the existing page: retain WebGL maps, parsed feeds,
+// native readers and the shared imagery cache instead of starting them again.
+const workspaceSnapshots=new Map();let workspaceSwitch=0,workspaceLoading=false;
+function saveWorkspace(){
+ workspaceSnapshots.set(winterMode,{
+  state:{...state,overlays:structuredClone(state.overlays)},follow:{...followLatest},time:state.times[state.index],
+  menus:['a','b','c'].map(key=>{const select=$('map-run'+(key==='a'?'':'-'+key));return {options:[...select.children].map(n=>n.cloneNode(true)),value:select.value};}),
+  expanded:['a','b','c'].map(key=>$('toggle-panel-menu-'+key).getAttribute('aria-expanded')==='true')
+ });
+}
+async function switchWorkspace(next,historyChange=true){
+ if(next===winterMode)return;
+ const ticket=++workspaceSwitch;
+ if(!winterMode)layoutRestore.save?.();
+ if(!workspaceLoading)saveWorkspace();workspaceLoading=true;pauseAnimation();++timeGeneration;++state.generation;viewportRefresh.cancel();
+ for(const panel of Object.values(panels)){panel.frameCache?.stop();clearGridValues(panel);}
+ winterMode=next;
+ document.body.classList.toggle('winter-hazards',next);
+ document.querySelector('.map-heading h1').textContent=next?'Winter Hazard Forecasting':'UK Model Maps';
+ document.title=(next?'Winter Hazard Forecasting':'UK weather maps')+' · Snowline';
+ $(next?'winter-tab':'all-maps-tab').setAttribute('aria-current','page');
+ $(next?'all-maps-tab':'winter-tab').removeAttribute('aria-current');
+ if(historyChange){const url=new URL(location.href);if(next)url.searchParams.set('view','winter');else url.searchParams.delete('view');history.pushState(null,'',url);}
+ status('Opening '+(next?'winter forecasting':'UK model maps')+'…');
+ try{
+  if(next){
+   ({isWinterField,WINTER_DEFAULTS}=await import('./map-winter-hazards.js?v=20261024-winter-panel-controls'));
+   const {installWinterAdditions}=await import('./map-winter-additions-reader.js?v=20261024-winter-panel-controls');
+   if(ticket!==workspaceSwitch){setWinterAdditionsActive(winterMode);return;}
+   setWinterAdditionsActive(true);installWinterAdditions(OM,settings);
+  }else{setWinterAdditionsActive(false);}
+  const snapshot=workspaceSnapshots.get(next),generation=state.generation;
+  if(snapshot){state={...snapshot.state,generation};Object.assign(followLatest,snapshot.follow);requestedTime=Date.parse(snapshot.time)||requestedTime;}
+  else{
+   state={...normalWorkspaceDefaults,metas:{},times:[],generation,overlays:createPanelOverlays()};
+   Object.assign(followLatest,{a:true,b:true,c:true});
+   if(next){Object.assign(state,WINTER_DEFAULTS);state.visiblePanelKeys=['a','b','c'];for(const key of ['a','b','c'])state.overlays[key].isobars=false;winterOpening=true;}
+  }
+  if(!next&&!layoutRestore.save){
+   layoutRestore=await createLayoutRestore();if(ticket!==workspaceSwitch)return;
+   const saved=layoutRestore.initial;
+   if(saved&&!snapshot){
+    state.compare=saved.compare;state.comparisonCount=saved.comparisonCount;state.interval=saved.interval;requestedTime=Date.parse(saved.time)||requestedTime;
+    for(const [i,key]of ['a','b','c'].entries()){const p=saved.panels[i];if(!p)continue;const suffix=key==='a'?'':key.toUpperCase();state['model'+suffix]=p.model;state['field'+suffix]=p.field;followLatest[key]=p.followLatest;state.overlays[key]={contours:p.contours,isobars:p.isobars,grid:p.grid};}
+   }
+   layoutRestore.start(captureLayout,describeLayout);
+  }
+  $('compare-maps').checked=state.compare;$('map-comparison-count').value=String(state.comparisonCount);$('comparison-count-control').hidden=!state.compare;
+  $('map-opacity').value=String(state.opacity*100);$('opacity-label').textContent=(state.opacity*100)+'%';
+  for(const [i,key]of ['a','b','c'].entries()){
+   const visible=panelVisible(key),suffix=key==='a'?'':'-'+key;
+   $('panel-'+key).hidden=!visible;$('layer-notes-'+key).hidden=!visible;
+   if(visible&&!panels[key])makeMap(key);
+   $('map-model'+suffix).value=sourceModel(panelSelection(state,key).model);
+   $('toggle-panel-menu-'+key).hidden=!next&&!state.compare;
+   setPanelMenuExpanded(key,snapshot?.expanded[i]??true);
+   for(const [control,setting]of [['contours','contours'],['mslp','isobars'],['grid','grid']])$('map-'+control+'-'+key).checked=state.overlays[key][setting];
+   if(snapshot){const select=$('map-run'+suffix);select.replaceChildren(...snapshot.menus[i].options.map(n=>n.cloneNode(true)));select.value=snapshot.menus[i].value;select.disabled=false;}
+  }
+  updateWinterPanelControls();resizeMapLayout();viewportBounds();
+  if(snapshot?.state.times.length){
+   extendCatalogue(fields,Object.values(state.metas),OM,settings);populateVariables();
+   $('reload-maps').disabled=false;for(const key of ['a','b','c'])$('map-variable'+(key==='a'?'':'-'+key)).disabled=false;
+   refreshTimeline();showRunUpdates();setLegend();setTime();
+  }else await configure();
+ }catch(error){if(ticket===workspaceSwitch)status('This workspace could not open. '+error.message);}
+ finally{if(ticket===workspaceSwitch)workspaceLoading=false;}
+}
+for(const [id,next]of [['all-maps-tab',false],['winter-tab',true]])$(id).addEventListener('click',event=>{
+ if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||event.button)return;
+ event.preventDefault();void switchWorkspace(next);
+});
+window.addEventListener('popstate',()=>void switchWorkspace(new URLSearchParams(location.search).get('view')==='winter',false));

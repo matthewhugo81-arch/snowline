@@ -1,4 +1,4 @@
-import {WINTER_ADDITION_KEYS} from './map-winter-additions.js';
+import {WINTER_ADDITION_KEYS} from './map-winter-additions.js?v=20261024-winter-panel-controls';
 // Explicit allow-list: new general-purpose layers never leak into this workspace.
 export const WINTER_FIELDS = new Set([
  ...WINTER_ADDITION_KEYS,'visibility','cloud_cover_2m',
