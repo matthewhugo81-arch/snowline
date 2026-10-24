@@ -1,3 +1,7 @@
+import {winterHours} from './map-winter-registry.js';
+const winterMode=new URLSearchParams(location.search).get('view')==='winter';
+let winterOpening= winterMode;
+const {isWinterField,WINTER_DEFAULTS}=winterMode?await import('./map-winter-hazards.js'):{isWinterField:()=>false,WINTER_DEFAULTS:null};
 import {ANOMALY_STYLE,anomalyLegend} from './map-anomaly-scale.js?v=20261023-revised-1c';
 import {createLayoutRestore} from './map-layouts.js?v=20261023-favourites';
 import {PRODUCT_FIELDS,PRODUCT_DOMAINS,productField,productChoices,loadProducts,retainProductSources} from './map-ensemble-products.js?v=20261023-revised-1c';
@@ -8,7 +12,7 @@ import {VERTICAL_MOTION,installVerticalMotion,verticalMotionOverlayURLs} from '.
 import {installRangeReads} from './map-range-reads.js?v=20261023-frame-throughput';
 import {applyMapAppearance,applyRoads as setRoads,drawTerrain as setTerrain,orderForecastBasemap as orderBasemap,rasterResampling,gridLabelLayer,coastlineController} from './map-appearance.js?v=20261023-revised-1c';
 import {MAP_BACKGROUNDS,backgroundStyle} from './map-backgrounds.js?v=20261013-map-appearance';
-import {forecastPointChartTitle as forecastChartTitle,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261023-phase-mechanism2';
+import {forecastPointChartTitle as forecastChartTitle,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261024-winter-hazards';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationPeriod,accumulationSource,precipitationStepHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {installAccumulations} from './map-accumulation-reader.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,compositeField,compositeSettings,compositeURL,isCompositeURL,compositeUnderlay} from './map-weather-composite.js?v=20261018-rates';
@@ -31,24 +35,24 @@ import {ForecastPlayback} from './map-playback.js?v=20261015-loading-performance
 import {ForecastNavigation} from './map-navigation.js?v=20261020-rapid-navigation';
 import {createViewRefresh,layoutForecastBounds,forecastViewKey} from './map-view-refresh.js?v=20261021-stable-tiles';
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
-import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-run-selector';
+import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261024-winter-hazards';
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
 import {visibleGridPoints,gridValueLabel,gridLabelDensity} from './map-grid.js?v=20261024-native-labels';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
-import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261023-phase-mechanism2';
+import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261024-winter-hazards';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {ukvCoverageText} from './ukv-run-info.js?v=20261013-ukv-retention';
-import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261023-phase-mechanism2';
+import {sourceVariable,extendCatalogue,availableFields,compareFields,variableGroup,PRECIPITATION_SCALE,CLOUD_COVER_SCALE} from './map-catalogue.js?v=20261024-winter-hazards';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import * as OM from './vendor/index.mjs?v=20261024-point-sampler';
 import {finite} from './data.js?v=20261019-mogreps-uk';
-import {MAP_MODELS as MODELS} from './map-models.js?v=20261022-concise-names';
-import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261022-retention-recovery';
-import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261021-harmonie-pressure';
+import {MAP_MODELS as MODELS} from './map-models.js?v=20261024-winter-hazards';
+import {mapRunCatalogue,sourceModel,selectedRunKey,renderRunSelector} from './map-run-selection.js?v=20261024-winter-hazards';
+import {loadMapRun as loadSpatialModel} from './map-ukv-runs.js?v=20261024-winter-hazards';
 import {cachedJSON,usageText} from './cache.js?v=20261010-ukv-families';
 import {selectEventPoint} from './event-analysis.js?v=20261019-mogreps-uk';
 import {isJetWind,is850Temperature,temperatureContourLevels,isSurfaceWind,SURFACE_WIND_SCALE} from './map-chart-style.js?v=20261020-surface-wind110';
-import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261023-phase-mechanism2';
+import {createChartImageMenu,chartScales} from './map-image-export.js?v=20261024-winter-hazards';
 import {MAP_AREAS} from './map-areas.js?v=20261013-nw-europe-periods';
 import {THETA_SYMBOLS,winterNote} from './map-winter.js?v=20261023-phase-mechanism2';
 import {isSymbolURL,symbolURL,symbolOverlay,precipitationSymbolProtocol} from './map-precipitation-symbols.js?v=20261023-phase-mechanism2';
@@ -56,7 +60,7 @@ const $=id=>document.getElementById(id);
 const imageMenu=createChartImageMenu();
 setupMobileMap();
 const sidebar=setupMapSidebar({onLayoutChange:resizeMapLayout});
-const layoutRestore=await createLayoutRestore(),savedLayout=layoutRestore.initial;
+const layoutRestore=winterMode?{initial:null,changed(){},start(){}}:await createLayoutRestore(),savedLayout=layoutRestore.initial;
 const UK=[-11,49,2.7,61.6];
 for(const area of MAP_AREAS){const option=document.createElement('option');option.value=area.id;option.textContent=area.name;$('map-area').append(option);}
 const currentArea=document.createElement('option');currentArea.value='current';currentArea.textContent='Current map area';$('map-area').append(currentArea);
@@ -93,6 +97,7 @@ installVerticalMotion(OM,settings);
 installPrecipitationType(OM,settings);
 installPrecipitationRates(OM,settings);
 const accumulationReader=installAccumulations(OM,settings);
+if(winterMode){const {installWinterAdditions}=await import('./map-winter-additions-reader.js');installWinterAdditions(OM,settings);}
 const retention=new ForecastRetention({deferChanges:true,onStatus:message=>{
  const element=$('source-check-status');if(element)element.textContent=message;
 }});
@@ -149,7 +154,7 @@ function resizeMapLayout(){
 function viewportBounds(){
  if(briefingActive)return;
  const visible=Object.entries(panels).filter(([key])=>panelVisible(key));if(!visible.length)return;
- const sideBySide=matchMedia('(min-width:1051px)').matches;
+ const sideBySide=matchMedia(winterMode?'(min-width:800px)':'(min-width:1051px)').matches;
  const width=document.querySelector('.map-workspace').clientWidth/(sideBySide?visible.length:1);
  const boundsByPanel=visible.map(([key,p])=>layoutForecastBounds(p.map,{
   width,
@@ -188,6 +193,15 @@ if(savedLayout){
  $('map-playback-speed').value=String(savedLayout.speed);
 }
 
+if(winterMode){
+ Object.assign(state,WINTER_DEFAULTS);
+ document.body.classList.add('winter-hazards');
+ document.querySelector('.map-heading h1').textContent='Winter Hazard Forecasting';
+ document.title='Winter Hazard Forecasting · Snowline';
+ $('winter-tab').setAttribute('aria-current','page');
+ $('all-maps-tab').removeAttribute('aria-current');
+ for(const key of ['a','b','c']){state.overlays[key].isobars=false;$('map-mslp-'+key).checked=false;}
+}
 $('compare-maps').checked=state.compare;$('map-comparison-count').value=String(state.comparisonCount);$('comparison-count-control').hidden=!state.compare;
 for(const key of ['b','c']){$('panel-'+key).hidden=!panelVisible(key);$('layer-notes-'+key).hidden=!panelVisible(key);}
 const initialLat=Number(params.get('lat')),initialLon=Number(params.get('lon'));
@@ -421,13 +435,13 @@ function panelCache(panel,model,field){
  panel.cacheKey=signature;
  panel.cacheTimes=state.times;panel.cacheMeta=meta;panel.frameDescriptors=descriptors;
  const decorate=url=>{const descriptor=descriptors.get(url);return [...(descriptor.symbolURL?[symbolOverlay(descriptor.symbolURL)]:[]),...(descriptor.cloudURL?[compositeUnderlay(descriptor.cloudURL)]:[]),...overlayGroups(descriptor)];};
- panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:accumulationHours(field)?120000:25000,preloadConcurrency:accumulationHours(field)?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
+ panel.frameCache=new ForecastFrames(panel.map,'frame-'+panel.key,{delay:120,rasterBefore:panel.rasterBefore,overlayBefore:panel.overlayBefore,decorate,prefetch:createFramePrefetch(panel.map,imageryCache,decorate),timeout:(accumulationHours(field)||winterHours(field))?120000:25000,preloadConcurrency:(accumulationHours(field)||winterHours(field))?1:state.compare?2:3,onProgress:updatePreloadStatus,canPreload:()=>!imageryCache.limited,cacheRevision:()=>imageryCache.retentionRevision,isActive:()=>!document.hidden});
  if(validatesSources)panel.frameCache.viewMaxAge=Infinity;
  panel.frameCache.setView(forecastViewKey(panel.map));panel.frames=panel.frameCache.frames;return panel.frameCache;
 }
 function warmUpcoming(panel){
  if(panel.restyling||!panel.frameCache)return;
- const accumulation=accumulationHours(panelSelection(state,panel.key).field);
+ const accumulation=accumulationHours(panelSelection(state,panel.key).field)||winterHours(panelSelection(state,panel.key).field);
  const window=arrowFrameWindow(panel.frameURLs,state.index,accumulation?{ahead:1,behind:1,loop:false}:frameBudget());
  panel.frameCache.warm({...window,all:accumulation?window.upcoming:fullSequence(panel.frameURLs,state.index),delay:accumulation?250:0});
 }
@@ -625,7 +639,7 @@ function setLegend(){
   const legendOffset=f.legendStart??0,legendColors=f.colors.slice(legendOffset),displayBreaks=displayStops(f).slice(legendOffset),min=f.temperatureBands||f.anomalyBands?displayBreaks[1]:displayBreaks[0],max=displayBreaks.at(-1);
   if(panels[key].legendField!==field){
   panels[key].legendField=field;
-  el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm/h)':['precipitation_probability','snowfall_probability'].includes(field)?'Chance (%)':f.categoryLabels?'Precipitation type & intensity':displayUnit(f);
+  el('legend-title').textContent=field===WEATHER_COMPOSITE?'Modelled cloud (%) / precipitation (mm/h)':['precipitation_probability','snowfall_probability'].includes(field)?'Chance (%)':isTypeField(field)?'Precipitation type & intensity':field==='categorical_freezing_rain'?'Freezing rain flag':displayUnit(f);
   gradient.hidden=!!f.bands;ticks.hidden=!!f.bands;bands.hidden=!f.bands;ticks.replaceChildren();bands.replaceChildren();
   gradient.style.background='linear-gradient(to right,'+(f.temperatureBands?f.colors.flatMap((c,i)=>[c+' '+100*i/f.colors.length+'%',c+' '+100*(i+1)/f.colors.length+'%']):f.colors.map((c,i)=>c+' '+100*(displayBreaks[i]-min)/(max-min)+'%')).join(',')+')';
   [min,f.temperatureBands?0:(min+max)/2,max].forEach(v=>{const span=document.createElement('span');span.textContent=Number(v.toFixed(2))+(f.unit==='°C'?'°':'');if(f.temperatureBands)span.style.left=100*f.stops.indexOf(v)/f.colors.length+'%';ticks.append(span);});
@@ -644,7 +658,7 @@ function setLegend(){
   el('legend-winter').hidden=!isTypeField(field)&&field!==THETA_SYMBOLS;el('legend-winter').textContent=isTypeField(field)?'Light → dark: 0.1–<0.5 / 0.5–<2 / 2–<5 / 5+ mm/h water equivalent · below 0.1 unshaded':field===THETA_SYMBOLS?f.legendNote:'';
   el('temperature-scale-note').textContent=f.anomalyBands?f.legendNote:isTypeField(field)?'Light → dark: 0.1–<0.5 / 0.5–<2 / 2–<5 / 5+ mm/h water equivalent':field===THETA_SYMBOLS?f.legendNote:f.temperatureBands?f.temperatureBands+'°C colour bands · '+min+' to '+max+'°C; end colours extend beyond this range.':'';
   }
-  let note=f.note+' '+winterNote(state.metas[model],field)+(state.metas[model]?.ensembleNote?' '+state.metas[model].ensembleNote:''),interval=accumulationPeriod(field,state.times[state.index])||f.legendNote||'';
+  let note=f.note+' '+winterNote(state.metas[model],field)+(state.metas[model]?.ensembleNote?' '+state.metas[model].ensembleNote:''),interval=accumulationPeriod(field,state.times[state.index])||(winterHours(field)?winterHours(field)+' h ending at the selected valid time':'')||f.legendNote||'';
   if(field===VERTICAL_MOTION){const sourceNote=directVerticalNote(fieldSource(state.metas[model],field,state.times[state.index]));if(sourceNote){note+=' '+sourceNote;interval+=' '+sourceNote;}}
   if([WEATHER_COMPOSITE,...TYPE_KEYS,THETA_SYMBOLS,'precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent'].includes(field)){
    const hours=fieldIntervalHours(state.metas[model],field,state.times[state.index]);
@@ -671,10 +685,10 @@ function setLegend(){
 }
 function populateVariables(onlyKey){
  for(const {key,model,field} of panelSelections(state).filter(item=>!onlyKey||item.key===onlyKey)){
-  const published=availableFields(fields,[state.metas[model],...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]);
-  const available=[...published];for(const f of productChoices(sourceModel(model)))if(!available.some(a=>a.key===f.key))available.push(f);available.sort(compareFields);const select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
+  const published=availableFields(fields,[state.metas[model],...(winterMode&&state.metas[model]?.winterProductMenu?[state.metas[model].winterProductMenu]:[]),...(state.metas[model]?.normalMenuMeta?[state.metas[model].normalMenuMeta]:[])]).filter(f=>!winterMode||isWinterField(f));
+  const available=[...published];for(const f of productChoices(sourceModel(model)).filter(f=>!winterMode))if(!available.some(a=>a.key===f.key))available.push(f);available.sort(compareFields);const select=$('map-variable'+(key==='a'?'':'-'+key)),groups=new Map();select.replaceChildren();
   for(const f of available){const group=variableGroup(f.key);if(!groups.has(group)){const element=document.createElement('optgroup');element.label=group;groups.set(group,element);select.append(element);}const option=document.createElement('option');option.value=f.key;option.textContent=f.name;groups.get(group).append(option);}
-  if(state.metas[model]?.variables.includes('precipitation')){
+  if(!winterMode&&state.metas[model]?.variables.includes('precipitation')){
    const supported=ACCUMULATION_KEYS.filter(k=>accumulationSource(state.metas[model],k));
    let group=groups.get('Accumulated precipitation');
    if(!group&&(state.metas[model].sources??[state.metas[model]]).some(source=>source.variables?.includes('precipitation')&&precipitationStepHours(source.domain,6))){group=document.createElement('optgroup');group.label='Accumulated precipitation';select.append(group);}
@@ -683,7 +697,7 @@ function populateVariables(onlyKey){
   }
   // Optional choices lead the menu but require their own metadata load. A model
   // switch must start with a verified field, not an unloaded probability.
-  const selected=available.some(f=>f.key===field)?field:published.find(f=>f.key===WEATHER_COMPOSITE)?.key??published.find(f=>f.key==='temperature_2m')?.key??published[0]?.key;
+  const selected=available.some(f=>f.key===field)?field:published.find(f=>f.key===WEATHER_COMPOSITE)?.key??published.find(f=>f.key==='temperature_2m')?.key??(winterMode?published.find(f=>!productField(f.key))?.key:null)??published[0]?.key;
   state['field'+(key==='a'?'':key.toUpperCase())]=selected;select.value=selected??'';
  }
 }
@@ -762,6 +776,13 @@ async function refreshLiveRuns(){
 }
 
 async function resolvePanelRun(item,load,options){
+ const result=await resolvePanelRunBase(item,load,options);
+ if(winterMode&&productChoices(sourceModel(item.model)).length&&!result.meta.productOnly){
+  try{const products=await loadProducts(sourceModel(item.model),load,followLatest[item.key]?null:result.meta.reference_time);result.meta={...result.meta,winterProductMenu:products};}catch{/* Only verified published products enter the winter menu. */}
+ }
+ return result;
+}
+async function resolvePanelRunBase(item,load,options){
  const request=requestedRun(item),model=sourceModel(item.model);
  if(productField(item.field)&&productChoices(model).some(f=>f.key===item.field)){
   // A probability can be restored on startup or carried into a new model.
@@ -810,6 +831,12 @@ async function configure(force=false){
   showRunUpdates();
   extendCatalogue(fields,metas,OM,settings);populateVariables();
   if(panelSelections(state).some(({field})=>!field))throw new Error('No map fields are available for one of these runs.');
+  if(winterOpening){
+   const frost=state.metas[state.modelC];
+   const times=(frost?.variable_valid_times?.[state.fieldC]??[]).map(Date.parse).filter(Number.isFinite);
+   if(times.length)requestedTime=times.reduce((best,t)=>Math.abs(t-requestedTime)<Math.abs(best-requestedTime)?t:best);
+   winterOpening=false;
+  }
   refreshTimeline();
   setLegend();setTime();
  }catch(error){if(generation===state.generation){state.times=[];refreshStartingTime('Forecast unavailable');for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
@@ -1004,7 +1031,7 @@ window.addEventListener('pagehide',()=>{outlineWait?.abort();pauseAnimation();})
  }
 });
 function loadBriefing(){
- return briefingModule??=import('./map-briefing.js?v=20261023-phase-mechanism2').catch(error=>{briefingModule=null;throw error;});
+ return briefingModule??=import('./map-briefing.js?v=20261024-winter-hazards').catch(error=>{briefingModule=null;throw error;});
 }
 function closeBriefing(){
  ++briefingOpening;briefingActive=false;

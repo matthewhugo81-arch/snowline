@@ -1,9 +1,10 @@
+import {WET_BULB,wetBulbInputs,winterHours,winterPeriodSource} from './map-winter-registry.js';
 import {isPrecipitationRate} from './map-precipitation-rate.js?v=20261018-rates';
 import {accumulationHours,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
 import {WEATHER_COMPOSITE,COMPOSITE_REQUIRED_FIELDS,compositeMeta} from './map-weather-composite.js?v=20261018-rates';
 import {chooseRun,hasTime,forecastTimes,publishedRun} from './map-runs.js?v=20261021-harmonie-pressure';
 import {UKV,UKV_NOWCAST,ukvRunFamily,selectUKVRun} from './ukv-run-selection.js?v=20261011-live-runs';
-import {sourceVariable} from './map-catalogue.js?v=20261023-phase-mechanism2';
+import {sourceVariable} from './map-catalogue.js?v=20261024-winter-hazards';
 import {PRECIPITATION_TYPE,TYPE_KEYS,isTypeField} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {ENSEMBLE_DOMAINS,ensemblePublicationStatus} from './map-ensemble.js?v=20261020-native-levels';
 import {ENSEMBLE_EXTRAS,verifiedEnsembleExtra,ensemblePeriod} from './map-ensemble-extra.js?v=20261020-native-levels';
@@ -35,7 +36,7 @@ export function ensembleHistoryURL(model){
 }
 // Backward sums/averages have no interval at initialization, even when that
 // timestamp is in the run-wide metadata: https://github.com/open-meteo/open-data
-const intervalFields=new Set([...TYPE_KEYS,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','snowfall_probability','rain','showers','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
+const intervalFields=new Set([...TYPE_KEYS,'temperature_2m_max','temperature_2m_min','precipitation','precipitation_probability','snowfall_probability','rain','showers','hail','categorical_freezing_rain','snowfall_water_equivalent','shortwave_radiation','direct_radiation','diffuse_radiation']);
 // GFS 0.13° omits these fields at analysis time, although run-wide metadata lists
 // them. Verified against the provider's Gfs013DownloadSurfaceVariable.skipHour0:
 // https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Gfs/GfsVariableDownloadable.swift
@@ -57,6 +58,8 @@ function fieldPublishedAt(source,key,time){
  return true;
 }
 export function fieldIntervalHours(meta,key,time){
+ if(winterHours(key))return winterHours(key);
+ if(key==='hail')return 1;
  const period=ensemblePeriod(meta,key,time);if(period)return period.hours;
  if(accumulationHours(key))return accumulationHours(key);
  if(key===THETA_SYMBOLS){const s=fieldSource(compositeMeta(meta),'precipitation',time);return s?precipitationStepHours(s.domain,(Date.parse(time)-Date.parse(s.reference_time))/3600000):null;}
@@ -83,6 +86,8 @@ export function combineSources(primary,other=[]){
  return {...primary,sources,completed:completedSources(sources),variables:[...new Set(sources.flatMap(meta=>meta.variables))],valid_times:forecastTimes(sources)};
 }
 export function fieldSource(meta,key,time){
+ if(winterHours(key))return winterPeriodSource(meta,key,time);
+ if(key===WET_BULB)return (meta?.sources??(meta?[meta]:[])).find(source=>wetBulbInputs(source)&&(!time||(hasTime(source,time)&&wetBulbInputs(source).every(input=>fieldPublishedAt(source,input,time)))))??null;
  if(accumulationHours(key))return accumulationSource(meta,key,time);
  if(key===THETA_SYMBOLS){const selected=compositeMeta(meta);return THETA_SYMBOL_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'wet_bulb_potential_temperature_850hPa',time):null;}
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_REQUIRED_FIELDS.every(field=>fieldSource(selected,field,time))?fieldSource(selected,'precipitation',time):null;}

@@ -1,3 +1,4 @@
+import {WINTER_ADDITION_KEYS,WET_BULB,winterHours,winterPeriodSource,winterVariable,winterAdditionField} from './map-winter-registry.js';
 import {productField} from './map-ensemble-products.js?v=20261022-ireland-ecmwf-range';
 import {precipitationRateVariable} from './map-precipitation-rate.js?v=20261018-rates';
 import {ACCUMULATION_KEYS,accumulationHours,accumulationField,accumulationSource} from './map-accumulation.js?v=20261014-interaction-audit';
@@ -51,11 +52,13 @@ export const PRECIPITATION_PROBABILITY_SCALE = {
  colors:['#ffffff','#dbeefd','#9ecae1','#4292c6','#2171b5','#08519c','#08306b']
 };
 export function sourceVariable(meta,key){
+ if(winterHours(key))return winterPeriodSource(meta,key)?key:null;
  if(accumulationHours(key))return accumulationSource(meta,key)?key:null;
  if(key===THETA_SYMBOLS)return canThetaSymbols(meta)?'wet_bulb_potential_temperature_850hPa_derived':null;
  if(key===WEATHER_COMPOSITE){const selected=compositeMeta(meta);return COMPOSITE_REQUIRED_FIELDS.every(field=>sourceVariable(selected,field))?'precipitation':null;}
  if(meta?.sources){for(const source of meta.sources){const variable=sourceVariable(source,key);if(variable)return variable;}return null;}
  const vars=meta?.variables??[];
+ if(WINTER_ADDITION_KEYS.includes(key))return winterVariable(meta,key);
  if(SURFACE_DERIVED_KEYS.includes(key)&&!vars.includes(key))return surfaceDerivedVariable(meta,key);
  if(key==='ocean_current_speed')return ['ocean_u_current','ocean_v_current'].every(k=>vars.includes(k))?'ocean_u_current':null;
  if(/^vertical_motion_\d+hPa$/.test(key))return pressureMotionVariable(meta,key);
@@ -83,6 +86,7 @@ export function canonicalVariable(key){
  return key;
 }
 export function variableGroup(key){
+ if(WINTER_ADDITION_KEYS.includes(key))return 'Winter Analysis';
  if(productField(key))return productField(key).group;
  if(/^ocean_|^sea_(ice|level|water)_/.test(key))return 'Marine';
  if(/^vertical_motion_\d+hPa$/.test(key))return 'Derived diagnostics';
@@ -136,6 +140,7 @@ const extras={
  uv_index_clear_sky:['Clear-sky UV index','uv','UV index assuming clear skies, rather than the forecast cloud cover.']
 };
 export function describeVariable(key,OM){
+ if(WINTER_ADDITION_KEYS.includes(key))return winterAdditionField(key);
  if(productField(key))return productField(key);
  const additional={
   snow_density:{name:'Snow density',unit:'kg/m³',stops:[0,50,100,150,200,300,400,500,700],colors:['#ffffff','#e4f3ff','#bfdef3','#92bce2','#7391ce','#7d66b3','#9a4194','#8a235e','#501337'],note:'Native density of the model snowpack. The model can retain a default density in snow-free cells; use with snow depth. This is not fresh-snow density or snowfall accumulation.'},
@@ -226,6 +231,7 @@ export function extendCatalogue(fields,metas,OM,settings){
  for(const key of SURFACE_DERIVED_KEYS)if(!keys.includes(key)&&metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  for(const key of [...TYPE_KEYS,THETA_SYMBOLS])if(metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  if(metas.some(meta=>sourceVariable(meta,'dew_point_2m'))&&!keys.includes('dew_point_2m'))keys.push('dew_point_2m');
+ for(const key of WINTER_ADDITION_KEYS)if(!keys.includes(key)&&metas.some(meta=>sourceVariable(meta,key)))keys.push(key);
  const omitted=[];
  for(const key of keys){
   if(!metas.some(meta=>sourceVariable(meta,key)))continue;

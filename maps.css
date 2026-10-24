@@ -361,3 +361,15 @@
  .map-page header .theme-control select{width:82px}
  .map-page .page-nav>a,.map-page .layout-restore>summary{padding-left:4px;padding-right:4px}
 }
+
+.hazard-nav{display:grid;gap:6px;margin:4px 0 16px}.hazard-nav a{padding:10px 9px;border:1px solid var(--line);border-radius:7px;text-decoration:none;color:inherit;font-weight:650;font-size:13px}.hazard-nav a[aria-current]{background:#087d83;color:white;border-color:#087d83}.winter-intro{display:none}.winter-hazards .winter-intro{display:block;font-size:12px;line-height:1.5;margin-bottom:16px}.winter-hazards .winter-intro strong{color:var(--ink)}.winter-hazards .compare-toggle,.winter-hazards #comparison-count-control,.winter-hazards .compare-help,.winter-hazards #open-briefing,.winter-hazards #mobile-briefing,.winter-hazards #layout-restore{display:none!important}
+@media(min-width:800px){
+ .winter-hazards .map-workspace{grid-template-columns:180px minmax(0,1fr)}
+ .winter-hazards .map-canvases:has(#panel-c:not([hidden])){flex-direction:row}
+ .winter-hazards .map-panel+.map-panel{border-top:0;border-left:2px solid var(--line)}
+ .winter-hazards .map-canvases:has(#panel-c:not([hidden])) .panel-selectors{grid-template-columns:1fr}
+ .winter-hazards .map-canvases:has(#panel-c:not([hidden])) .map-view{height:420px}
+ .winter-hazards .panel-controls{padding:8px}
+ .winter-hazards .map-panel-label{font-size:10px;left:4px;padding:4px}
+ .winter-hazards .panel-overlays{gap:5px;flex-wrap:wrap}
+}
