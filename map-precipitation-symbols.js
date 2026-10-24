@@ -1,9 +1,11 @@
 import {nativeCategory,estimatedCategory,precipitationFileInfo} from './map-precipitation-type.js?v=20261014-interaction-audit';
 import {symbolRecipe} from './map-winter.js?v=20261023-phase-mechanism2';
+import {loadShowerDiagnostic,showerAt} from './map-shower-diagnostics.js';
 import {SYMBOL_STYLE,SYMBOL_SPACING,SYMBOL_HALO,MAX_CLUSTER_EXTENT,symbolRadius,makeSymbolSample,thinSymbolSamples,drawPlacedPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism2';
 export {SYMBOL_COLORS,SYMBOL_SPACING,symbolRadius,drawPrecipitationSymbols} from './map-precipitation-glyphs.js?v=20261023-phase-mechanism2';
 export const isSymbolURL=url=>/[?&]precip_symbols=/.test(url);
-export const symbolURL=(url,source,thetaURL)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style='+SYMBOL_STYLE+(thetaURL?'&theta_source='+encodeURIComponent(thetaURL):'');
+const showerSession=Date.now();
+export const symbolURL=(url,source,thetaURL)=>url+'&precip_symbols='+symbolRecipe(source)+'&symbols_style='+SYMBOL_STYLE+(['ukmo_global_deterministic_10km','ukmo_uk_deterministic_2km'].includes(source?.domain)?'&shower_session='+showerSession:'')+(thetaURL?'&theta_source='+encodeURIComponent(thetaURL):'');
 export function symbolOverlay(url){return {id:'precip-symbols',source:{type:'raster',url,tileSize:512,maxzoom:10},layers:[{id:'precip-symbols-image',type:'raster',paint:{'raster-opacity':1,'raster-fade-duration':0,'raster-resampling':'linear'}}]};}
 const categoryKind={1:'rain',2:'mixed',3:'snow',4:'other',5:'freezing',6:'ice'};
 export function symbolInputs(recipe){return recipe==='icon'?['rain','showers','snowfall_water_equivalent']:recipe==='partitioned'?['precipitation','showers']:recipe==='native'?['precipitation','precipitation_type']:recipe==='estimated'?['precipitation','snowfall_water_equivalent']:['precipitation'];}
@@ -26,7 +28,7 @@ export function precipitationSymbols(values,hours,recipe){
   return [glyph('precipitation',amount-convective,'dynamic'),glyph('showers',convective,'convective')].filter(wet);
  }
  const category=recipe==='native'?nativeCategory(values.precipitation_type):recipe==='estimated'?estimatedCategory(amount,values.snowfall_water_equivalent):4;
- return [glyph(categoryKind[category]??'other',amount)];
+ return [glyph(categoryKind[category]??'other',amount,values.shower_diagnostic===true?'convective':'unseparated')];
 }
 const latAt=(pixel,world)=>Math.atan(Math.sinh(Math.PI*(1-2*pixel/world)))*180/Math.PI;
 // Keep the original global 16 px lattice and nearest-native-cell sampling.
@@ -48,6 +50,8 @@ export async function precipitationSymbolProtocol(params,controller,OM,settings)
  if(clip[0]<clip[2]&&clip[1]<clip[3]){
   const ranges=OM.getRanges(config,clip),grid=OM.GridFactory.create(config,ranges),reader=OM.getProtocolInstance(settings).omFileReader,arrays={};
   for(const key of symbolInputs(recipe)){controller.signal.throwIfAborted();arrays[key]=(await reader.readVariable(file,key,ranges,controller.signal)).values;}
+  const showerDiagnostic=await loadShowerDiagnostic(file);
+  controller.signal.throwIfAborted();
   let thetaGrid,thetaValues;
   const thetaURL=query.get('theta_source');
   if(thetaURL){
@@ -68,6 +72,7 @@ export async function precipitationSymbolProtocol(params,controller,OM,settings)
     if(lon<clip[0]||lon>clip[2]||lat<clip[1]||lat>clip[3])continue;
     const values=Object.fromEntries(keys.map(key=>[key,grid.getInterpolatedValue(arrays[key],lat,lon,'nearest')]));
     if(thetaGrid)values.theta_w=thetaGrid.getInterpolatedValue(thetaValues,lat,lon,'nearest');
+    values.shower_diagnostic=showerAt(showerDiagnostic,lat,lon);
     const glyphs=precipitationSymbols(values,hours,recipe);
     if(glyphs.length)samples.push(makeSymbolSample(column,row,glyphs));
    }

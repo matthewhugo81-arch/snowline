@@ -10,7 +10,7 @@ test('only verified native feeds supply a dynamic / convective partition',()=>{
  }
  const ukv={domain:'ukmo_uk_deterministic_2km',reference_time:'2026-10-14T00:00:00Z',variables:['precipitation','snowfall_water_equivalent','cape','showers']};
  assert.equal(symbolRecipe(ukv),'estimated');
- assert.match(winterNote(ukv,THETA_SYMBOLS),/no dynamic \/ convective split/);
+ assert.match(winterNote(ukv,THETA_SYMBOLS),/experimental shower estimate/);
  assert.deepEqual(symbolInputs('partitioned'),['precipitation','showers']);
 });
 

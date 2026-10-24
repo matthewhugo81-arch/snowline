@@ -1,5 +1,6 @@
 ensemble-data/
 point-data/
+shower-data/
 __pycache__/
 node_modules/
 _site/
