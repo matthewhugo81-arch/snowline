@@ -28,3 +28,12 @@ and no longer depend on shared viewport clipping. Point reads retain viewport
 bounds. Preserve this distinction: the interactive map now caches tiles across
 pans and independent panels. Tests: `tests/map-read-bounds.test.mjs` and the
 actual-renderer check in `tests/map-interactions-browser.mjs`.
+
+24 October 2026: `index.mjs` uses `forecast-http.mjs` for native HTTP reads.
+The request deadline covers both headers and response-body consumption; timeout
+aborts the underlying fetch before retry backoff. Caller cancellation also
+interrupts backoff. Permanent HTTP errors retain their status and are not
+retried. Shared-reader subscriber ownership is unchanged. Preserve the helper
+import and the body consumer in `getBytes` when updating the bundle.
+Regression coverage: `tests/forecast-http.test.mjs`, including real stalled
+HTTP connections and the bundled native range-reader integration.
