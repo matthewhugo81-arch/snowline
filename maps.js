@@ -736,6 +736,21 @@ function updateRunMenus(results){
   if(result&&state.metas[model])renderRunSelector($('map-run'+(key==='a'?'':'-'+key)),sourceModel(model),result,state.metas[model],{followLatest:followLatest[key],product:!!productField(field)});
  }
 }
+function finishRunDiscovery(result,valid){
+ result.menuReady?.then(normal=>{
+  if(!valid()||!normal)return;
+  state.metas[result.key]={...state.metas[result.key],normalMenuMeta:normal};
+  extendCatalogue(fields,[normal],OM,settings);populateVariables();
+ }).catch(()=>{});
+ result.metadataReady?.then(pair=>{
+  if(!valid()||!pair||Date.parse(pair.latest.reference_time)!==Date.parse(result.meta.reference_time))return;
+  // Add verified same-run optional choices without restarting the displayed
+  // field, moving its valid time, or replacing a later user selection.
+  state.metas[result.key]=retainRunProgress(state.metas[result.key],pair.latest);
+  extendCatalogue(fields,[state.metas[result.key]],OM,settings);populateVariables();showRunUpdates();
+ }).catch(()=>{});
+ result.completion?.then(pair=>{if(valid())updateRunMenus([{...pair,key:result.key,meta:state.metas[result.key]}]);}).catch(()=>{});
+}
 function showRunUpdates(message=''){
  const pairs=panelModelIds(state).filter(id=>state.metas[id]).map(id=>[id,state.metas[id]]);
  $('ukv-run-note').textContent='Selected model runs: '+pairs.map(([id,meta])=>modelName(id)+' '+runLabel(meta)+(meta.selectionWarnings?.length?' · '+meta.selectionWarnings.join(' '):'')).join(' · ');
@@ -791,16 +806,14 @@ async function resolvePanelRunBase(item,load,options){
   // A probability can be restored on startup or carried into a new model.
   // Load that model's ordinary catalogue independently of the product cycle.
   // Menu metadata never becomes a data source for the selected probability.
-  const [meta,normal]=await Promise.all([
-   loadProducts(model,load,followLatest[item.key]?null:state.metas[item.model]?.reference_time),
-   loadSpatialModel(model,load).catch(()=>null)
-  ]);
+  const menuReady=loadSpatialModel(model,load).catch(()=>null);
+  const meta=await loadProducts(model,load,followLatest[item.key]?null:state.metas[item.model]?.reference_time);
   if(!meta.variables.includes(item.field))throw Error('This ensemble product is not yet published for the selected run.');
-  const normalMenuMeta=normal??state.metas[item.model]?.normalMenuMeta??state.metas[item.model];
+  const normalMenuMeta=state.metas[item.model]?.normalMenuMeta??state.metas[item.model];
   if(normalMenuMeta)extendCatalogue(fields,[normalMenuMeta],OM,settings);
-  return {meta:{...meta,normalMenuMeta},latest:meta,previous:null,key:selectedRunKey(model,meta)};
+  return {meta:{...meta,normalMenuMeta},latest:meta,previous:null,key:selectedRunKey(model,meta),menuReady};
  }
- return mapRunCatalogue.select(request,load,options);
+ return mapRunCatalogue.select(request,load,{...options,requiredField:item.field});
 }
 async function configure(force=false){
  failedSelection=null;
@@ -821,7 +834,7 @@ async function configure(force=false){
  try{
   const load=metadataLoader(force);
   const selected=panelSelections(state);
-  const results=await Promise.all(selected.map(async item=>({...item,...await resolvePanelRun(item,load)})));if(generation!==state.generation)return;
+  const results=await Promise.all(selected.map(async item=>({...item,...await resolvePanelRun(item,load,{deferPrevious:true})})));if(generation!==state.generation)return;
   const pairs=results.map(result=>[result.key,result.meta]);
   for(let i=0;i<selected.length;i++){
    const panelKey=selected[i].key,suffix=panelKey==='a'?'':panelKey.toUpperCase();
@@ -842,6 +855,7 @@ async function configure(force=false){
   }
   refreshTimeline();
   setLegend();setTime();
+  for(const result of results)finishRunDiscovery(result,()=>generation===state.generation&&!!state.metas[result.key]);
  }catch(error){if(generation===state.generation){state.times=[];refreshStartingTime('Forecast unavailable');for(const p of Object.values(panels)){p.frameCache?.clear();p.loaded=false;}$('map-time-label').textContent='Forecast unavailable';status(error.message);}}
  finally{if(generation===state.generation){$('reload-maps').disabled=false;$('map-variable').disabled=!state.field;$('map-variable-b').disabled=!state.fieldB;$('map-variable-c').disabled=!state.fieldC;}}
 }
@@ -869,10 +883,7 @@ async function configurePanel(key,model,follow){
   document.dispatchEvent(new CustomEvent('snowline-model-run-verified',{detail:{model:sourceModel(result.key),meta:result.latest}}));
   // Refresh only this panel's older-run choices once archive discovery finishes.
   // A later model/layer choice must never be overwritten by that background work.
-  result.completion?.then(pair=>{
-   if(selection!==panel.selectionGeneration||state[property]!==result.key||productField(panelSelection(state,key).field))return;
-   renderRunSelector($('map-run'+suffix),sourceModel(result.key),pair,state.metas[result.key],{followLatest:followLatest[key]});
-  }).catch(()=>{/* The next live check retries; the selected run is already verified. */});
+  finishRunDiscovery(result,()=>selection===panel.selectionGeneration&&state[property]===result.key);
   showRunUpdates();refreshTimeline();setTime();
  }catch(error){
   if(selection!==panel.selectionGeneration)return;

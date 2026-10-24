@@ -8,9 +8,14 @@ for(const cached of [false,true])test(`probability menu loads native MOGREPS com
  const model='snowline_mogreps_global',field='ens_rain_ge25mm_6h';
  const native={domain:model,reference_time:'2026-10-22T18:00:00Z',variables:['geopotential_height_500hPa_anomaly_mean','pressure_msl_mean']};
  const product={domain:'snowline_mogreps_g_products',reference_time:'2026-10-22T12:00:00Z',variables:[field],productOnly:true};
- let extended,loaded;
+ let extended,loaded,release;const gate=new Promise(resolve=>release=resolve);
  const context={winterMode:false,requestedRun:()=>({}),sourceModel:x=>x,productField:()=>true,productChoices:()=>[{key:field}],loadProducts:async()=>product,loadSpatialModel:async id=>{loaded=id;return native;},followLatest:{c:true},state:{metas:cached?{[model]:{...product,normalMenuMeta:{variables:['temperature_850hPa_mean']}}}:{}},extendCatalogue:(_,metas)=>extended=metas,fields:[],OM:{},settings:{},selectedRunKey:()=>model};
+ context.loadSpatialModel=async id=>{loaded=id;await gate;return native;};
  const resolve=vm.runInNewContext(body+';resolvePanelRun',context),result=await resolve({key:'c',model,field},()=>{});
- assert.equal(loaded,model);assert.equal(result.meta.normalMenuMeta,native);assert.equal(extended[0],native);
+ assert.equal(loaded,model);assert.ok(result.menuReady,'Product is ready while ordinary metadata is held');
+ context.state.metas[model]=result.meta;context.populateVariables=()=>{};context.showRunUpdates=()=>{};
+ const hydrate=vm.runInNewContext(source.slice(source.indexOf('function finishRunDiscovery('),source.indexOf('function showRunUpdates('))+';finishRunDiscovery',context);
+ hydrate(result,()=>true);release();await result.menuReady;await Promise.resolve();
+ assert.equal(context.state.metas[model].normalMenuMeta,native);assert.equal(extended[0],native);
  assert.equal(result.meta.reference_time,product.reference_time);assert.deepEqual(result.meta.variables,[field]);assert.equal(result.meta.sources,undefined);
 });

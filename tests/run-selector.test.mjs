@@ -56,6 +56,31 @@ test('fast layer discovery propagates a failed current-run check',async()=>{
  await assert.rejects(catalogue.select('ecmwf_ifs',async()=>({}),{deferPrevious:true}),/Offline/);
 });
 
+test('requested core field resolves before supplements; optional fields wait for verified inputs',async()=>{
+ let finishExtras,finishArchive;
+ const extras=new Promise(resolve=>finishExtras=resolve),archive=new Promise(resolve=>finishArchive=resolve);
+ const primary=run(6),full={...primary,variables:[...primary.variables,'cape']},load=async()=>({});
+ const catalogue=createRunCatalogue({loadModel:async(model,load,{onPrimary})=>{onPrimary(primary);await extras;return full;},loadRun:async()=>{await archive;return run(0);}});
+ const core=await catalogue.select('ecmwf_ifs',load,{deferPrevious:true,requiredField:'temperature_2m'});
+ assert.equal(core.meta.variables.includes('cape'),false);
+ let extraReady=false;
+ const extra=catalogue.select('ecmwf_ifs',load,{deferPrevious:true,requiredField:'cape'}).then(value=>{extraReady=true;return value;});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(extraReady,false);
+ finishExtras();assert.equal((await extra).meta.variables.includes('cape'),true);
+ assert.equal((await core.metadataReady).latest.variables.includes('cape'),true);
+ finishArchive();assert.equal((await core.completion).previous.reference_time,ref(0));
+});
+
+test('partial or differently dated primary metadata cannot bypass historical selection',async()=>{
+ for(const key of ['ecmwf_ifs',selectedRunKey('ecmwf_ifs',run(0))]){
+  let release;const gate=new Promise(resolve=>release=resolve),load=async()=>({});
+  const catalogue=createRunCatalogue({loadModel:async(model,load,{onPrimary})=>{onPrimary(run(6,false,2));await gate;return run(6,false,2);},loadRun:async()=>run(0)});
+  let resolved=false;const selected=catalogue.select(key,load,{deferPrevious:true,requiredField:'temperature_2m'}).then(value=>{resolved=true;return value;});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(resolved,false);
+  release();assert.equal((await selected).meta.reference_time,ref(0));
+ }
+});
+
 test('UKV completed-index hints cannot cross main and nowcast run families',async()=>{
  for(const [model,newest,hint,previous] of [['ukmo_uk_deterministic_2km',9,8,6],['ukmo_uk_deterministic_2km_nowcast',10,9,8]]){
   const requested=[];

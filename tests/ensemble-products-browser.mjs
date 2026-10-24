@@ -224,8 +224,10 @@ try{
   await page.route('**/snowline_mogreps_global/**',r=>r.fulfill({json:ordinary}));
   await page.route('https://raw.githubusercontent.com/**/snowline_mogreps_g_products/**',r=>r.fulfill({json:{...product,domain:'snowline_mogreps_g_products',variables:six}}));
   await page.locator('#map-model').selectOption(mogreps);await ready();
+  await page.waitForFunction(height=>!!document.querySelector(`#map-variable option[value="${height}"]`),height);
   assert.equal(await page.locator(`#map-variable option[value="${height}"]`).count(),1,'Switching models on a probability retains the height anomaly menu');
   await page.reload();await ready();
+  await page.waitForFunction(height=>!!document.querySelector(`#map-variable option[value="${height}"]`),height);
   assert.equal(await page.locator(`#map-variable option[value="${height}"]`).count(),1,'Restoring a probability on startup loads the normal ensemble catalogue');
   await page.locator('#map-variable').selectOption(height);await ready();
   assert.ok((await page.evaluate(()=>window.productPanels.a.url)).includes('snowline_mogreps_global/'),'Height anomaly uses native data, not the probability run');

@@ -57,12 +57,13 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
   const load=url=>loadJSON(url,{force});
   const key=requestedChart??$('preset').value;
   if(productChoices(model.id).some(f=>f.key===key)){
-   const [product,normal]=await Promise.all([loadProducts(model.id,load,runKey?selectedReference(runKey):null),normalMenus.has(model.id)?null:mapRunCatalogue.select(model.id,load).catch(()=>null)]);
-   if(normal)normalMenus.set(sourceModel(normal.key),normal.meta);
+   const menuReady=normalMenus.has(model.id)?null:mapRunCatalogue.select(model.id,load,{deferPrevious:true}).catch(()=>null);
+   const product=await loadProducts(model.id,load,runKey?selectedReference(runKey):null);
    if(!product.variables.includes(key))throw Error('This chart is not yet published for this ensemble run. Choose another chart or retry after publication.');
-   return {meta:product,key:selectedRunKey(model.id,product)};
+   return {meta:product,key:selectedRunKey(model.id,product),menuReady};
   }
-  return mapRunCatalogue.select(runKey??model.id,load);
+  const field=BRIEFING_PRESETS.find(p=>p.id===key)?.field??key;
+  return mapRunCatalogue.select(runKey??model.id,load,{deferPrevious:true,requiredField:field});
  }
  const count=()=>Number($('count').value);
  const bounds=()=>$('area').value==='current'?currentBounds:BRIEFING_AREAS.find(area=>area.id===$('area').value).bounds;
@@ -203,6 +204,19 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
    $('preset').value=(available.find(item=>item.id===previous||item.key===previous)??available[0]).id;
    $('run').textContent=modelName()+' · initialized '+runLabel(meta)+' · '+runAvailability(meta)+' · Checks every minute.';
    controlsDisabled(false);timeline();renderPage();
+   const selectedGeneration=generation,selectedModel=model.id;
+   const stillSelected=()=>active&&generation===selectedGeneration&&model.id===selectedModel&&meta?.reference_time===selected.meta.reference_time;
+   selected.menuReady?.then(normal=>{
+    if(!stillSelected()||!normal)return;
+    normalMenus.set(selectedModel,normal.meta);onMetadata(normal.meta);
+    const choice=$('preset').value;presets=menuPresets();briefingOptions($('preset'),presets);$('preset').value=choice;
+   }).catch(()=>{});
+   selected.metadataReady?.then(pair=>{
+    if(!stillSelected()||!pair||pair.latest.reference_time!==meta.reference_time)return;
+    meta=retainRunProgress(meta,pair.latest);normalMenus.set(selectedModel,meta);onMetadata(meta);
+    const choice=$('preset').value;presets=menuPresets();briefingOptions($('preset'),presets);$('preset').value=choice;
+   }).catch(()=>{});
+   selected.completion?.then(pair=>{if(stillSelected())renderRunSelector($('run-select'),selectedModel,pair,meta,{followLatest:!runKey});}).catch(()=>{});
   }catch(error){if(token===generation){meta=null;$('run').textContent=model.name;$('status').textContent=error.message;controlsDisabled(true);$('preset').disabled=false;$('retry').hidden=false;}}
  }
  let refreshing=false;

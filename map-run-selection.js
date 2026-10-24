@@ -1,4 +1,4 @@
-import {loadSpatialModel,loadSpatialRun,ensembleHistoryURL} from './map-sources.js?v=20261024-ifs-gem-showers1';
+import {loadSpatialModel,loadSpatialRun,ensembleHistoryURL,hasFieldTime} from './map-sources.js?v=20261024-ifs-gem-showers1';
 import {publishedRun,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
 import {runCandidates} from './map-previous-run-data.js?v=20261024-ifs-gem-showers1';
 import {formatModelRun} from './map-model-run-menu.js?v=20261024-ifs-gem-showers1';
@@ -23,8 +23,8 @@ const withoutHistory=meta=>{const {previousCompletedRun,...run}=meta;return run;
 // An undated key follows the latest complete run. Dated keys stay pinned.
 export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpatialRun}={}){
  const records=new Map(),checks=new WeakMap();
- async function check(model,load,onReady){
-  const incoming=await loadModel(model,load),old=records.get(model);
+ async function check(model,load,onReady,onPrimary){
+  const incoming=await loadModel(model,load,{onPrimary:latest=>onPrimary({latest,previous:null,warning:null})}),old=records.get(model);
   const latest=retainRunProgress(old?.latest,incoming),reference=Date.parse(latest.reference_time);
   const retained=[old?.previous,old?.latest,incoming.previousCompletedRun].filter(m=>completedModelRun(model,m)&&Date.parse(m.reference_time)<reference)
    .sort((a,b)=>Date.parse(b.reference_time)-Date.parse(a.reference_time))[0]??null;
@@ -68,20 +68,25 @@ export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpati
   if(!checks.has(load))checks.set(load,new Map());
   const pending=checks.get(load);
   if(!pending.has(model)){
-   let release;
-   const ready=new Promise(resolve=>release=resolve),complete=check(model,load,release);
-   complete.then(release,()=>release(null));
-   pending.set(model,{ready,complete});
+   let release,releasePrimary;
+   const ready=new Promise(resolve=>release=resolve),primary=new Promise(resolve=>releasePrimary=resolve);
+   const complete=check(model,load,pair=>{release(pair);releasePrimary(pair);},releasePrimary);
+   complete.then(pair=>{release(pair);releasePrimary(pair);},()=>{release(null);releasePrimary(null);});
+   pending.set(model,{primary,ready,complete});
   }
   return pending.get(model);
  }
  const catalogue=(model,load)=>discovery(model,load).complete;
  return {
   catalogue,
-  async select(key,load,{deferPrevious=false}={}){
+  async select(key,load,{deferPrevious=false,requiredField}={}){
    const model=sourceModel(key),reference=selectedReference(key),check=discovery(model,load);
-   let pair=deferPrevious?await check.ready:null;
-   const early=pair&&completedModelRun(model,pair.latest)&&!key.endsWith('_previous')&&(!reference||Date.parse(reference)===Date.parse(pair.latest.reference_time));
+   const usable=pair=>pair&&completedModelRun(model,pair.latest)&&!key.endsWith('_previous')&&(!reference||Date.parse(reference)===Date.parse(pair.latest.reference_time))&&(!requiredField||pair.latest.valid_times.some(time=>hasFieldTime(pair.latest,requiredField,time)));
+   // Only a field-aware consumer may bypass optional supplements. Other callers
+   // keep the complete field catalogue while still deferring archive discovery.
+   let pair=deferPrevious?await (requiredField?check.primary:check.ready):null;
+   if(deferPrevious&&!usable(pair))pair=await check.ready;
+   const early=usable(pair);
    if(!early)pair=await check.complete;
    const choices=[pair.latest,pair.previous].filter(Boolean);
    let meta=reference?choices.find(m=>Date.parse(m.reference_time)===Date.parse(reference)):
@@ -92,7 +97,7 @@ export function createRunCatalogue({loadModel=loadSpatialModel,loadRun=loadSpati
    const warnings=[...(meta.sourceWarnings??[]),...(pair.warning?[pair.warning]:[])];
    if(!pair.previous&&!completedModelRun(model,pair.latest))warnings.push('No complete run could be verified. Incoming hours remain available; the next check will retry.');
    meta={...meta,sourceWarnings:[...new Set(warnings)]};
-   return {...pair,meta,key:selectedRunKey(model,meta),...(early?{completion:check.complete}:{})};
+   return {...pair,meta,key:selectedRunKey(model,meta),...(early?{metadataReady:check.ready,completion:check.complete}:{})};
   }
  };
 }

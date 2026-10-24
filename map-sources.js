@@ -129,7 +129,7 @@ async function mogrepsSnow(model,load,reference){
  if(!verifiedSnowMetadata(meta,model)||(reference&&Date.parse(meta.reference_time)!==Date.parse(reference)))throw Error('Unverified snowfall run');
  return {...meta,domain:model.snowDomain,baseURL:ownBase};
 }
-export async function loadSpatialModel(model,load){
+export async function loadSpatialModel(model,load,{onPrimary}={}){
  const domain=domains[model===UKV_NOWCAST?UKV:model];
  if(!domain)throw new Error('Unknown spatial model');
  let baseURL=ownEnsembles.has(domain)?generatedBase(domain):SPATIAL_BASE;
@@ -175,6 +175,9 @@ export async function loadSpatialModel(model,load){
  }));
  if(early&&primary.domain!==UKMO_EARLY&&Date.parse(early.reference_time)===Date.parse(primary.reference_time))other.push(early);
  if(ENSEMBLE_EXTRAS[model]){
+  // Core mean/spread charts do not depend on the optional extra-field feed.
+  // Consumers must still check that their requested field exists in this run.
+  onPrimary?.({...combineSources(primary,other.filter(Boolean)),sourceWarnings:[...warnings],freshnessWarning,publicationStatus});
   try{const extra=await ensembleExtra(model,primary.reference_time,load);other.push(extra);if(!extra.completed)warnings.push('Additional ensemble fields are still being prepared for this run. Each layer shows only its verified forecast hours.');}
   catch{warnings.push('Additional ensemble fields are not yet available for this run; the published mean and spread charts remain available.');}
  }
