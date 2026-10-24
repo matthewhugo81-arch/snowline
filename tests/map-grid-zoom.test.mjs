@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {createValueReader} from '../map-values.js';
-import {gridValueLabel} from '../map-grid.js';
+import {gridValueLabel,gridLabelDensity} from '../map-grid.js';
 const source=readFileSync(new URL('../maps.js',import.meta.url),'utf8');
 const draw=source.slice(source.indexOf('async function drawGridValues('),source.indexOf('\nfunction concreteURL('));
 test('zoomed grid labels restore every visible tile, including lower rows',async()=>{
@@ -15,7 +15,7 @@ test('zoomed grid labels restore every visible tile, including lower rows',async
   let data;const note={};
   const map={getCanvas:()=>({clientWidth:620,clientHeight:716}),getZoom:()=>zoom,getSource:()=>({setData:value=>{data=value;}}),getLayer:()=>true,moveLayer:()=>{}};
   const panel={key:'a',map,loaded:true,displayedTime:'time',displayedField:'gust',displayedModel:'ukv',url:'om://forecast?interpolation=linear'};
-  const context=vm.createContext({briefingActive:false,playing:false,state:{overlays:{a:{grid:true}},times:['time'],index:0,metas:{ukv:{}}},panelSelection:()=>({model:'ukv',field:'gust'}),fieldSource:()=>({domain:'ukv'}),settings:{domainOptions:[{value:'ukv',grid:{}}]},$:()=>note,OM,fields:[{key:'gust',unit:'mph'}],visibleGridPoints:()=>points,readMapValue:createValueReader(OM,{}),gridValueLabel,displayUnit:()=> 'mph',WEATHER_COMPOSITE:'weather',console});
+  const context=vm.createContext({briefingActive:false,playing:false,state:{overlays:{a:{grid:true}},times:['time'],index:0,metas:{ukv:{}}},panelSelection:()=>({model:'ukv',field:'gust'}),fieldSource:()=>({domain:'ukv'}),settings:{domainOptions:[{value:'ukv',grid:{}}]},$:()=>note,OM,fields:[{key:'gust',unit:'mph'}],visibleGridPoints:()=>points,readMapValue:createValueReader(OM,{}),gridValueLabel,gridLabelDensity,displayUnit:()=> 'mph',WEATHER_COMPOSITE:'weather',console});
   vm.runInContext(draw+';globalThis.draw=drawGridValues;',context);
   await context.draw(panel);
   assert.equal(data.features.length,3,'Top, middle and bottom rows survive zoom '+zoom);

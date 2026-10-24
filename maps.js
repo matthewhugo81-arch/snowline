@@ -33,7 +33,7 @@ import {createViewRefresh,layoutForecastBounds,forecastViewKey} from './map-view
 import {overlayGroups} from './map-overlay-specs.js?v=20261019-ensemble-extra4';
 import {panelSelection,panelSelections,panelModelIds,panelForecastTimes,createPanelOverlays} from './map-panels.js?v=20261020-run-selector';
 import {forecastInterval} from './map-interval.js?v=20261019-panel-interval';
-import {visibleGridPoints,gridValueLabel} from './map-grid.js?v=20261020-ifs-coverage';
+import {visibleGridPoints,gridValueLabel,gridLabelDensity} from './map-grid.js?v=20261024-native-labels';
 import {displayUnit,displayValue,displayStops,isWindSpeed} from './map-wind-units.js?v=20261019-ensemble-extra4';
 import {loadSpatialRun,fieldSource,hasFieldTime,fieldDataURL,fieldIntervalHours} from './map-sources.js?v=20261023-phase-mechanism2';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261021-harmonie-pressure';
@@ -288,7 +288,7 @@ async function drawGridValues(panel){
  if(!domain){note.textContent='Grid values unavailable for this model.';return;}
  try{
   const grid=OM.GridFactory.create(domain.grid),canvas=map.getCanvas(),f=fields.find(item=>item.key===field);
-  const points=visibleGridPoints(grid,canvas.clientWidth,canvas.clientHeight,p=>map.unproject(p),p=>map.project(p));
+  const points=visibleGridPoints(grid,canvas.clientWidth,canvas.clientHeight,p=>map.unproject(p),p=>map.project(p),gridLabelDensity(map.getZoom()));
   const valueURL=panel.url.replace(/interpolation=[^&]+/,'interpolation=nearest');
   const features=(await Promise.all(points.map(async point=>{
    // Zoomed views span multiple decoded tiles; restore each point's tile on demand.

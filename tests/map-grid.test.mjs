@@ -57,3 +57,22 @@ test('each panel owns independent contour, pressure and grid switches',()=>{
  const fresh=createPanelOverlays();
  assert.deepEqual(fresh.a,overlays.b);
 });
+
+// At this zoom a native cell spans 25 px: fixed 42 px sampling used to
+// alternate between adjacent columns and skipped columns, leaving stripes.
+test('native lattice has no periodically missing rows or columns and zoom reveals every readable cell',()=>{
+ const grid=OM.GridFactory.create({type:'regular',nx:1000,ny:1000,latMin:0,lonMin:0,dx:.125,dy:.125});
+ const unproject=([x,y])=>({lat:y/200,lng:x/200});
+ const project=([lon,lat])=>({x:lon*200,y:lat*200});
+ const overview=visibleGridPoints(grid,800,600,unproject,project);
+ const close=visibleGridPoints(grid,800,600,unproject,project,{minSpacing:24,maxPoints:1800});
+ const gaps=points=>{
+  const rows=new Map();for(const p of points){const row=Math.floor(p.id/grid.nx);if(!rows.has(row))rows.set(row,[]);rows.get(row).push(p.id%grid.nx);}
+  for(const columns of rows.values()){columns.sort((a,b)=>a-b);const steps=columns.slice(1).map((x,i)=>x-columns[i]);assert.equal(new Set(steps).size,1,'No missing vertical stripes');}
+  const ys=[...rows.keys()].sort((a,b)=>a-b);assert.equal(new Set(ys.slice(1).map((y,i)=>y-ys[i])).size,1,'No missing horizontal stripes');
+ };
+ gaps(overview);gaps(close);assert.ok(close.length>overview.length*2);
+ for(const p of close)assert.equal(grid.getInterpolatedValue(indexValues,p.lat,p.lon,'nearest'),p.id);
+ const expected=[];grid.forEachPoint(p=>{const s=project([p.lon,p.lat]);if(s.x>=12&&s.x<=788&&s.y>=36&&s.y<=588)expected.push(p.index);},[0,0,4,3]);
+ assert.deepEqual(close.map(p=>p.id).sort((a,b)=>a-b),expected.sort((a,b)=>a-b),'All legible native cells are shown at close zoom');
+});
