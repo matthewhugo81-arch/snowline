@@ -106,7 +106,7 @@ export function renderRunSelector(select,model,pair,selected,{followLatest=false
   option.textContent=formatModelRun(selected)+' · ensemble products';
   select.append(option);select.value=option.value;select.disabled=false;
   select.dataset.preferredRun=option.value;
-  select.title='Ensemble product initialization in UTC. These products publish separately from ordinary model charts. Check latest runs to load the latest published products.';
+  select.title='Ensemble product initialization in UTC. These products publish separately from ordinary model charts. Newly published products are checked automatically every minute.';
   return;
  }
  const runs=[pair.latest,pair.previous,selected].filter(Boolean);

@@ -53,25 +53,27 @@ function populate(){
  document.querySelectorAll('.plot').forEach(el=>{el.tabIndex=0;el.title='Right-click to copy or save this chart. Pinch with two fingers to zoom; move two fingers sideways to pan. Right-drag (or Shift + left-drag) to zoom all charts. Double-click or press Escape here to reset.';});
  $('data-table').previousElementSibling.innerHTML='<tr><th>Model</th>'+VARIABLES.map(v=>`<th>${v.title}<br>${v.unit}</th>`).join('')+'<th>Coverage / status</th></tr>';
 }
-async function loadLocation(location,force=false){
- datasetDialog.close();chartZoom.cancel();state.zoom=null;
+async function loadLocation(location,force=false,{background=false}={}){
+ if(!background){datasetDialog.close();chartZoom.cancel();state.zoom=null;}
  state.controller?.abort();state.controller=new AbortController();const signal=state.controller.signal;const generation=++state.generation;
- state.location=location;state.models.clear();state.errors.clear();state.index=0;state.fetched=null;state.loading=true;state.limit=null;
+ state.location=location;if(!background){state.models.clear();state.index=0;state.fetched=null;}state.errors.clear();state.loading=true;state.limit=null;
  $('place').textContent=location.name;$('coordinates').textContent=`${Math.abs(location.latitude).toFixed(4)}° ${location.latitude<0?'S':'N'} · ${Math.abs(location.longitude).toFixed(4)}° ${location.longitude<0?'W':'E'}`;
  let altitude=location.elevation;
  const showAltitude=()=>{$('altitude').textContent=finite(altitude)?'Altitude: approximately '+Math.round(altitude).toLocaleString('en-GB')+' m above sea level':'Altitude: loading…';};
  showAltitude();
  $('refresh').disabled=true;$('refresh').textContent='Loading…';
+ if(!background){
  let start=Math.floor(Date.now()/3600000)*3600000;state.timeNote='';
  const today=Date.parse(new Date().toISOString().slice(0,10)+'T00:00:00Z');
  if(Number.isFinite(requestedTime)&&requestedTime>=today&&requestedTime<start)start=requestedTime;
  state.times=Array.from({length:168},(_,i)=>new Date(start+i*3600000).toISOString().replace('.000Z','Z'));
  if(Number.isFinite(requestedTime)){const idx=state.times.findIndex(t=>Date.parse(t)===requestedTime);if(idx>=0)state.index=idx;else state.timeNote='The selected map time is outside this point-forecast window. ';requestedTime=NaN;}
- setStatus('Loading forecasts for this location…');render();
+ }
+ if(!background){setStatus('Loading forecasts for this location…');render();}
  try{await loadPointForecasts(location,{signal,force,withWindDirection:true,withPressure:true,withTemperature500:true,
   onModel:model=>{if(generation!==state.generation)return;state.models.set(model.id,model);if(!finite(altitude)&&finite(model.elevation)){altitude=model.elevation;showAltitude();}if(model.retryAt)state.limit={retryAt:model.retryAt};},
   onError:(model,error)=>{if(generation!==state.generation)return;state.errors.set(model.id,error.name==='TimeoutError'?'Request timed out. Try Refresh.':error.message);if(error.status===429)state.limit=error;},
-  onProgress:done=>{if(generation===state.generation){setStatus(`Loading forecasts · ${done} of ${MODELS.length} models checked`);scheduleRender();}}
+  onProgress:done=>{if(generation===state.generation&&!background){setStatus(`Loading forecasts · ${done} of ${MODELS.length} models checked`);scheduleRender();}}
  });}catch(error){if(signal.aborted||generation!==state.generation)return;setStatus(error.message,true);}
  if(generation!==state.generation)return;
  // Forecast responses already include elevation; avoid a separate API call on every visit.
@@ -245,5 +247,17 @@ for(const [id,filter] of [['select-all',()=>true],['select-global',m=>!m.regiona
 $('focus').addEventListener('change',e=>{const group=e.target.value;const snow=['snowfall','snow_depth','temperature_2m','dew_point_2m','temperature_850hPa','temperature_500hPa','precipitation'];const ice=['temperature_2m','dew_point_2m','soil_temperature_0cm','relative_humidity_2m','precipitation','snow_depth','cloud_cover','wind_speed_10m','wind_gusts_10m'];const wind=['wind_speed_10m','wind_gusts_10m','wind_direction_10m'];for(const v of VARIABLES){const card=$('plot-'+v.key).closest('article');const order=group==='snow'?snow:group==='wind'?wind:ice;card.hidden=group!=='all'&&!order.includes(v.key);card.style.order=group==='all'?0:order.indexOf(v.key);}scheduleRender();});
 let resizeTimer;window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(scheduleRender,120);});
 populate();await loadLocation(state.location);
+// Refresh in place: keep the inspected hour, zoom and usable forecasts on error.
+let lastAutomaticCheck=Date.now();
+async function refreshLocation(){
+ if(document.hidden||state.loading||Date.now()-lastAutomaticCheck<300000)return;
+ lastAutomaticCheck=Date.now();
+ await loadLocation(state.location,false,{background:true});
+}
+let locationRefreshTimer=setInterval(refreshLocation,300000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshLocation();});
+window.addEventListener('online',()=>{lastAutomaticCheck=0;void refreshLocation();});
+window.addEventListener('pagehide',()=>clearInterval(locationRefreshTimer));
+window.addEventListener('pageshow',event=>{if(event.persisted){clearInterval(locationRefreshTimer);locationRefreshTimer=setInterval(refreshLocation,300000);void refreshLocation();}});
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});try{await document.modelContext.registerTool({name:'set_forecast_location',title:'Compare forecasts at a location',description:'Load the model comparison for latitude and longitude and update the visible dashboard. Makes requests to Open-Meteo.',inputSchema:{type:'object',properties:{latitude:{type:'number',minimum:-90,maximum:90},longitude:{type:'number',minimum:-180,maximum:180}},required:['latitude','longitude'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},async execute(input){if(!input||!finite(input.latitude)||!finite(input.longitude)||Math.abs(input.latitude)>90||Math.abs(input.longitude)>180)throw new Error('Valid latitude and longitude are required.');await loadLocation({latitude:input.latitude,longitude:input.longitude,name:`${input.latitude.toFixed(4)}, ${input.longitude.toFixed(4)}`});return {location:state.location,modelsLoaded:state.models.size,unavailable:state.errors.size};}},{signal:lifecycle.signal});}catch(error){console.info('Optional browser tool unavailable:',error.message);}}
 

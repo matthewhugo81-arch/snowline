@@ -123,3 +123,19 @@ References:
 - https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/
 - https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
 - https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
+
+## Probability products and open location charts (24 October 2026)
+
+The external clock also checks `ensemble-products.yml` independently of both
+ordinary publishers. Its own persistent lease allows at most one new build
+per fifteen minutes and never duplicates an active run. `/health` includes
+`products`; overall health requires all three schedulers. GitHub's hourly
+product cron remains a fallback. This closes the multi-hour gaps observed
+when GitHub scheduled triggers were delayed.
+
+Maps and briefing views continue checking every minute. Their run signature
+includes the immutable product base URL and generation timestamp, so a revised
+publication of the same initialization refreshes the displayed data too.
+Location charts check every five minutes while visible, reuse the forecast
+service cache and retry on return/online without discarding zoom, inspected
+time or usable forecasts when a request fails.

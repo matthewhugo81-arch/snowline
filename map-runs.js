@@ -19,7 +19,7 @@ export function runAvailability(meta){
  return (meta.completed===false?'Updating':'Available')+' · to T+'+lead+' h';
 }
 export function runSignature(meta){
- return JSON.stringify((meta?.sources??(meta?[meta]:[])).map(source=>[source.domain,source.reference_time,source.completed,source.variables,source.valid_times,source.variable_valid_times??null,source.variable_intervals??null]));
+ return JSON.stringify((meta?.sources??(meta?[meta]:[])).map(source=>[source.domain,source.reference_time,source.baseURL??null,source.generated_at??null,source.completed,source.variables,source.valid_times,source.variable_valid_times??null,source.variable_intervals??null]));
 }
 // Revalidation must not regress an open page on a transient stale response.
 // Same-run growth is safe to combine; different cycles are never spliced.

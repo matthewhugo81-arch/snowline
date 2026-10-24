@@ -9,13 +9,14 @@ export const COMPANION_WORKFLOW='pages.yml';
 const MINUTE=60000;
 const iso=value=>new Date(value).toISOString();
 export class ModelSchedulerService {
- constructor(storage,{token,fetcher=(...args)=>fetch(...args),now=()=>Date.now(),companion=false}={}){
+ constructor(storage,{token,fetcher=(...args)=>fetch(...args),now=()=>Date.now(),companion=false,products=false}={}){
   this.storage=storage;this.token=token;this.fetcher=fetcher;this.now=now;this.inflight=null;
   this.repository=companion?COMPANION_REPOSITORY:REPOSITORY;
-  this.healthWorkflow=companion?COMPANION_WORKFLOW:HEALTH_WORKFLOW;
-  this.publishWorkflow=companion?COMPANION_WORKFLOW:PUBLISH_WORKFLOW;
-  this.stateKey=companion?'companion-state':'state';
-  this.stalledMinutes=companion?110:35;
+  this.healthWorkflow=products?'ensemble-products.yml':companion?COMPANION_WORKFLOW:HEALTH_WORKFLOW;
+  this.publishWorkflow=products?'ensemble-products.yml':companion?COMPANION_WORKFLOW:PUBLISH_WORKFLOW;
+  this.stateKey=products?'products-state':companion?'companion-state':'state';
+  this.stalledMinutes=products?60:companion?110:35;
+  this.minimumInterval=products?15*MINUTE:150000;
   this.dispatchBody=companion?{ref:'main',inputs:{check_freshness:true}}:{ref:'main'};
  }
  async api(path,method='GET',body){
@@ -42,7 +43,7 @@ export class ModelSchedulerService {
    // Persist before sending. An ambiguous POST outcome or isolate restart must
    // not cause a second dispatch during this lease. Leave 30 seconds below
    // the cron interval so ordinary trigger jitter does not skip every other tick.
-   if(now-(Date.parse(previous.lastAttemptAt)||0)<150000)return save({status:'cooldown'});
+   if(now-(Date.parse(previous.lastAttemptAt)||0)<this.minimumInterval)return save({status:'cooldown'});
    const workflows=[...new Set([this.healthWorkflow,this.publishWorkflow])];
    const runs=await Promise.all(workflows.map(async workflow=>{
     const data=await this.api(`actions/workflows/${workflow}/runs?branch=main&per_page=20`);
@@ -62,7 +63,7 @@ export class ModelSchedulerService {
    }
    // Native GitHub schedules and manual checks count too. Do not issue another
    // job when one already started within the most recent interval.
-   if(health.some(run=>now-Date.parse(run.created_at)<150000))return save({status:'recent',activeRunIds:[],error:null});
+   if(health.some(run=>now-Date.parse(run.created_at)<this.minimumInterval))return save({status:'recent',activeRunIds:[],error:null});
    await save({status:'dispatching',lastAttemptAt:iso(now),activeRunIds:[],error:null});
    const result=await this.api(`actions/workflows/${this.healthWorkflow}/dispatches`,'POST',this.dispatchBody);
    return save({status:'dispatched',lastDispatchAt:iso(now),lastDispatchedRunId:result?.workflow_run_id??null,error:null});

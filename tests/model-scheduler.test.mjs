@@ -86,10 +86,11 @@ test('a failed main check still dispatches the companion and exposes both status
  const f=fixture(),object=new ModelScheduler({storage:f.storage},{GITHUB_ACTIONS_TOKEN:'fixture-only'});
  object.scheduler.fetcher=async()=>new Response(null,{status:503});
  object.companion.fetcher=f.fetcher;
+ object.products.fetcher=f.fetcher;
  await assert.rejects(object.tick(),/publication check failed/);
  const status=await object.status();
- assert.equal(status.ok,false);assert.equal(status.mainOk,false);assert.equal(status.companion.ok,true);
- assert.equal(f.calls.filter(call=>call.options.method==='POST').length,1);
+ assert.equal(status.ok,false);assert.equal(status.mainOk,false);assert.equal(status.companion.ok,true);assert.equal(status.products.ok,true);
+ assert.equal(f.calls.filter(call=>call.options.method==='POST').length,2);
 });
 test('public endpoint is read-only and scheduled handler awaits Durable Object dispatch',async()=>{
  const source=(await readFile(new URL('../scheduler/index.mjs',import.meta.url),'utf8'))
@@ -101,4 +102,18 @@ test('public endpoint is read-only and scheduled handler awaits Durable Object d
   assert.equal((await worker.fetch(new Request('https://scheduler.test'+path,{method}),env)).status,status);
  }
  assert.equal(ticks,0);assert.equal(reads,1);let pending;await worker.scheduled({},env,{waitUntil:p=>{pending=p;}});await pending;assert.equal(ticks,1);
+});
+
+test('products have an independent clock, fifteen-minute lease and busy protection',async()=>{
+ const f=fixture();
+ const products=new ModelSchedulerService(f.storage,{token:'fixture-only',fetcher:f.fetcher,now:()=>instant,products:true});
+ await f.service.tick();await products.tick();
+ const post=f.calls.filter(c=>c.options.method==='POST').at(-1);
+ assert.match(post.url,/ensemble-products.yml\/dispatches$/);
+ const restarted=new ModelSchedulerService(f.storage,{token:'fixture-only',fetcher:f.fetcher,now:()=>instant+14*60000,products:true});
+ assert.equal((await restarted.tick()).status,'cooldown');
+ restarted.now=()=>instant+16*60000;assert.equal((await restarted.tick()).status,'dispatched');
+ const busy=fixture({publish:[{id:22,status:'in_progress',created_at:new Date(instant-30*60000).toISOString()}]});
+ const running=new ModelSchedulerService(busy.storage,{token:'fixture-only',fetcher:busy.fetcher,now:()=>instant,products:true});
+ assert.equal((await running.tick()).status,'busy');assert.equal(busy.calls.length,1);
 });

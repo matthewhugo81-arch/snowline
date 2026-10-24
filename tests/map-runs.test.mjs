@@ -54,3 +54,11 @@ test('field reporting-period metadata also participates in live run refreshes',(
  assert.notEqual(runSignature(first),runSignature(retained));
  assert.equal(runSignature(retained),runSignature(retainRunProgress(retained,first)),'Known period metadata survives a stale response');
 });
+
+test('same-run immutable product republication changes the refresh signature',()=>{
+ const first={domain:'products',reference_time:'2026-10-24T06:00:00Z',variables:['gust'],valid_times:['2026-10-24T12:00:00Z'],baseURL:'https://example.com/revision-one/'};
+ const revised={...first,baseURL:'https://example.com/revision-two/'};
+ assert.notEqual(runSignature(first),runSignature(revised));
+ assert.notEqual(runSignature(first),runSignature(retainRunProgress(first,revised)));
+ assert.equal(runSignature(revised),runSignature({...revised,_retrievedAt:123}));
+});
