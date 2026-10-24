@@ -262,6 +262,8 @@
 #toggle-map-sidebar{display:none}
 #map-settings-content[hidden]{display:none}
 @media(min-width:651px){
+ /* Reserve a row above the workspace tabs for the collapse control. */
+ .map-sidebar #map-settings-content{padding-top:24px}
  .map-sidebar .compare-toggle{padding-right:24px}
  .map-sidebar #toggle-map-sidebar{display:block;position:absolute;right:6px;top:6px;width:28px;height:28px;padding:0;margin:0;font-size:24px;line-height:24px}
  .map-workspace.map-sidebar-collapsed{grid-template-columns:34px minmax(0,1fr);gap:6px}
