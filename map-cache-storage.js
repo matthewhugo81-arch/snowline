@@ -83,7 +83,7 @@ export class SharedForecastStorage{
   if(this.channel)this.channel.onmessage=({data})=>{
    if(data?.cache!==this.name)return;
    if(data.type==='evict')this.onEvict(data.keys);
-   if(data.type==='usage'){this.stats=data.stats;this.onChange();}
+   if(data.type==='usage'){this.applyUsage(data.stats);}
    if(data.type==='clients')void this.refreshActivity().catch(()=>{});
   };
   this.onVisibility=()=>this.update({active:!globalThis.document?.hidden});
@@ -91,12 +91,13 @@ export class SharedForecastStorage{
   this.timer=setInterval(()=>this.lease().catch(()=>{}),30000);
  }
  async refreshActivity(){
+  const revision=this.activityRevision=(this.activityRevision??0)+1;
   const db=await this.db;if(this.closed)return;
   const tx=db.transaction(['clients','totals'],'readonly'),done=complete(tx);
   const [all,total]=await Promise.all([request(tx.objectStore('clients').getAll()),request(tx.objectStore('totals').get(this.name))]);await done;
   if(this.closed)return;
   const clients=await liveClients(all.filter(c=>c.cache===this.name),this.locks);
-  if(this.closed)return;
+  if(this.closed||revision!==this.activityRevision)return;
   // Older clients lack the activity flag; count them conservatively as active.
   this.activeWindows=clients.filter(c=>c.active!==false).length;
   this.stats={...this.stats,bytes:total?.bytes??0,entries:total?.count??0,budget:Math.min(this.budget,...clients.map(c=>c.budget)),windows:clients.length,activeWindows:this.activeWindows};
@@ -134,9 +135,15 @@ export class SharedForecastStorage{
    this.channel?.postMessage({cache:this.name,type:'clients'});db.close();
   }catch{}finally{this.channel?.close();}
  }
+ applyUsage(stats){
+  // Disk writes/broadcasts can finish after a tab closes. Their byte totals
+  // remain useful, but their older client counts must not replace liveness.
+  this.stats={...stats,windows:this.stats?.windows??stats.windows,activeWindows:this.activeWindows};
+  this.onChange();
+ }
  notify(keys,stats){
   if(keys.length){this.onEvict(keys);this.channel?.postMessage({cache:this.name,type:'evict',keys});}
-  this.stats=stats;this.onChange();this.channel?.postMessage({cache:this.name,type:'usage',stats});
+  this.applyUsage(stats);this.channel?.postMessage({cache:this.name,type:'usage',stats});
  }
  async put(key,response,bytes){
   if(this.closed)throw cacheLimitError('storage-unavailable');

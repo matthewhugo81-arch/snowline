@@ -4,10 +4,10 @@ import {appearanceKey} from './map-appearance.js?v=20261024-loading-verified1';
 import {backgroundOptions} from './map-backgrounds.js?v=20261013-map-appearance';
 import {forecastValidity,forecastPointTimeLabel as forecastTimeLabel} from './map-validity.js?v=20261024-rain-colours1';
 import {fixedAccumulationPeriods,periodStart,configurePeriodInterval,fixedPeriodNote} from './map-accumulation-periods.js?v=20261019-12-hour';
-import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261024-rain-colours1';
+import {createPreviousRunAnalysis} from './map-previous-runs.js?v=20261024-cache-liveness2';
 import {accumulationHours} from './map-accumulation.js?v=20261014-interaction-audit';
 import {BRIEFING_PRESETS,BRIEFING_AREAS,briefingPresets,briefingOptions,briefingTimes,briefingPage,briefingCaption,briefingKey,BriefingImages} from './map-briefing-data.js?v=20261024-rain-colours1';
-import {BriefingRenderer} from './map-briefing-renderer.js?v=20261024-rain-colours1';
+import {BriefingRenderer} from './map-briefing-renderer.js?v=20261024-cache-liveness2';
 import {forecastInterval} from './map-interval.js?v=20261019-12-hour';
 import {runLabel,runAvailability,runSignature,retainRunProgress} from './map-runs.js?v=20261024-live-products';
 import {PRECIPITATION_SCALE} from './map-catalogue.js?v=20261024-rain-colours1';
@@ -34,8 +34,8 @@ export function createBriefing({host,models,loadModel,loadRun,loadJSON,fields,im
  <div id="briefing-legend" class="briefing-legend" role="group" aria-label="Chart colour scale"></div></div></div>
  <div class="briefing-navigation"><button id="briefing-previous" class="secondary">Earlier charts</button><p id="briefing-status" role="status" aria-live="polite"></p><button id="briefing-retry" class="secondary" hidden>Retry charts</button><button id="briefing-next" class="secondary">Later charts</button></div>
  <div id="briefing-grid" class="briefing-grid" aria-label="Forecast chart sequence"></div>
- <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html?v=20261024-rain-colours1">Data and map credits</a>.</p>
- <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong></div><img id="briefing-enlarged-image" alt="" role="button" tabindex="0" aria-label="Minimise chart" title="Click to minimise chart" style="cursor:zoom-out"><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html?v=20261024-rain-colours1">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
+ <p class="small-note briefing-credits">Charts show one model run with matching fields. Blank areas are outside available model coverage. Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap; coastline: Natural Earth. <a href="map-credits.html?v=20261024-cache-liveness2">Data and map credits</a>.</p>
+ <dialog id="briefing-enlarged"><div class="briefing-heading"><strong id="briefing-enlarged-title"></strong></div><img id="briefing-enlarged-image" alt="" role="button" tabindex="0" aria-label="Minimise chart" title="Click to minimise chart" style="cursor:zoom-out"><p id="briefing-enlarged-note"></p><p class="small-note">Weather: Open-Meteo / model providers. Map: OpenFreeMap / OpenMapTiles / OpenStreetMap. <a href="map-credits.html?v=20261024-cache-liveness2">Credits</a>.</p></dialog></div><section id="previous-run-view" hidden aria-label="Previous Run Analysis"></section>`;
  const $=id=>host.querySelector('#briefing-'+id);
  const choices=models;
  for(const [label,items] of [['Short-term models',choices.filter(model=>model.regional&&!model.ensemble)],['Medium-term models',choices.filter(model=>!model.regional&&!model.ensemble)],['Ensemble models',choices.filter(model=>model.ensemble)]] ){

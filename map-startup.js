@@ -13,7 +13,7 @@ export function showStartupFailure(error,doc=document,reload=()=>location.reload
  if(retry){retry.disabled=false;retry.textContent='Reload map';retry.addEventListener('click',reload,{once:true});}
  return message;
 }
-export async function startMapPage({load=()=>import('./maps.js?v=20261024-rain-colours1'),doc=globalThis.document,reload}={}){
+export async function startMapPage({load=()=>import('./maps.js?v=20261024-cache-liveness2'),doc=globalThis.document,reload}={}){
  try{await load();return true;}
  catch(error){showStartupFailure(error,doc,reload);console.error('Snowline map startup:',error);return false;}
 }
