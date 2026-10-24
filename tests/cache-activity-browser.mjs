@@ -5,10 +5,13 @@ for(let i=0;i<3;i++){const page=await context.newPage();pages.push(page);await p
 const main=pages[2],wait=budget=>main.waitForFunction(b=>c.backgroundConcurrency===b,budget,{timeout:5000});await wait(4);
 for(const page of pages.slice(0,2))await page.evaluate(()=>{hiddenForTest=true;document.dispatchEvent(new Event('visibilitychange'));});await wait(12);
 assert.equal(await main.evaluate(()=>c.storageStatus().windows),3,'Hidden storage leases stay alive');
-// Visibility updates must wake an existing queue, without another tile write.
-await main.evaluate(()=>{window.started=0;c.load=async()=>{started++;return {data:new Uint8Array(4).buffer};};});
 await pages[0].evaluate(()=>{hiddenForTest=false;document.dispatchEvent(new Event('visibilitychange'));});await wait(6);
+// Visibility updates must wake an existing queue, without another tile write.
+await main.evaluate(()=>{window.started=0;window.releases=[];c.setForeground([]);c.load=async()=>{started++;await new Promise(r=>releases.push(r));return {data:new Uint8Array(4).buffer};};window.jobs=Array.from({length:12},(_,i)=>c.prefetch({url:'om://queued-'+i,type:'image'},new AbortController()));});
+await main.waitForFunction(()=>started===6);
 await pages[0].evaluate(()=>{hiddenForTest=true;document.dispatchEvent(new Event('visibilitychange'));});await wait(12);
+await main.waitForFunction(()=>started===12);
+await main.evaluate(async()=>{releases.forEach(r=>r());await Promise.all(jobs);await Promise.all([...c.writes.values()].map(w=>w.promise));c.load=async()=>({data:new Uint8Array(4).buffer});});
 await main.evaluate(async()=>{for(let i=0;i<10;i++){await c.protocol({url:'om://distant-'+i,type:'image'},new AbortController());await Promise.all([...c.writes.values()].map(w=>w.promise));}});
 const keys=await main.evaluate(async()=>[...await(await c.disk).keys()].map(k=>JSON.parse(new URL(k.url).searchParams.get('key'))[1]));for(let i=0;i<3;i++)assert.ok(keys.includes('om://selected-'+i),'Hidden selected charts remain protected');
 await pages[0].evaluate(()=>c.release());await main.waitForFunction(()=>c.storageStatus().windows===2);assert.equal(await main.evaluate(()=>c.backgroundConcurrency),12);
@@ -16,4 +19,3 @@ const stats=await main.evaluate(async()=>{const shared=c.contexts.get(c.context)
 await main.evaluate(async()=>{const shared=c.contexts.get(c.context).shared,db=await shared.db;await new Promise(r=>{const tx=db.transaction('clients','readwrite');tx.objectStore('clients').delete('legacy');tx.oncomplete=r;});await shared.refreshActivity();});await wait(12);
 for(const page of pages)await page.evaluate(()=>c.release());await context.close();console.log('PASS active windows, hidden leases/protection, visibility recovery, immediate close, legacy clients');
 }finally{await browser.close();server.close();}
-
