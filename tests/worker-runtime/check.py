@@ -13,7 +13,7 @@ import urllib.request
 
 root = Path(__file__).resolve().parents[2]
 config = sys.argv[1] if len(sys.argv) > 1 else 'tests/worker-runtime/wrangler.toml'
-expected = ({'ok': True, 'rpc': True, 'posts': 2, 'leaseReused': True}
+expected = ({'ok': True, 'rpc': True, 'posts': 3, 'leaseReused': True}
             if 'scheduler-runtime' in config else {'ok': True, 'nativeFetch': True, 'upstream': 1, 'reused': True})
 with socket.socket() as sock:
     sock.bind(('127.0.0.1', 0))
